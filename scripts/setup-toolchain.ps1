@@ -59,10 +59,17 @@ if (-not $SkipAndroid) {
 
   $SdkManager = Join-Path $Latest 'bin\sdkmanager.bat'
   Write-Host "[android] accepting licences and installing: $($SdkPackages -join ', ')"
-  $yes = ('y' + [Environment]::NewLine) * 50
-  $yes | & $SdkManager "--sdk_root=$Sdk" --licenses | Out-Host
+  # Feed the "y" answers from a file: Windows PowerShell 5.1 does not deliver
+  # piped stdin to a .bat, so sdkmanager would silently decline every licence.
+  $YesFile = Join-Path $Tool 'yes.txt'
+  Set-Content -Encoding ascii $YesFile (@('y') * 50)
+  Start-Process -FilePath $SdkManager -ArgumentList "`"--sdk_root=$Sdk`"", '--licenses' `
+    -RedirectStandardInput $YesFile -NoNewWindow -Wait
+  Remove-Item $YesFile
+  if (-not (Test-Path (Join-Path $Sdk 'licenses\android-sdk-license'))) { throw "Android SDK licences were not accepted" }
   & $SdkManager "--sdk_root=$Sdk" @SdkPackages | Out-Host
   if ($LASTEXITCODE -ne 0) { throw "sdkmanager failed" }
+  if (-not (Test-Path (Join-Path $Sdk 'platform-tools\adb.exe'))) { throw "Android SDK packages were not installed" }
 
   # Tell Gradle where the SDK is.
   $LocalProps = Join-Path $Root 'android\local.properties'
