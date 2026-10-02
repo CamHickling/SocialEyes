@@ -1,0 +1,25 @@
+# Project-local toolchain (scripts/setup-toolchain.ps1) and its log
+.toolchain/
+.toolchain-setup.log
+
+# Python
+__pycache__/
+*.egg-info/
+.pytest_cache/
+.venv/
+
+# Android / Gradle
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+android/.kotlin/
+*.apk
+!dist/*.apk
+
+# Generated study packages, session data and analysis outputs.
+# Participant data must never be committed.
+build/
+data/
+analysis_out/

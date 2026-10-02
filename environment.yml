@@ -1,0 +1,32 @@
+# Analysis + build toolchain for SocialEyes.
+# Works on Windows, macOS and Linux:
+#   conda env create -p ./.toolchain/env -f environment.yml
+# (scripts/setup-toolchain.ps1 does this for you on Windows.)
+name: socialeyes
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - pip
+  # Python analysis stack
+  - numpy>=1.26
+  - pandas>=2.2
+  - scipy>=1.13
+  - matplotlib>=3.8
+  - pillow>=10
+  - pyyaml>=6
+  - pydantic>=2.7
+  - pytest>=8
+  # opencv from pip below (conda-forge's build is fine too, but the pip wheel
+  # is what most researchers will already have and includes the aruco module)
+  # Java for building the Android app (Android Gradle Plugin needs JDK 17)
+  - openjdk=17
+  # R for the mixed-effects models
+  - r-base=4.4
+  - r-lme4
+  - r-lmertest
+  - r-emmeans
+  - r-ordinal
+  - pip:
+      - opencv-python-headless>=4.9
+      - -e ./python
