@@ -1,21 +1,8 @@
 package org.socialeyes.pictogram.ui
 
 import android.view.ViewTreeObserver
-import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.unit.IntOffset
-import kotlin.math.roundToInt
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -47,6 +34,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -110,6 +101,9 @@ private fun FeedContent(session: Session, onDone: (reason: String) -> Unit) {
     val imageMaxWidth = with(LocalDensity.current) { LocalConfiguration.current.screenWidthDp.dp.roundToPx() }
     var finished by remember { mutableStateOf(false) }
     var commentsFor by remember { mutableStateOf<FeedPost?>(null) }
+    val commentLikes = remember { mutableStateMapOf<String, Boolean>() }
+    var toast by remember { mutableStateOf<Pair<String, Long>?>(null) } // text, id
+    val scope = rememberCoroutineScope()
     val dark = isDarkTheme()
     val primary = MaterialTheme.colorScheme.onBackground
 
@@ -137,6 +131,7 @@ private fun FeedContent(session: Session, onDone: (reason: String) -> Unit) {
         val listener = ViewTreeObserver.OnDrawListener {
             if (finished) return@OnDrawListener
             view.getLocationOnScreen(loc)
+            tracker.windowSize = view.width.toFloat() to view.height.toFloat()
             tracker.onDraw(loc[0].toFloat(), loc[1].toFloat())
         }
         view.viewTreeObserver.addOnDrawListener(listener)
@@ -147,10 +142,12 @@ private fun FeedContent(session: Session, onDone: (reason: String) -> Unit) {
     }
 
     var showDone by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        delay(((cfg.doneButtonAfterS ?: 0.0) * 1000).toLong())
-        showDone = true
-        log.event("done_button_shown")
+    cfg.doneButtonAfterS?.let { after -> // null: no done button
+        LaunchedEffect(Unit) {
+            delay((after * 1000).toLong())
+            showDone = true
+            log.event("done_button_shown")
+        }
     }
     cfg.timeLimitS?.let { limit ->
         LaunchedEffect(Unit) {
@@ -159,11 +156,13 @@ private fun FeedContent(session: Session, onDone: (reason: String) -> Unit) {
         }
     }
 
+    // Blank strip where the status bar would be, so the sync patch doesn't cover the wordmark.
+    val sync = pkg.study.display.syncPatch
+    val topStrip = if (sync.enabled) maxOf(24, sync.sizeDp + 16).dp else 0.dp
+
     Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        // Blank strip where the status bar would be, so the sync patch doesn't cover the wordmark.
-        val sync = pkg.study.display.syncPatch
-        if (sync.enabled) Spacer(Modifier.height(maxOf(24, sync.sizeDp + 16).dp))
+        if (topStrip > 0.dp) Spacer(Modifier.height(topStrip))
 
         // top bar: wordmark, notifications, messages
         Row(
@@ -211,6 +210,9 @@ private fun FeedContent(session: Session, onDone: (reason: String) -> Unit) {
                         pkg = pkg,
                         imageMaxWidth = imageMaxWidth,
                         allowLikes = cfg.allowLikes,
+                        allowSaves = cfg.allowSaves,
+                        allowShares = cfg.allowShares,
+                        onShared = { toast = "Sent" to System.nanoTime() },
                         track = { element, coords -> tracker.update(post.postId, element, coords) },
                         event = { type, fields -> log.event(type, fields = arrayOf("post_id" to post.postId, *fields)) },
                         onOpenComments = {
@@ -224,74 +226,77 @@ private fun FeedContent(session: Session, onDone: (reason: String) -> Unit) {
         }
 
         HorizontalDivider(thickness = 0.5.dp, color = FeedColors.divider(dark))
-        // Tab bar, for the look only: the tabs do nothing.
+        // Tab bar. Home scrolls back to the top of the feed; the other tabs are for the look only.
         Row(
             Modifier.fillMaxWidth().height(50.dp),
             horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            BarIcon(FeedIcons.HomeFilled)
+            BarIcon(FeedIcons.HomeFilled) {
+                log.event("home_tap")
+                scope.launch { listState.animateScrollToItem(0) }
+            }
             BarIcon(FeedIcons.Search)
             BarIcon(FeedIcons.Create)
             BarIcon(FeedIcons.Reels)
-            Box(
-                Modifier.size(26.dp).border(1.5.dp, primary, CircleShape).padding(3.dp)
-                    .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape),
-            )
+            Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) { DefaultAvatar(27.dp, dark) }
         }
     }
 
-    // Comments sheet. Drawn in this window rather than as a dialog, so the system
-    // bars stay hidden and the feed doesn't move when it opens.
-    fun closeComments() {
-        commentsFor?.let { log.event("comments_close", fields = arrayOf("post_id" to it.postId)) }
-        commentsFor = null
-    }
-    BackHandler(enabled = commentsFor != null) { closeComments() }
-    var sheetPost by remember { mutableStateOf<FeedPost?>(null) } // kept during the exit animation
-    if (commentsFor != null) sheetPost = commentsFor
-    AnimatedVisibility(commentsFor != null, enter = fadeIn(), exit = fadeOut()) {
+    // "Sent" confirmation, like the app's own short pop-ups.
+    toast?.let { (text, id) ->
+        LaunchedEffect(id) {
+            delay(1500)
+            toast = null
+        }
         Box(
-            Modifier.fillMaxSize().background(Color(0x66000000)).clickable(
-                interactionSource = remember { MutableInteractionSource() }, indication = null,
-            ) { closeComments() },
-        )
-    }
-    AnimatedVisibility(
-        commentsFor != null,
-        enter = slideInVertically { it },
-        exit = slideOutVertically { it },
-        modifier = Modifier.align(Alignment.BottomCenter),
-    ) {
-        var drag by remember { mutableStateOf(0f) }
-        Column(
             Modifier
-                .fillMaxWidth()
-                .heightIn(max = (LocalConfiguration.current.screenHeightDp * 0.72f).dp)
-                .offset { IntOffset(0, drag.roundToInt().coerceAtLeast(0)) }
-                .background(MaterialTheme.colorScheme.background, RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {},
-        ) {
-            Box(
-                Modifier.fillMaxWidth().height(28.dp).pointerInput(Unit) {
-                    detectVerticalDragGestures(
-                        onDragEnd = { if (drag > 150f) closeComments(); drag = 0f },
-                        onDragCancel = { drag = 0f },
-                    ) { _, dy -> drag += dy }
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 72.dp)
+                .background(Color(0xE6262626), RoundedCornerShape(8.dp))
+                .padding(horizontal = 18.dp, vertical = 10.dp),
+        ) { Text(text, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold) }
+    }
+
+    commentsFor?.let { post ->
+        key(post.postId) {
+            CommentsSheet(
+                pkg = pkg,
+                post = post,
+                topInset = topStrip,
+                allowCommentLikes = cfg.allowCommentLikes,
+                commentLikes = commentLikes,
+                track = { element, coords -> tracker.updateOverlay(post.postId, element, coords) },
+                trackClip = tracker::setOverlayClip,
+                onCommentLike = { i, liked ->
+                    log.event("comment_like", fields = arrayOf("post_id" to post.postId, "comment" to i, "liked" to liked))
                 },
-                contentAlignment = Alignment.Center,
-            ) {
-                Box(Modifier.size(width = 36.dp, height = 4.dp).background(FeedColors.secondary(dark), RoundedCornerShape(2.dp)))
-            }
-            sheetPost?.let { Column(Modifier.verticalScroll(rememberScrollState())) { CommentsSheet(pkg, it, dark) } }
+                onState = { state ->
+                    log.event("comments_sheet", fields = arrayOf("post_id" to post.postId, "state" to state.name.lowercase()))
+                },
+                onClose = {
+                    log.event("comments_close", fields = arrayOf("post_id" to post.postId))
+                    tracker.clearOverlay()
+                    commentsFor = null
+                },
+            )
         }
     }
     }
 }
 
 @Composable
-private fun BarIcon(icon: ImageVector) {
-    Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
+private fun BarIcon(icon: ImageVector, onClick: (() -> Unit)? = null) {
+    Box(
+        Modifier
+            .size(44.dp)
+            .then(
+                if (onClick != null) {
+                    Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+                } else Modifier
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
         Icon(icon, null, tint = MaterialTheme.colorScheme.onBackground, modifier = Modifier.size(26.dp))
     }
 }
@@ -311,7 +316,7 @@ private fun StoriesTray(pkg: StudyPackage, feed: List<FeedPost>) {
         item {
             StoryBubble("Your story") {
                 Box {
-                    Box(Modifier.size(68.dp).padding(3.dp).background(MaterialTheme.colorScheme.surfaceVariant, CircleShape))
+                    DefaultAvatar(62.dp, isDarkTheme(), Modifier.padding(3.dp))
                     Box(
                         Modifier.align(Alignment.BottomEnd).size(22.dp)
                             .border(2.dp, MaterialTheme.colorScheme.background, CircleShape)
@@ -363,40 +368,5 @@ private fun CaughtUp(dark: Boolean) {
         Text("You're all caught up", fontSize = 18.sp, color = MaterialTheme.colorScheme.onBackground)
         Spacer(Modifier.height(4.dp))
         Text("You've seen all new posts.", fontSize = 14.sp, color = FeedColors.secondary(dark), textAlign = TextAlign.Center)
-    }
-}
-
-/** All comments of a post, opened from the comment icon or "View all N comments". */
-@Composable
-private fun CommentsSheet(pkg: StudyPackage, post: FeedPost, dark: Boolean) {
-    val secondary = FeedColors.secondary(dark)
-    Column(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
-        Text("Comments", fontWeight = FontWeight.SemiBold, fontSize = 16.sp, textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onBackground, modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp))
-        HorizontalDivider(thickness = 0.5.dp, color = FeedColors.divider(dark))
-        if (post.comments.isEmpty()) {
-            Column(Modifier.fillMaxWidth().padding(vertical = 48.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("No comments yet", fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground)
-                Spacer(Modifier.height(6.dp))
-                Text("Start the conversation.", fontSize = 14.sp, color = secondary)
-            }
-        }
-        for (c in post.comments) {
-            val account = pkg.manifest.accounts[c.accountId]
-            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
-                if (account != null) Avatar(pkg.file(account.avatar), 34.dp) else Spacer(Modifier.size(34.dp))
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(pkg.handle(c), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground)
-                    Text(c.text, fontSize = 14.sp, color = MaterialTheme.colorScheme.onBackground)
-                    Text("Reply", fontSize = 12.sp, color = secondary, fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(top = 4.dp))
-                }
-                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(start = 8.dp, top = 4.dp)) {
-                    Icon(FeedIcons.Heart, null, tint = secondary, modifier = Modifier.size(14.dp))
-                    if (c.likeCount > 0) Text("${c.likeCount}", fontSize = 11.sp, color = secondary)
-                }
-            }
-        }
     }
 }

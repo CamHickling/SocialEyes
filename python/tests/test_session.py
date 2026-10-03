@@ -107,6 +107,29 @@ def test_entries_count_returns_into_view():
     assert e.set_index("element").loc["post", "visible_s"] == pytest.approx(2.0)
 
 
+def sheet(post, top, comments=2):
+    els = [(post, "sheet", 0, top, 1000, 2000)]
+    els += [(post, f"sheet_comment_{i}", 0, top + 200 + 150 * i, 1000, top + 350 + 150 * i) for i in range(comments)]
+    return els
+
+
+def test_sheet_lies_on_top_of_the_feed():
+    lay = Layout(viewport_rows([(0, 0, card("a", 0) + sheet("a", 800))]))
+    r = lay.locate([0, 0, 0], [10, 10, 10], [500, 900, 1100])
+    assert r["element"].tolist() == ["image", "sheet", "sheet_comment_0"]
+
+
+def test_sheet_hides_the_feed_below_it():
+    area = (0, 0, 1000, 2000)
+    # 0-1 s no sheet; 1-2 s sheet from y = 600 (half of the image hidden); 2-3 s full screen
+    frames = [(0, 0, card("a", 0)), (1000, 0, card("a", 0) + sheet("a", 600)),
+              (2000, 0, card("a", 0) + sheet("a", 0)), (3000, None, [])]
+    e = Layout(viewport_rows(frames)).exposure(3000 * MS, area).set_index("element")
+    assert e.loc["image", "visible_s"] == pytest.approx(2.0)  # hidden while the sheet is full screen
+    assert e.loc["image", "weighted_s"] == pytest.approx(1.0 + 0.5)
+    assert e.loc["sheet_comment_1", "visible_s"] == pytest.approx(2.0)
+
+
 # ---------------------------------------------------------------- touch mapping and occlusion
 
 

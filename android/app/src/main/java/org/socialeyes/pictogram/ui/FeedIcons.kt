@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathFillType
@@ -12,6 +14,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.PathBuilder
 import androidx.compose.ui.graphics.vector.path
@@ -101,6 +104,25 @@ object FeedIcons {
     }
 
     val Bookmark = icon("bookmark") {
+        line {
+            moveTo(19f, 21f)
+            lineTo(12f, 14.9f)
+            lineTo(5f, 21f)
+            lineTo(5f, 3.5f)
+            lineTo(19f, 3.5f)
+            close()
+        }
+    }
+
+    val BookmarkFilled = icon("bookmark_filled") {
+        solid {
+            moveTo(19f, 21f)
+            lineTo(12f, 14.9f)
+            lineTo(5f, 21f)
+            lineTo(5f, 3.5f)
+            lineTo(19f, 3.5f)
+            close()
+        }
         line {
             moveTo(19f, 21f)
             lineTo(12f, 14.9f)
@@ -225,6 +247,25 @@ fun VerifiedBadge(size: Dp = 12.dp, color: Color = FeedColors.Blue) {
             lineTo(w * 0.71f, w * 0.38f)
         }
         drawPath(tick, Color.White, style = Stroke(width = w * 0.11f, cap = StrokeCap.Round, join = StrokeJoin.Round))
+    }
+}
+
+/**
+ * The default profile picture of an account without one: a white head-and-shoulders
+ * silhouette on a grey circle. Used for the participant's own avatar.
+ */
+@Composable
+fun DefaultAvatar(size: Dp, dark: Boolean = false, modifier: Modifier = Modifier) {
+    val background = if (dark) Color(0xFF3A3A3A) else Color(0xFFDBDBDB)
+    val figure = if (dark) Color(0xFF8E8E8E) else Color.White
+    Canvas(modifier.size(size)) {
+        val w = this.size.width
+        drawCircle(background)
+        val clip = Path().apply { addOval(Rect(0f, 0f, w, w)) }
+        drawCircle(figure, radius = w * 0.19f, center = Offset(w / 2, w * 0.38f))
+        clipPath(clip) {
+            drawOval(figure, topLeft = Offset(w * 0.17f, w * 0.64f), size = Size(w * 0.66f, w * 0.62f))
+        }
     }
 }
 

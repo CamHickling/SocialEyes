@@ -80,6 +80,9 @@ fun PostCard(
     pkg: StudyPackage,
     imageMaxWidth: Int,
     allowLikes: Boolean,
+    allowSaves: Boolean,
+    allowShares: Boolean,
+    onShared: () -> Unit,
     track: (element: String, LayoutCoordinates) -> Unit,
     event: (type: String, fields: Array<Pair<String, Any?>>) -> Unit,
     onOpenComments: () -> Unit,
@@ -92,6 +95,8 @@ fun PostCard(
     val secondary = FeedColors.secondary(dark)
 
     var liked by rememberSaveable(post.postId) { mutableStateOf(false) }
+    var saved by rememberSaveable(post.postId) { mutableStateOf(false) }
+    val saveBounce = remember { Animatable(1f) }
     val bigHeart = remember { Animatable(0f) }
     val likeBounce = remember { Animatable(1f) }
     val scope = rememberCoroutineScope()
@@ -211,9 +216,27 @@ fun PostCard(
                     modifier = Modifier.scale(likeBounce.value),
                 ) { setLiked(!liked, "button") }
                 ActionIcon(FeedIcons.Comment, primary, onClick = onOpenComments)
-                ActionIcon(FeedIcons.Share, primary, onClick = null)
+                ActionIcon(FeedIcons.Share, primary, onClick = if (allowShares) {
+                    {
+                        event("share", emptyArray())
+                        onShared()
+                    }
+                } else null)
                 Spacer(Modifier.weight(1f))
-                ActionIcon(FeedIcons.Bookmark, primary, onClick = null)
+                ActionIcon(
+                    if (saved) FeedIcons.BookmarkFilled else FeedIcons.Bookmark, primary,
+                    modifier = Modifier.scale(saveBounce.value),
+                    onClick = if (allowSaves) {
+                        {
+                            saved = !saved
+                            event("save", arrayOf("saved" to saved))
+                            if (saved) scope.launch {
+                                saveBounce.snapTo(0.7f)
+                                saveBounce.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium))
+                            }
+                        }
+                    } else null,
+                )
             }
             val likes = post.likeCount + if (liked) 1 else 0
             if (likes > 0) {

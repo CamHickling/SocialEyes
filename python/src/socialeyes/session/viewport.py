@@ -10,7 +10,22 @@ import numpy as np
 import pandas as pd
 
 # Most specific first: a point on the "edited" label is reported as label, not image.
+# The comments sheet lies on top of the feed, so its comments and the sheet itself
+# come before any feed element.
 PRIORITY = ("label", "image", "header", "actions", "caption", "comments", "post")
+NO_HIT = 10_000
+
+
+def _rank(element: str) -> int:
+    if element.startswith("sheet_comment_"):
+        return 0
+    if element == "sheet":
+        return 1
+    return 2 + PRIORITY.index(element)
+
+
+def _is_sheet(element: str) -> bool:
+    return element == "sheet" or element.startswith("sheet_comment_")
 
 
 class Layout:
@@ -24,7 +39,7 @@ class Layout:
         self.scroll_y = vp.loc[is_frame, "scroll_y"].to_numpy(float)
         el = vp.loc[~is_frame, ["post_id", "element", "left", "top", "right", "bottom"]].copy()
         el["fi"] = frame_index[~is_frame]
-        el["rank"] = el["element"].map({e: k for k, e in enumerate(PRIORITY)}).astype(int)
+        el["rank"] = el["element"].map(_rank).astype(int)
         self.elements = el.reset_index(drop=True)
         self._by_frame = {fi: g for fi, g in self.elements.groupby("fi")}
 
@@ -56,7 +71,7 @@ class Layout:
             px, py = x[idx, None], y[idx, None]
             L, T, R, B = (g[c].to_numpy(float)[None, :] for c in ("left", "top", "right", "bottom"))
             hit = (px >= L) & (px < R) & (py >= T) & (py < B)
-            ranks = np.where(hit, g["rank"].to_numpy()[None, :], len(PRIORITY))
+            ranks = np.where(hit, g["rank"].to_numpy()[None, :], NO_HIT)
             best = ranks.argmin(axis=1)
             found = hit[np.arange(len(idx)), best]
             post[idx[found]] = g["post_id"].to_numpy()[best[found]]
@@ -73,7 +88,9 @@ class Layout:
         """Time each post/element was on screen.
 
         ``area`` is the screen rectangle the feed is visible in; ``end_ns`` closes
-        the last frame. Columns: post_id, element, visible_s (any part on
+        the last frame. While the comments sheet is open, feed elements count as
+        visible only above the sheet's top edge; the sheet and its comments may
+        extend above ``area`` (it can cover the top bar). Columns: post_id, element, visible_s (any part on
         screen), full_s (>= 99.9% on screen), weighted_s (time x visible area
         fraction), first_visible_ns, entries (times it came into view).
         """
@@ -85,8 +102,15 @@ class Layout:
         dt = (next_t - self.times) / 1e9
         L, T, R, B = (el[c].to_numpy(float) for c in ("left", "top", "right", "bottom"))
         aL, aT, aR, aB = area
+        sheet = el["element"].map(_is_sheet).to_numpy(bool)
+        # top of the sheet in each frame (inf when it is closed)
+        sheet_top = np.full(len(self.times), np.inf)
+        is_sheet_row = (el["element"] == "sheet").to_numpy()
+        np.minimum.at(sheet_top, el["fi"].to_numpy()[is_sheet_row], T[is_sheet_row])
+        bottom = np.where(sheet, aB, np.minimum(aB, sheet_top[el["fi"].to_numpy()]))
+        top = np.where(sheet, -np.inf, aT)
         w = np.clip(np.minimum(R, aR) - np.maximum(L, aL), 0, None)
-        h = np.clip(np.minimum(B, aB) - np.maximum(T, aT), 0, None)
+        h = np.clip(np.minimum(B, bottom) - np.maximum(T, top), 0, None)
         full_area = (R - L) * (B - T)
         frac = np.divide(w * h, full_area, out=np.zeros_like(full_area), where=full_area > 0)
         d = el.assign(dt=dt[el["fi"].to_numpy()], frac=frac, t=self.times[el["fi"].to_numpy()])

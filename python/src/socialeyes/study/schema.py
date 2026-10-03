@@ -148,6 +148,12 @@ class Feed(_Strict):
     """Show an 'I'm done' button after this many seconds (null = never)."""
     allow_comment_typing: bool = False
     allow_likes: bool = True
+    allow_saves: bool = True
+    """Bookmark button saves/unsaves the post."""
+    allow_shares: bool = True
+    """Send button shows "Sent" (nothing is actually sent)."""
+    allow_comment_likes: bool = True
+    """Comments can be liked in the comments sheet."""
 
 
 # ---------------------------------------------------------------- procedure steps

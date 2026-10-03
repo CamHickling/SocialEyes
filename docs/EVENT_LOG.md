@@ -121,6 +121,11 @@ the type. Unknown types must be ignored by readers, so the app can add new ones.
 |---|---|
 | `like` | `post_id`, `liked` (true/false), `via` (`button` or `double_tap`) |
 | `comments_open` / `comments_close` | `post_id` (the comments sheet; posts show their first 2 comments inline) |
+| `comments_sheet` | `post_id`, `state` (`half` or `full`): the sheet came to rest at half height or full screen |
+| `comment_like` | `post_id`, `comment` (0-based position in the post's comments), `liked` (true/false) |
+| `save` | `post_id`, `saved` (true/false): the bookmark button (`feed.allow_saves`) |
+| `share` | `post_id`: the send button; the app only shows "Sent" (`feed.allow_shares`) |
+| `home_tap` | the Home tab was tapped; the feed scrolls back to the top |
 | `caption_expand` | `post_id` |
 | `profile_tap` | `post_id`, `target` (`handle` or `avatar`) |
 | `label_tap` | `post_id` |
@@ -161,10 +166,16 @@ Each logged frame is one `frame` row followed by one row per visible element.
 | `frame` | frame counter |
 | `scroll_y` | feed scroll offset in px (on `frame` rows) |
 | `post_id` | blank on `frame` rows |
-| `element` | `frame`, `post` (the whole card), `header`, `image`, `label`, `actions`, `caption`, `comments` |
+| `element` | `frame`, `post` (the whole card), `header`, `image`, `label`, `actions`, `caption`, `comments`; while the comments sheet is open also `sheet` and `sheet_comment_<n>` (comment n of the post, 0-based) |
 | `left`, `top`, `right`, `bottom` | element rectangle, screen px, unclipped (blank on `frame` rows) |
 
 When the feed step ends, the app writes one final `frame` row with no elements.
+
+While the comments sheet is open, its rows carry the `post_id` of the post whose
+comments it shows. The sheet lies on top of the feed: the analysis maps a point on
+it to the sheet (or the comment under it) rather than to the post below, and counts
+feed elements as visible only above the sheet's top edge. `sheet_comment_<n>` rows
+are written only while that comment is in the sheet's visible area.
 A post is "visible" if any part of its `post` rectangle is on screen.
 
 ## touch.csv

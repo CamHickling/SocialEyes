@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -13,7 +14,8 @@ TOUCH_COLUMNS = ["t_ns", "action", "pointer_id", "x_px", "y_px", "pressure", "si
 VIEWPORT_COLUMNS = ["t_ns", "frame", "scroll_y", "post_id", "element", "left", "top", "right", "bottom"]
 SENSOR_COLUMNS = ["t_ns", "sensor", "x", "y", "z", "w"]
 CAMERA_COLUMNS = ["segment", "frame", "t_ns", "exposure_ns"]
-ELEMENTS = ("frame", "post", "header", "image", "label", "actions", "caption", "comments")
+ELEMENTS = ("frame", "post", "header", "image", "label", "actions", "caption", "comments", "sheet")
+SHEET_COMMENT = re.compile(r"sheet_comment_\d+")  # comment n of the post, in the comments sheet
 TOUCH_ACTIONS = ("down", "move", "up", "cancel")
 
 
@@ -106,8 +108,8 @@ def _read_csv(path: Path, columns: list[str], dtypes: dict) -> pd.DataFrame:
     return df
 
 
-def _check_values(df: pd.DataFrame, column: str, allowed, name: str) -> None:
-    bad = sorted(set(df[column]) - set(allowed))
+def _check_values(df: pd.DataFrame, column: str, allowed, name: str, pattern: Optional[re.Pattern] = None) -> None:
+    bad = sorted(v for v in set(df[column]) - set(allowed) if not (pattern and pattern.fullmatch(str(v))))
     if bad:
         raise SessionFormatError(f"{name}: unknown {column} value(s) {bad[:5]}; allowed: {list(allowed)}")
 
@@ -148,7 +150,7 @@ def load_session(path: Path | str) -> Session:
     vp_path = path / "viewport.csv"
     if vp_path.is_file():
         viewport = _read_csv(vp_path, VIEWPORT_COLUMNS, {"t_ns": "int64", "post_id": str, "element": str})
-        _check_values(viewport, "element", ELEMENTS, "viewport.csv")
+        _check_values(viewport, "element", ELEMENTS, "viewport.csv", SHEET_COMMENT)
     else:
         viewport = pd.DataFrame(columns=VIEWPORT_COLUMNS).astype({"t_ns": "int64"})
 

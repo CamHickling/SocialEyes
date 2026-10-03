@@ -27,6 +27,42 @@ class ViewportTracker(private val log: SessionLog) {
 
     var scrollY: () -> Float = { 0f }
 
+    // The comments sheet, drawn over the feed: element -> rectangle (window coordinates).
+    private val overlay = LinkedHashMap<String, ScreenRect>()
+    private var overlayPost: String? = null
+    private var overlayClip: ScreenRect? = null
+
+    /** Window size, for deciding whether sheet elements are on screen. */
+    var windowSize: Pair<Float, Float> = Float.MAX_VALUE to Float.MAX_VALUE
+
+    /** A comments-sheet element: `sheet` or `sheet_comment_<n>`. */
+    fun updateOverlay(postId: String, element: String, coords: LayoutCoordinates) {
+        if (!coords.isAttached) return
+        val p = coords.positionInWindow()
+        val r = ScreenRect(p.x, p.y, p.x + coords.size.width, p.y + coords.size.height)
+        if (overlayPost != postId) { overlay.clear(); overlayPost = postId }
+        if (overlay[element] != r) {
+            overlay[element] = r
+            dirty = true
+        }
+    }
+
+    /** The part of the sheet comments are visible in (below its header). */
+    fun setOverlayClip(coords: LayoutCoordinates) {
+        if (!coords.isAttached) return
+        val p = coords.positionInWindow()
+        val r = ScreenRect(p.x, p.y, p.x + coords.size.width, p.y + coords.size.height)
+        if (overlayClip != r) { overlayClip = r; dirty = true }
+    }
+
+    fun clearOverlay() {
+        if (overlayPost == null) return
+        overlay.clear()
+        overlayPost = null
+        overlayClip = null
+        dirty = true
+    }
+
     fun update(postId: String, element: String, coords: LayoutCoordinates) {
         if (!coords.isAttached) return
         val p = coords.positionInWindow()
@@ -58,6 +94,13 @@ class ViewportTracker(private val log: SessionLog) {
                 if (element != "post") log.viewportElement(t, frame, postId, element, r.offset(windowX, windowY))
             }
         }
+        overlayPost?.let { postId ->
+            val window = ScreenRect(0f, 0f, windowSize.first, windowSize.second)
+            for ((element, r) in overlay) {
+                val inView = r.intersects(window) && (element == "sheet" || overlayClip?.let(r::intersects) != false)
+                if (inView) log.viewportElement(t, frame, postId, element, r.offset(windowX, windowY))
+            }
+        }
         frame++
     }
 
@@ -65,5 +108,7 @@ class ViewportTracker(private val log: SessionLog) {
     fun close() {
         log.viewportFrame(Clocks.elapsedNs(), frame, scrollY())
         posts.clear()
+        overlay.clear()
+        overlayPost = null
     }
 }

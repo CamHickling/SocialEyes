@@ -81,6 +81,9 @@ data class FeedConfig(
     @SerialName("time_limit_s") val timeLimitS: Double? = null,
     @SerialName("done_button_after_s") val doneButtonAfterS: Double? = 60.0,
     @SerialName("allow_likes") val allowLikes: Boolean = true,
+    @SerialName("allow_saves") val allowSaves: Boolean = true,
+    @SerialName("allow_shares") val allowShares: Boolean = true,
+    @SerialName("allow_comment_likes") val allowCommentLikes: Boolean = true,
 )
 
 @Serializable
