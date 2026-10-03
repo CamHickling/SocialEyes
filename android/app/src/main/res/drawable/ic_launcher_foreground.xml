@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The SocialEyes mark (docs/assets/socialeyes-mark.svg) inside the adaptive-icon safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="0.2"
+        android:scaleY="0.2"
+        android:translateX="24"
+        android:translateY="31">
+        <path
+            android:fillColor="#E4572E"
+            android:pathData="M90,10 H210 A70,70 0 0 1 280,80 V120 A70,70 0 0 1 210,190 H90 A70,70 0 0 1 20,120 V80 A70,70 0 0 1 90,10 Z" />
+        <path
+            android:fillColor="#E4572E"
+            android:pathData="M70,170 L52,226 L118,184 Z" />
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M62,100 Q150,30 238,100 Q150,170 62,100 Z" />
+        <path
+            android:fillColor="#1B1E28"
+            android:pathData="M122,100 A28,28 0 1 1 178,100 A28,28 0 1 1 122,100 Z" />
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M153,90 A8,8 0 1 1 169,90 A8,8 0 1 1 153,90 Z" />
+    </group>
+</vector>

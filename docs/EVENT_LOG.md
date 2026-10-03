@@ -105,10 +105,12 @@ the type. Unknown types must be ignored by readers, so the app can add new ones.
 | `step_start` | `step_id`, `step_type` | a procedure step is shown |
 | `step_end` | `step_id`, `reason` (`continue`, `done_button`, `time_limit`) | it is left |
 | `trial_start` | `step_id`, `trial` (0-based), `image_id` | image_rating / recognition trial shown |
-| `response` | `step_id`, `item_id`, `value`, `rt_ms`, optional `trial` | final answer when the participant moves on |
-| `response_change` | `step_id`, `item_id`, `value`, optional `trial` | every change before that (the VAS drag path is in touch.csv) |
+| `items_shown` | `step_id`, `item_ids` (in display order), optional `trial` | a page of questionnaire / rating items appears |
+| `response` | `step_id`, `item_id`, `value`, `rt_ms`, optional `trial` | final answer when the participant moves on; `rt_ms` = page shown to the item's last change |
+| `response_change` | `step_id`, `item_id`, `value`, optional `trial` | every change before that: taps, and the end of each VAS drag (the drag path is in touch.csv). Typing in text and number items is not logged |
+| | | recognition trials use the item ids `old_new` (`old` / `new`, compare with the plan's `answer`) and `confidence` (1-4) |
 | `validation_target` | `step_id`, `index`, `x_px`, `y_px` | validation dot shown |
-| `validation_tap` | `step_id`, `index`, `x_px`, `y_px` | dot tapped |
+| `validation_tap` | `step_id`, `index`, `x_px`, `y_px`, `on_target` | every tap while a dot is shown; only an `on_target` tap (within 1.5 dot diameters) moves to the next dot |
 | `done_button_shown` | | the feed's "I'm done" button appears |
 | `feed_start` | | the feed is shown, after the feed step's `instructions` (only when it has instructions) |
 | `marker_layout` | `step_id`, `tags` (`{"<tag id>": [left, top, right, bottom]}`) | end of a marker_calibration step: where each screen tag was |
@@ -118,7 +120,7 @@ the type. Unknown types must be ignored by readers, so the app can add new ones.
 | type | fields |
 |---|---|
 | `like` | `post_id`, `liked` (true/false), `via` (`button` or `double_tap`) |
-| `comments_open` / `comments_close` | `post_id` |
+| `comments_open` / `comments_close` | `post_id` (the comments sheet; posts show their first 2 comments inline) |
 | `caption_expand` | `post_id` |
 | `profile_tap` | `post_id`, `target` (`handle` or `avatar`) |
 | `label_tap` | `post_id` |

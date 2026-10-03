@@ -32,9 +32,28 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.content.Context
+import android.content.Intent
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.pm.ShortcutInfoCompat
+import androidx.core.content.pm.ShortcutManagerCompat
+import androidx.core.graphics.drawable.IconCompat
 import org.socialeyes.pictogram.BuildConfig
+import org.socialeyes.pictogram.MainActivity
+import org.socialeyes.pictogram.R
 import org.socialeyes.pictogram.study.StudyPackage
 import java.io.File
+
+/** Asks the launcher to put a Pictogram shortcut on the home screen (it shows its own confirmation). */
+private fun requestHomeScreenShortcut(context: Context) {
+    val intent = Intent(context, MainActivity::class.java).setAction(Intent.ACTION_MAIN)
+    val shortcut = ShortcutInfoCompat.Builder(context, "launch")
+        .setShortLabel(context.getString(R.string.app_name))
+        .setIcon(IconCompat.createWithResource(context, R.mipmap.ic_launcher))
+        .setIntent(intent)
+        .build()
+    ShortcutManagerCompat.requestPinShortcut(context, shortcut, null)
+}
 
 /** Researcher screen: pick a study package and a participant, then start the session. */
 @OptIn(ExperimentalLayoutApi::class)
@@ -121,6 +140,10 @@ fun SetupScreen(
                     studies = StudyPackage.findAll(studiesDir)
                     if (studies.none { it.first == selectedDir }) selectedDir = studies.firstOrNull { it.second.isSuccess }?.first
                 }) { Text("Reload studies") }
+                val context = LocalContext.current
+                if (ShortcutManagerCompat.isRequestPinShortcutSupported(context)) {
+                    OutlinedButton(onClick = { requestHomeScreenShortcut(context) }) { Text("Add to home screen") }
+                }
                 Text(
                     "Sessions are saved in Android/data/${BuildConfig.APPLICATION_ID}/files/data/. " +
                         "Press Back during a session to stop it.",

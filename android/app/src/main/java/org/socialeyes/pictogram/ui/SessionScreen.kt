@@ -60,6 +60,9 @@ fun SessionScreen(session: Session, onExit: () -> Unit) {
                     "feed" -> FeedScreen(session, step) { reason -> session.next(reason) }
                     "marker_calibration" -> MarkerCalibrationStep(session, step) { session.next() }
                     "validation" -> ValidationStep(session, step) { session.next() }
+                    "questionnaire" -> QuestionnaireStep(session, step) { session.next() }
+                    "image_rating" -> ImageRatingStep(session, step) { session.next() }
+                    "recognition" -> RecognitionStep(session, step) { session.next() }
                     "end" -> MessageScreen("", step.str("text").orEmpty(), button = null) {}
                     else -> PlaceholderStep(step) { session.next() }
                 }

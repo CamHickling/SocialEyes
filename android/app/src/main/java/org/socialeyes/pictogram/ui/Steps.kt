@@ -137,7 +137,8 @@ fun MarkerCalibrationStep(session: Session, step: Step, onContinue: () -> Unit) 
 
 /**
  * Gaze validation: dots at the study's normalised positions, one at a time;
- * the participant looks at each and taps it. Logs `validation_target` and `validation_tap`.
+ * the participant looks at each and taps it. Logs `validation_target` and every
+ * `validation_tap`; only a tap within 1.5 dot diameters of the dot (`on_target`) moves on.
  */
 @Composable
 fun ValidationStep(session: Session, step: Step, onContinue: () -> Unit) {
@@ -182,10 +183,13 @@ fun ValidationStep(session: Session, step: Step, onContinue: () -> Unit) {
                 detectTapGestures { tap ->
                     if (index >= points.size) return@detectTapGestures
                     val p = tap + origin
+                    // Only a tap near the dot moves on, so a stray touch can't skip a target.
+                    val onTarget = (tap - target(index)).getDistance() <= targetPx * 1.5f
                     session.log.event(
                         "validation_tap",
-                        fields = arrayOf("step_id" to step.id, "index" to index, "x_px" to p.x, "y_px" to p.y),
+                        fields = arrayOf("step_id" to step.id, "index" to index, "x_px" to p.x, "y_px" to p.y, "on_target" to onTarget),
                     )
+                    if (!onTarget) return@detectTapGestures
                     if (index + 1 < points.size) index++ else {
                         index = points.size
                         onContinue()

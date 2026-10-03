@@ -139,8 +139,8 @@ for mixed models in R.
 | Session log format (touches, scrolling, interactions, quality events) | 🟡 | `docs/EVENT_LOG.md` (draft; the app must implement it) |
 | Session analysis: gestures, time on screen, touch→AOI, finger occlusion, quality checks | ✅ | `python/src/socialeyes/session/` (tested on simulated sessions) |
 | CSV format reference | 🟡 | `docs/STUDY_DESIGN.md` (draft, may still change) |
-| Android "Pictogram" app: Instagram-style feed, sync patch, touch / scroll / viewport / quality logging, instructions, marker calibration, validation | 🟡 | `android/` (builds; not yet tested on a phone) |
-| App: questionnaires, image ratings, recognition test, camera check, comments sheet | ⏳ | shown as "not available yet" placeholders |
+| Android "Pictogram" app: Instagram-style feed (stories row, comments sheet), sync patch, touch / scroll / viewport / quality logging, instructions, marker calibration, validation, questionnaires, image ratings, recognition test | 🟡 | `android/` (tested on a Pixel 3) |
+| App: camera check, front camera, sensors, Neon control | ⏳ | see [What the app doesn't do yet](#what-the-app-doesnt-do-yet) |
 | Neon integration (auto start/stop, clock sync) | ⏳ | |
 | Gaze-to-screen mapping and AOI analysis | ⏳ | |
 | R analysis templates | ⏳ | |
@@ -486,13 +486,43 @@ adb install -r app\build\outputs\apk\debug\app-debug.apk
 adb push ..\build\example /sdcard/Android/data/org.socialeyes.pictogram/files/studies/
 ```
 
-Open **Pictogram**, pick the study and a participant, and start. Press Back to stop a
-session. Sessions are saved on the phone; copy them back and analyse them with:
+Open **Pictogram** (the app drawer, or tap **Add to home screen** on its setup screen once
+for a home-screen shortcut), pick the study and a participant, and start. Press Back to stop a
+session. The first time the app goes full screen, Android shows a "Viewing full screen"
+notice; tap **Got it** during a test run so participants never see it. Sessions are saved on the phone; copy them back and analyse them with:
 
 ```powershell
 adb pull /sdcard/Android/data/org.socialeyes.pictogram/files/data ..\data
 socialeyes session ..\data\example\P001\<session folder> --build ..\build\example
 ```
+
+### What the app doesn't do yet
+
+The setup screen lists the parts of a study the app can't run yet. Steps it can't show
+appear as a "not available yet" screen with a Skip button and are still logged, so the
+rest of the session works.
+
+| Missing | What happens now |
+|---|---|
+| `camera_check` step and `logging.front_camera` | placeholder screen; no video recorded |
+| `logging.sensors` (accelerometer / gyroscope) | not recorded |
+| `logging.screen_recording` | not recorded |
+| Neon control (start/stop recording, `neon` events, `neon.required`) | sessions run without the glasses being controlled; start the Neon recording by hand |
+| `feed.allow_comment_typing` / `comment_submit` | not available |
+| `interruption` events (notifications, calls) | not logged; `app_state` still shows when the app left the screen |
+| Testing on more phones | tested on a Pixel 3 (Android 12): a full session runs and `socialeyes session` reads it; other screen sizes and Android versions are untested |
+
+**How the feed differs from the real app.** It copies the look of a photo-sharing feed
+(stories row, post header, thin-line icons, likes, captions with "… more", comments,
+"2 days ago", tab bar) under the neutral name Pictogram and a free script font, with no
+real logos. Everything except liking, captions and comments is for the look only: stories,
+share, bookmark, the top-bar icons and the tabs do nothing. Each post shows its first
+2 comments; with more, "View all N comments" opens the comments sheet, so use the
+`order` column in `comments.csv` to choose which comments are visible without a tap.
+The "I'm done" button sits in the top bar so it never covers a post.
+
+`session.json` records only what was actually recorded: sensors, screen recording
+and the front camera are always `false` there for now.
 
 ---
 
@@ -587,7 +617,8 @@ Roughly in order:
       (tested on simulated sessions)
 - [ ] The **Android app**: feed rendering, procedure steps, event logging
       (per `docs/EVENT_LOG.md`), sync patch, Neon real-time API control
-      (in progress: the feed, logging, sync patch, calibration and validation are built)
+      (in progress: the feed, logging, sync patch, calibration, validation, questionnaires,
+      ratings and recognition are built)
 - [ ] **Analysis pipeline**: tag detection → screen homography → scroll-aware
       mapping of gaze to post and image pixels → AOI fixation metrics
 - [ ] **R templates** for the standard mixed models
