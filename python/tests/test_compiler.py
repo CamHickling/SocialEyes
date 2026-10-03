@@ -1,0 +1,185 @@
+import json
+from collections import Counter
+
+import pytest
+
+from conftest import EXAMPLE, edit_file
+from socialeyes.study.compiler import StudyError, build_plans, check_study, compile_study, load_study
+
+
+def errors_of(path):
+    b, rep = check_study(path)
+    assert b is None
+    return "\n".join(rep.errors)
+
+
+def test_example_study_is_valid():
+    b, rep = check_study(EXAMPLE)
+    assert rep.errors == []
+    assert rep.warnings == []
+    assert len(b.critical) == 8 and len(b.fillers) == 12
+
+
+def test_plans_are_reproducible():
+    b = load_study(EXAMPLE)
+    assert build_plans(b) == build_plans(load_study(EXAMPLE))
+
+
+def test_every_post_in_every_cell_equally_often_per_block():
+    b = load_study(EXAMPLE)
+    plans = build_plans(b)[:8]  # one balanced block: 2 groups x 4 lists
+    assert Counter((p["group"], p["list"]) for p in plans) == Counter({(g, l): 1 for g in (0, 1) for l in range(4)})
+    per_post = Counter()
+    for p in plans:
+        crit = [e for e in p["feed"] if e["role"] == "critical"]
+        assert len(crit) == 8
+        assert Counter(e["cell"] for e in crit) == Counter({c: 2 for c in set(e["cell"] for e in crit)})
+        per_post.update((e["post_id"], e["cell"]) for e in crit)
+    assert set(per_post.values()) == {2}  # 8 posts x 4 cells, each twice per block
+
+
+def test_conditions_are_applied():
+    b = load_study(EXAMPLE)
+    for p in build_plans(b):
+        for e in p["feed"]:
+            if e["role"] != "critical":
+                assert e["label"] is None
+                assert e["comment_variant"] == ""  # comments factor applies to critical posts only
+                assert e["conditions"] == {}
+                continue
+            c = e["conditions"]
+            assert e["image_id"] == f"{e['post_id']}_{c['edit']}"
+            assert e["label"] == (None if c["label"] == "none" else "edited")
+            assert e["comment_variant"] == p["between"]["comments"]
+            assert len(e["comments"]) == 2
+
+
+def test_feed_constraints_hold():
+    b = load_study(EXAMPLE)
+    for p in build_plans(b):
+        roles = [e["role"] for e in p["feed"]]
+        assert roles[:2] == ["filler", "filler"]
+        assert "critical,critical" not in ",".join(roles)
+        crit_cells = [e["cell"] for e in p["feed"] if e["role"] == "critical"]
+        assert all(not (a == b_ == c) for a, b_, c in zip(crit_cells, crit_cells[1:], crit_cells[2:]))
+
+
+def test_recognition_trials():
+    b = load_study(EXAMPLE)
+    plan = build_plans(b)[0]
+    trials = plan["steps"]["recog"]["trials"]
+    kinds = Counter(t["kind"] for t in trials)
+    assert kinds == {"old": 8, "alternate": 8, "foil": 2}
+    seen = {e["image_id"] for e in plan["feed"]}
+    for t in trials:
+        assert (t["image_id"] in seen) == (t["kind"] == "old")
+    assert len(plan["steps"]["ratings"]["trials"]) == 8
+
+
+def test_compile_writes_package(example, tmp_path):
+    out, _ = compile_study(example, tmp_path / "build")
+    manifest = json.loads((out / "study.json").read_text(encoding="utf-8"))
+    assert manifest["study"]["id"] == "example"
+    assert len(list((out / "plans").glob("P*.json"))) == 16
+    for img in manifest["images"].values():
+        assert (out / img["file"]).is_file()
+        if img["aoi"]:
+            assert (out / img["aoi"]).is_file()
+    for acc in manifest["accounts"].values():
+        assert (out / acc["avatar"]).is_file()
+    assert sorted(p.name for p in (out / "tags").iterdir()) == [f"tag36h11_{i}.png" for i in range(4)]
+    aoi = json.loads((out / "aois" / "crit01_original.json").read_text())
+    assert [a["name"] for a in aoi["aois"]] == ["face", "waist", "legs"]
+
+
+def test_compile_refuses_to_overwrite(example, tmp_path):
+    out = tmp_path / "build"
+    compile_study(example, out)
+    with pytest.raises(FileExistsError):
+        compile_study(example, out)
+    compile_study(example, out, clean=True)
+    other = tmp_path / "not_a_build"
+    other.mkdir()
+    (other / "notes.txt").write_text("keep me")
+    with pytest.raises(FileExistsError):
+        compile_study(example, other, clean=True)
+    assert (other / "notes.txt").is_file()
+
+
+def test_errors_are_collected_not_first_only(example):
+    edit_file(example / "posts.csv", "crit01,critical,acc1", "crit01,critical,nobody")
+    edit_file(example / "images.csv", "crit02_retouched,images/crit02_retouched.png,crit02,retouched",
+              "crit02_retouched,images/missing.png,crit02,retouched")
+    errs = errors_of(example)
+    assert "account_id 'nobody'" in errs
+    assert "'images/missing.png' not found" in errs
+
+
+def test_missing_image_version(example):
+    edit_file(example / "images.csv", "crit03,retouched", "crit03,edited")
+    assert "post crit03 has no image with version 'retouched'" in errors_of(example)
+
+
+def test_missing_comment_variant(example):
+    edit_file(example / "comments.csv", "crit04,appearance,1", "crit04,apearance,1")
+    edit_file(example / "comments.csv", "crit04,appearance,2", "crit04,apearance,2")
+    assert "post crit04 has no comments with variant 'appearance'" in errors_of(example)
+
+
+def test_undefined_label(example):
+    edit_file(example / "study.yaml", "edited: edited}", "edited: altered}")
+    assert "label 'altered' is not defined" in errors_of(example)
+
+
+def test_missing_aoi_for_critical_image(example):
+    (example / "aois" / "crit05_original.json").unlink()
+    assert "need an AOI file" in errors_of(example)
+
+
+def test_aoi_size_mismatch(example):
+    path = example / "aois" / "crit06_original.json"
+    data = json.loads(path.read_text())
+    data["width"] = 1080
+    path.write_text(json.dumps(data))
+    assert "is for a 1080x675 image" in errors_of(example)
+
+
+def test_foil_must_not_belong_to_a_post(example):
+    edit_file(example / "study.yaml", "foils: [foil01, foil02]", "foils: [foil01, fill01]")
+    assert "foil 'fill01' belongs to post fill01" in errors_of(example)
+
+
+def test_unknown_csv_column(example):
+    edit_file(example / "posts.csv", "posted_ago", "posted")
+    assert "unknown column(s) ['posted']" in errors_of(example)
+
+
+def test_schema_errors_are_reported(example):
+    edit_file(example / "study.yaml", "lead_in_fillers: 2", "lead_in_filers: 2")
+    assert "feed.lead_in_filers" in errors_of(example)
+
+
+def test_infeasible_feed_constraints(example):
+    edit_file(example / "study.yaml", "min_fillers_between_critical: 1", "min_fillers_between_critical: 3")
+    assert "min_fillers_between_critical=3" in errors_of(example)
+
+
+def test_warnings_for_unbalanced_numbers(example):
+    edit_file(example / "study.yaml", "n_plans: 16", "n_plans: 10")
+    b, rep = check_study(example)
+    assert b is not None
+    assert any("not a multiple of the assignment block size 8" in w for w in rep.warnings)
+
+
+def test_caption_variants(example):
+    edit_file(example / "study.yaml", "factors:\n", "factors:\n  - name: tone\n    design: between\n"
+              "    levels: [plain, body]\n    sets:\n      caption_variant: \"{level}\"\n")
+    with pytest.raises(StudyError, match="no caption with variant 'plain'"):
+        load_study(example)
+    rows = ["post_id,variant,text"] + [f"crit{n:02d},{v},{v} caption {n}" for n in range(1, 9) for v in ("plain", "body")]
+    (example / "captions.csv").write_text("\n".join(rows) + "\n", encoding="utf-8")
+    b = load_study(example)
+    for p in build_plans(b):
+        for e in p["feed"]:
+            if e["role"] == "critical":
+                assert e["caption"].startswith(p["between"]["tone"] + " caption")

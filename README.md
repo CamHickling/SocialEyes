@@ -28,8 +28,8 @@
 <br>
 
 > [!WARNING]
-> **Work in progress (v0.1).** The study-definition format, the
-> counterbalancing logic and the eye-tracking building blocks exist. The phone
+> **Work in progress (v0.1).** The study format, the study compiler and
+> command-line tool, and the eye-tracking building blocks exist. The phone
 > app and the end-to-end analysis pipeline are **not built yet**. Each part
 > below is marked ✅ working, 🟡 partial or ⏳ planned, so you know what you can
 > rely on today. Feedback from other labs is very welcome.
@@ -133,13 +133,16 @@ for mixed models in R.
 | AprilTag generation/detection, printable phone-case marker sheet | ✅ | `python/src/socialeyes/markers.py` |
 | Sync code (m-sequence) and validation dot layouts | ✅ | `design.py` |
 | Toolchain setup script (Windows) | ✅ | `scripts/setup-toolchain.ps1` |
-| `socialeyes` command-line tool | ⏳ | declared in `pyproject.toml`, not written |
-| Study compiler (CSV loading, cross-checks, plan export) | ⏳ | |
+| `socialeyes` command-line tool (`validate`, `compile`, `case-sheet`) | ✅ | `python/src/socialeyes/cli.py` |
+| Study compiler (CSV loading, cross-checks, plan export) | ✅ | `python/src/socialeyes/study/compiler.py` |
+| Example study (placeholder images) and tests | ✅ | `studies/example/`, `python/tests/` |
+| Session log format (touches, scrolling, interactions, quality events) | 🟡 | `docs/EVENT_LOG.md` (draft; the app must implement it) |
+| Session analysis: gestures, time on screen, touch→AOI, finger occlusion, quality checks | ✅ | `python/src/socialeyes/session/` (tested on simulated sessions) |
+| CSV format reference | 🟡 | `docs/STUDY_DESIGN.md` (draft, may still change) |
 | Android "Pictogram" app | ⏳ | `android/` |
 | Neon integration (auto start/stop, clock sync) | ⏳ | |
 | Gaze-to-screen mapping and AOI analysis | ⏳ | |
 | R analysis templates | ⏳ | |
-| Example study, tests, `docs/STUDY_DESIGN.md` | ⏳ | |
 | macOS/Linux setup script | ⏳ | the conda environment already works cross-platform |
 
 ---
@@ -197,6 +200,7 @@ conda activate ./.toolchain/env
 ```powershell
 . .\scripts\env.ps1
 python -c "import socialeyes, cv2; print('socialeyes', socialeyes.__version__, '| opencv', cv2.__version__)"
+socialeyes validate studies/example
 Rscript -e "library(lme4); cat('lme4 OK\n')"
 java -version
 ```
@@ -206,9 +210,10 @@ java -version
 ## Designing a study
 
 > [!NOTE]
-> The format below is implemented and validated (`schema.py`). The compiler that
-> reads it end to end is **not written yet**, but the format is stable enough
-> to start preparing materials.
+> The format below is implemented by the compiler. The CSV columns are
+> documented in [`docs/STUDY_DESIGN.md`](docs/STUDY_DESIGN.md) and may still
+> change slightly before v1. [`studies/example/`](studies/example) is a complete
+> working study to copy from.
 
 A study is a folder:
 
@@ -218,13 +223,13 @@ studies/my_study/
   accounts.csv     # fake poster accounts (name, avatar, ...)
   images.csv       # every image file, including all edited/unedited versions
   posts.csv        # which posts exist; which are critical vs. filler
-  comments.csv     # comment sets that can be attached to posts
+  comments.csv     # comment sets that can be attached to posts (optional)
+  captions.csv     # caption variants (optional)
   images/          # the image files
   aois/            # one AOI file per image (see below)
 ```
 
-The column layout of the CSVs is still being finalised and will be documented
-in `docs/STUDY_DESIGN.md`.
+The CSV columns are described in [`docs/STUDY_DESIGN.md`](docs/STUDY_DESIGN.md).
 
 ### Key ideas
 
@@ -282,7 +287,7 @@ factors:
   - name: comments
     design: between
     levels: [neutral, appearance]
-    applies_to: all
+    applies_to: critical       # 'all' also switches filler comments
     sets:
       comment_variant: "{level}"
 
@@ -294,6 +299,11 @@ feed:
   done_button_after_s: 60      # "I'm done" button appears after 60 s
   time_limit_s: null
   allow_likes: true
+
+logging:                       # what the app records besides gaze
+  touches: true
+  sensors: false
+  screen_recording: false
 
 procedure:
   - {id: welcome, type: instructions, title: Welcome,
@@ -319,7 +329,7 @@ procedure:
     items:
       - {id: attractive, kind: likert, points: 7, text: "How attractive is this person?"}
       - {id: realistic, kind: likert, points: 7, text: "How realistic is this image?"}
-  - {id: recog, type: recognition, lures: both, confidence: true}
+  - {id: recog, type: recognition, lures: both, foils: [foil01, foil02], confidence: true}
   - {id: end, type: end}
 
 participants:
@@ -329,7 +339,9 @@ participants:
 ```
 
 **Procedure step types:** `instructions`, `marker_calibration` (on-screen tags
-and sync flash; do one before and after the feed), `validation` (look-and-tap
+and sync flash; do one before and after the feed), `camera_check` (researcher
+framing check for the optional front camera; never shows the video),
+`validation` (look-and-tap
 dots, 5/9/13 points, used to measure gaze accuracy), `questionnaire` (items of
 kind `vas`, `likert`, `choice`, `text`, `number`), `feed` (exactly one),
 `image_rating`, `recognition` (old/new test with `foils` and/or the
@@ -337,11 +349,56 @@ kind `vas`, `likert`, `choice`, `text`, `number`), `feed` (exactly one),
 
 The schema rejects typos and impossible designs with a clear error. Unknown
 keys, a factor without two levels, two factors setting the same attribute, and
-a missing feed step are all errors. You can check a file today:
+a missing feed step are all errors. The compiler then cross-checks the CSVs
+against the design: missing image versions or comment variants, unknown
+accounts, missing files or AOIs, feed constraints that can't be met.
 
 ```powershell
-python -c "import yaml,sys; from socialeyes.study.schema import Study; Study.model_validate(yaml.safe_load(open(sys.argv[1], encoding='utf-8'))); print('OK')" studies/my_study/study.yaml
+socialeyes validate studies/my_study     # lists every problem, with file and line
+socialeyes compile studies/my_study      # writes build/my_study/ for the phone app
 ```
+
+`compile` writes one plan per participant (`plans/P001.json`, ...) with their
+conditions, feed order and trial orders, plus `study.json`, the media, the
+normalised AOIs and the screen AprilTags. Plans depend only on `seed`, so
+compiling again gives the same plans.
+
+---
+
+## What gets recorded
+
+Besides Neon's gaze and scene video, the app writes a session folder
+(format: [`docs/EVENT_LOG.md`](docs/EVENT_LOG.md)):
+
+| stream | contents | why |
+|---|---|---|
+| viewport | where every post, image, label, caption and comment block is on screen, each frame it moves | maps gaze and touches to content; exact time on screen per post |
+| touches | every finger down / move / up | scrolling behaviour, taps, double-tap likes, a finger covering an AOI |
+| events | procedure steps, likes, comment opens, profile taps, label taps, answers (incl. changes and response times) | engagement measures, ratings, recognition |
+| quality | app sent to background, notifications, dropped frames, rotation, brightness, battery, Neon status | flag or exclude bad sessions |
+| optional | motion sensors; screen recording (pilots); **front camera** video of the face (facial expressions) | switched on per study under `logging:` |
+
+All timestamps share one clock with the sync patch, so everything lines up with
+gaze. Analyse a session with:
+
+```powershell
+socialeyes session data/my_study/P001/<session> --build build/my_study
+```
+
+This writes per-session tables: `strokes.csv` (tap, double tap, long press,
+scroll, fling, pinch), `exposure.csv` (seconds each post and image was on
+screen), `touch_targets.csv` (every touch mapped to post, image pixel and AOI),
+`occlusion.csv` (when a finger probably covered an AOI), `interactions.csv`
+and `quality.json`.
+
+Until the app exists, `socialeyes simulate build/my_study P001 <folder>` writes
+a realistic fake session to try the analysis on.
+
+> [!NOTE]
+> **Front camera:** Android shows a camera indicator while recording, and a
+> camera pointed at you may make you more aware of your appearance, which is
+> close to what body-image studies measure. Pilot with and without the camera
+> before using it. Details: [`docs/EVENT_LOG.md#front-camera`](docs/EVENT_LOG.md#front-camera).
 
 ---
 
@@ -397,7 +454,7 @@ Glasses-based gaze lives in the coordinates of the scene camera. To know
 Generate a printable frame at 1:1 scale (measure your phone's screen first):
 
 ```powershell
-python -c "from socialeyes.markers import case_sheet_svg; svg,_ = case_sheet_svg(70.0, 152.0, [10,11,12,13,14,15], 15.0); open('case_sheet.svg','w').write(svg)"
+socialeyes case-sheet --width-mm 70 --height-mm 152 --study studies/my_study -o case_sheet.svg
 ```
 
 Print it at **100% scale** (no "fit to page"), check that a tag's black border
@@ -454,11 +511,17 @@ python/
     study/schema.py      study.yaml format
     study/design.py      counterbalancing, assignment, feed ordering, sync code
     study/aoi.py         areas of interest
+    study/compiler.py    loads + cross-checks a study folder, writes plans
+    session/             reads session logs: gestures, exposure, touch->AOI,
+                         occlusion, quality; simulate.py writes fake sessions
+    cli.py               the `socialeyes` command
+  tests/                 pytest suite (runs against studies/example)
 android/                 (planned) the Pictogram app
-studies/example/         (planned) a complete worked example
+studies/example/         a complete worked example with placeholder images
 docs/
+  STUDY_DESIGN.md        CSV reference, balance rules, compiler output
+  EVENT_LOG.md           session log format (app <-> analysis contract)
   assets/                logos, banners, avatar, favicons (PNG + SVG)
-                         (planned) detailed guides
 ```
 
 ---
@@ -470,6 +533,11 @@ docs/
 > `analysis_out/` are git-ignored on purpose. Store data according to your
 > ethics approval.
 
+- **Consent and anonymisation are the researcher's responsibility.** SocialEyes
+  assumes participants have already given consent for everything a study
+  enables (eye tracking, touch logging, front camera video), and that the
+  researcher anonymises the data as their ethics approval requires. The app
+  does not ask for or check consent itself.
 - The app uses a **fictional platform name and branding**. Don't add real
   logos or trademarks.
 - Use only images you have the rights to use for research. Make sure your
@@ -487,16 +555,18 @@ Roughly in order:
 
 - [x] Study schema, counterbalancing, AOIs, AprilTag markers, sync code
 - [x] Project-local toolchain setup (Windows)
-- [ ] Finalise the CSV formats and write the **study compiler** + `socialeyes`
-      CLI (`validate`, `compile`, `case-sheet`)
-- [ ] A complete **example study** with placeholder images
-- [ ] The **Android app**: feed rendering, procedure steps, event logging, sync
-      patch, Neon real-time API control
+- [x] **Study compiler** + `socialeyes` CLI (`validate`, `compile`, `case-sheet`)
+- [x] A complete **example study** with placeholder images
+- [ ] Finalise the CSV formats (draft in `docs/STUDY_DESIGN.md`)
+- [x] Session **log format** and touch / scrolling / quality analysis
+      (tested on simulated sessions)
+- [ ] The **Android app**: feed rendering, procedure steps, event logging
+      (per `docs/EVENT_LOG.md`), sync patch, Neon real-time API control
 - [ ] **Analysis pipeline**: tag detection → screen homography → scroll-aware
       mapping of gaze to post and image pixels → AOI fixation metrics
 - [ ] **R templates** for the standard mixed models
       (`dwell ~ edit * label + (1|participant) + (1|post)`)
-- [ ] Tests, docs, macOS/Linux setup
+- [ ] More tests and docs, macOS/Linux setup
 
 ---
 

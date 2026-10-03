@@ -1,0 +1,91 @@
+# Example study: 2 (image: original vs. retouched, within)
+#              x 2 (label: none vs. "edited" disclaimer, within)
+#              x 2 (comments: neutral vs. appearance-focused, between)
+#
+# All images are generated placeholders (make_placeholders.py).
+# Check it:    socialeyes validate studies/example
+# Build it:    socialeyes compile studies/example
+id: example
+title: Retouching labels and visual attention (example)
+version: 1
+seed: 20251001                 # change it and every plan changes; never change it mid-study
+
+platform:
+  name: Pictogram              # never use a real platform's name or logo
+  theme: light
+
+labels:
+  edited:
+    text: "This image has been digitally altered"
+    style: banner
+
+factors:
+  - name: edit
+    design: within
+    levels: [original, retouched]
+    sets:
+      image_version: "{level}"           # picks the image whose version is original/retouched
+  - name: label
+    design: within
+    levels: [none, edited]
+    sets:
+      label: {none: null, edited: edited}
+  - name: comments
+    design: between
+    levels: [neutral, appearance]
+    # applies_to: all would also switch the comments of filler posts; every
+    # filler would then need a neutral and an appearance comment set.
+    applies_to: critical
+    sets:
+      comment_variant: "{level}"
+
+feed:
+  order: shuffle
+  lead_in_fillers: 2
+  max_run_same_cell: 2
+  min_fillers_between_critical: 1
+  done_button_after_s: 60
+  time_limit_s: null
+  allow_likes: true
+
+logging:                       # besides gaze; see docs/EVENT_LOG.md
+  touches: true                # raw touch points
+  sensors: false               # accelerometer / gyroscope
+  screen_recording: false      # pilots only: Android asks permission every session
+  front_camera:                # face video for expression analysis; add a camera_check
+    enabled: false             # step before the recorded steps
+    resolution: 720p
+    fps: 30
+    steps: [feed]
+
+procedure:
+  - {id: welcome, type: instructions, title: Welcome,
+     text: "Please browse the feed as you normally would."}
+  - {id: cal1, type: marker_calibration, duration_s: 4}
+  - {id: val1, type: validation, points: 9}
+  - id: pre
+    type: questionnaire
+    title: Right now...
+    items:
+      - {id: body_sat_pre, kind: vas, text: "How satisfied are you with your body right now?",
+         min_label: "Not at all", max_label: "Extremely"}
+  - {id: feed, type: feed}
+  - {id: cal2, type: marker_calibration}
+  - id: post
+    type: questionnaire
+    items:
+      - {id: body_sat_post, kind: vas, text: "How satisfied are you with your body right now?",
+         min_label: "Not at all", max_label: "Extremely"}
+  - id: ratings
+    type: image_rating
+    posts: critical
+    items:
+      - {id: attractive, kind: likert, points: 7, text: "How attractive is this person?"}
+      - {id: realistic, kind: likert, points: 7, text: "How realistic is this image?"}
+  - {id: recog, type: recognition, lures: both, foils: [foil01, foil02], confidence: true}
+  - {id: end, type: end}
+
+participants:
+  n_plans: 16                  # 2 balanced blocks of 8 (2 groups x 4 lists)
+  id_prefix: P
+  id_digits: 3

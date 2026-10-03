@@ -193,6 +193,20 @@ class MarkerCalibrationStep(_Step):
     """Show on-screen tags + a full-screen sync flash code for this long."""
 
 
+class CameraCheckStep(_Step):
+    """Researcher-run framing check for the front camera.
+
+    The participant never sees their own video (seeing yourself before a
+    body-image task is itself a manipulation): the screen only shows a framing
+    guide and whether a face is detected.
+    """
+
+    type: Literal["camera_check"]
+    min_face_s: float = Field(3.0, ge=0.5, le=30)
+    """Continue unlocks once a face has been detected continuously this long."""
+    instructions: str = "Hold the phone as you normally would and look at the screen."
+
+
 class ValidationStep(_Step):
     type: Literal["validation"]
     points: Literal[5, 9, 13] = 9
@@ -237,6 +251,7 @@ Step = Annotated[
     Union[
         InstructionsStep,
         MarkerCalibrationStep,
+        CameraCheckStep,
         ValidationStep,
         QuestionnaireStep,
         FeedStep,
@@ -246,6 +261,53 @@ Step = Annotated[
     ],
     Field(discriminator="type"),
 ]
+
+
+class FrontCamera(_Strict):
+    """Video of the participant's face from the phone's front camera.
+
+    Consent and anonymisation are handled by the researcher; the app records
+    whenever this is enabled. Android shows a camera indicator while recording,
+    which may make participants more self-aware; pilot with and without it.
+    """
+
+    enabled: bool = False
+    resolution: Literal["480p", "720p", "1080p"] = "720p"
+    """720p is the practical minimum for facial-expression analysis."""
+    fps: Literal[15, 24, 30] = 30
+    bitrate_mbps: float = Field(3.0, ge=0.5, le=20)
+    steps: Union[Literal["all"], list[str]] = ["feed"]
+    """Procedure step ids to record, or "all"."""
+    segment_s: int = Field(60, ge=10, le=600)
+    """Video is cut into files of this length so a crash loses at most one segment."""
+
+
+class Logging(_Strict):
+    """What the app records besides gaze. See docs/EVENT_LOG.md for the file format.
+
+    The viewport log (where each post is on screen), UI interactions, responses
+    and session-quality events are always recorded: gaze mapping and data
+    quality checks depend on them.
+    """
+
+    touches: bool = True
+    """Raw touch points (down/move/up). Needed for gesture and finger-occlusion
+    analysis."""
+    sensors: bool = False
+    """Phone accelerometer, gyroscope and rotation vector."""
+    sensor_hz: int = Field(50, ge=5, le=200)
+    screen_recording: bool = False
+    """Record the phone screen (pilots / validating the gaze mapping). Android asks
+    for permission every session and it costs performance; keep off for real data."""
+    screen_recording_fps: int = Field(30, ge=5, le=60)
+    front_camera: FrontCamera = FrontCamera()
+
+    @model_validator(mode="after")
+    def _one_encoder(self):
+        if self.front_camera.enabled and self.screen_recording:
+            raise ValueError("logging: front_camera and screen_recording cannot both be enabled "
+                             "(two video encoders at once make the feed stutter on most phones)")
+        return self
 
 
 class Participants(_Strict):
@@ -263,11 +325,15 @@ class Study(_Strict):
     display: Display = Display()
     markers: Markers = Markers()
     neon: Neon = Neon()
+    logging: Logging = Logging()
 
     accounts: str = "accounts.csv"
     images: str = "images.csv"
     posts: str = "posts.csv"
     comments: str = "comments.csv"
+    """Optional: a missing file means no post has comments."""
+    captions: str = "captions.csv"
+    """Optional: only needed when a factor sets caption_variant."""
     labels: dict[str, Label] = {}
     factors: list[Factor] = []
     feed: Feed = Feed()
@@ -299,6 +365,11 @@ class Study(_Strict):
             raise ValueError("procedure must contain exactly one feed step")
         if self.procedure[-1].type != "end":
             raise ValueError("the last procedure step must be type: end")
+        cam = self.logging.front_camera
+        if isinstance(cam.steps, list):
+            unknown = [s for s in cam.steps if s not in ids]
+            if unknown:
+                raise ValueError(f"logging.front_camera.steps: unknown procedure step id(s) {unknown}")
         return self
 
     @property
