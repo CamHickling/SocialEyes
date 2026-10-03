@@ -23,3 +23,6 @@ android/.kotlin/
 build/
 data/
 analysis_out/
+
+# Local secrets: the test phone's PIN for scripts/unlock-phone.ps1. Never commit.
+phone-pin.local

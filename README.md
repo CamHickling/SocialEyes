@@ -489,7 +489,10 @@ adb push ..\build\example /sdcard/Android/data/org.socialeyes.pictogram/files/st
 Open **Pictogram** (the app drawer, or tap **Add to home screen** on its setup screen once
 for a home-screen shortcut), pick the study and a participant, and start. Press Back to stop a
 session. The first time the app goes full screen, Android shows a "Viewing full screen"
-notice; tap **Got it** during a test run so participants never see it. Sessions are saved on the phone; copy them back and analyse them with:
+notice; tap **Got it** during a test run so participants never see it.
+
+To unlock a test phone from the computer, put its PIN in `phone-pin.local` in the project
+root (git-ignored; never commit it) and run `.\scripts\unlock-phone.ps1`. Sessions are saved on the phone; copy them back and analyse them with:
 
 ```powershell
 adb pull /sdcard/Android/data/org.socialeyes.pictogram/files/data ..\data
