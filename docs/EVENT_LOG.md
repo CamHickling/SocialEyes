@@ -3,8 +3,10 @@
 > [!NOTE]
 > **Draft (format version 1).** This is the contract between the Pictogram app
 > (which writes these files) and the Python analysis (`socialeyes.session`,
-> which reads them). The app isn't built yet. Until it is,
-> `socialeyes.session.simulate` writes realistic fake sessions in this format.
+> which reads them). The app (`android/`) writes session.json, events.jsonl,
+> viewport.csv and touch.csv; sensors, screen recording and the front camera
+> are not built yet. `socialeyes.session.simulate` writes realistic fake
+> sessions in this format.
 
 One folder per session:
 
@@ -84,6 +86,9 @@ recording the front camera) gives the resolution
 and frame rate actually achieved, which can differ from what was requested, and
 the camera's timestamp source (see Front camera).
 
+`sync_patch` is the sync patch's screen rectangle `[left, top, right, bottom]`
+(absent when the patch is disabled).
+
 `feed_area` is the screen rectangle the feed scrolls in (below the status and
 app bars), used to decide how much of a post is visible. `end.reason` is
 `completed` or `aborted` (the researcher stopped the session).
@@ -105,6 +110,8 @@ the type. Unknown types must be ignored by readers, so the app can add new ones.
 | `validation_target` | `step_id`, `index`, `x_px`, `y_px` | validation dot shown |
 | `validation_tap` | `step_id`, `index`, `x_px`, `y_px` | dot tapped |
 | `done_button_shown` | | the feed's "I'm done" button appears |
+| `feed_start` | | the feed is shown, after the feed step's `instructions` (only when it has instructions) |
+| `marker_layout` | `step_id`, `tags` (`{"<tag id>": [left, top, right, bottom]}`) | end of a marker_calibration step: where each screen tag was |
 
 **Feed interactions**
 

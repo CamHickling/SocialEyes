@@ -139,7 +139,8 @@ for mixed models in R.
 | Session log format (touches, scrolling, interactions, quality events) | 🟡 | `docs/EVENT_LOG.md` (draft; the app must implement it) |
 | Session analysis: gestures, time on screen, touch→AOI, finger occlusion, quality checks | ✅ | `python/src/socialeyes/session/` (tested on simulated sessions) |
 | CSV format reference | 🟡 | `docs/STUDY_DESIGN.md` (draft, may still change) |
-| Android "Pictogram" app | ⏳ | `android/` |
+| Android "Pictogram" app: Instagram-style feed, sync patch, touch / scroll / viewport / quality logging, instructions, marker calibration, validation | 🟡 | `android/` (builds; not yet tested on a phone) |
+| App: questionnaires, image ratings, recognition test, camera check, comments sheet | ⏳ | shown as "not available yet" placeholders |
 | Neon integration (auto start/stop, clock sync) | ⏳ | |
 | Gaze-to-screen mapping and AOI analysis | ⏳ | |
 | R analysis templates | ⏳ | |
@@ -471,6 +472,30 @@ reliance on network time. Settings live under `display.sync_patch` in
 
 ---
 
+## Running the app
+
+The app is a work in progress (see [Feature status](#feature-status)). To build it and
+try the example study on an Android phone (Android 10 or newer, USB debugging on):
+
+```powershell
+. .\scripts\env.ps1
+socialeyes compile studies/example                  # writes build\example
+cd android
+.\gradlew assembleDebug                             # first build downloads Gradle and libraries
+adb install -r app\build\outputs\apk\debug\app-debug.apk
+adb push ..\build\example /sdcard/Android/data/org.socialeyes.pictogram/files/studies/
+```
+
+Open **Pictogram**, pick the study and a participant, and start. Press Back to stop a
+session. Sessions are saved on the phone; copy them back and analyse them with:
+
+```powershell
+adb pull /sdcard/Android/data/org.socialeyes.pictogram/files/data ..\data
+socialeyes session ..\data\example\P001\<session folder> --build ..\build\example
+```
+
+---
+
 ## Using the Python package today
 
 With the toolchain active (`. .\scripts\env.ps1`), these pieces work:
@@ -516,7 +541,7 @@ python/
                          occlusion, quality; simulate.py writes fake sessions
     cli.py               the `socialeyes` command
   tests/                 pytest suite (runs against studies/example)
-android/                 (planned) the Pictogram app
+android/                 the Pictogram app (Kotlin, Jetpack Compose)
 studies/example/         a complete worked example with placeholder images
 docs/
   STUDY_DESIGN.md        CSV reference, balance rules, compiler output
@@ -562,6 +587,7 @@ Roughly in order:
       (tested on simulated sessions)
 - [ ] The **Android app**: feed rendering, procedure steps, event logging
       (per `docs/EVENT_LOG.md`), sync patch, Neon real-time API control
+      (in progress: the feed, logging, sync patch, calibration and validation are built)
 - [ ] **Analysis pipeline**: tag detection → screen homography → scroll-aware
       mapping of gaze to post and image pixels → AOI fixation metrics
 - [ ] **R templates** for the standard mixed models
