@@ -140,8 +140,8 @@ for mixed models in R.
 | Session log format (touches, scrolling, interactions, quality events) | 🟡 | `docs/EVENT_LOG.md` (draft; the app must implement it) |
 | Session analysis: gestures, time on screen, touch→AOI, finger occlusion, quality checks | ✅ | `python/src/socialeyes/session/` (tested on simulated sessions) |
 | CSV format reference | 🟡 | `docs/STUDY_DESIGN.md` (draft, may still change) |
-| Android SocialEyes app: Instagram-style feed (stories row, comments sheet), sync patch, touch / scroll / viewport / quality logging, instructions, marker calibration, validation, questionnaires, image ratings, recognition test, camera check, front camera video | 🟡 | `android/` (tested on a Pixel 3) |
-| App: sensors, Neon control | ⏳ | see [What the app doesn't do yet](#what-the-app-doesnt-do-yet) |
+| Android SocialEyes app: Instagram-style feed (stories row, comments sheet), sync patch, touch / scroll / viewport / quality logging, instructions, marker calibration, validation, questionnaires, image ratings, recognition test, camera check, front camera video, motion sensors, interruption detection | 🟡 | `android/` (tested on a Pixel 3) |
+| App: screen recording, Neon control | ⏳ | see [What the app doesn't do yet](#what-the-app-doesnt-do-yet) |
 | Neon integration (auto start/stop, clock sync) | ⏳ | |
 | Gaze-to-screen mapping and AOI analysis | ⏳ | |
 | R analysis templates | ⏳ | |
@@ -394,7 +394,7 @@ Besides Neon's gaze and scene video, the app writes a session folder
 | viewport | where every post, image, label, caption and comment block is on screen, each frame it moves | maps gaze and touches to content; exact time on screen per post |
 | touches | every finger down / move / up | scrolling behaviour, taps, double-tap likes, a finger covering an AOI |
 | events | procedure steps, likes, comment opens, profile taps, label taps, answers (incl. changes and response times) | engagement measures, ratings, recognition |
-| quality | app sent to background, notifications, dropped frames, rotation, brightness, battery, Neon status | flag or exclude bad sessions |
+| quality | app sent to background, interruptions (notification sounds, calls, alarms, notification shade), Do Not Disturb, dropped frames, rotation, brightness, battery, Neon status | flag or exclude bad sessions |
 | optional | motion sensors; screen recording (pilots); **front camera** video of the face (facial expressions) | switched on per study under `logging:` |
 
 All timestamps share one clock with the sync patch, so everything lines up with
@@ -525,10 +525,9 @@ rest of the session works.
 
 | Missing | What happens now |
 |---|---|
-| `logging.sensors` (accelerometer / gyroscope) | not recorded |
 | `logging.screen_recording` | not recorded |
 | Neon control (start/stop recording, `neon` events, `neon.required`) | sessions run without the glasses being controlled; start the Neon recording by hand |
-| `interruption` events (notifications, calls) | not logged; `app_state` still shows when the app left the screen |
+| Silent notifications | only notifications that make a sound are logged as interruptions; turn on Do Not Disturb for sessions (the setup screen reminds you when it is off) |
 | Testing on more phones | tested on a Pixel 3 (Android 12): a full session runs and `socialeyes session` reads it; other screen sizes and Android versions are untested |
 
 **How the feed differs from the real app.** It copies the look of a photo-sharing feed
@@ -559,8 +558,8 @@ are logged (`comment_submit`, `comment_edit`). `feed.allow_likes`, `allow_saves`
 or off per study.
 The "I'm done" button sits in the top bar so it never covers a post.
 
-`session.json` records only what was actually recorded: sensors and screen recording
-are always `false` there for now.
+`session.json` records only what was actually recorded: screen recording is always
+`false` there for now.
 
 ---
 

@@ -30,6 +30,7 @@ class SessionLog(val dir: File, initialMeta: JsonObject, logTouches: Boolean) {
     private val viewport = csv("viewport.csv", VIEWPORT_COLUMNS)
     private val touch = if (logTouches) csv("touch.csv", TOUCH_COLUMNS) else null
     private var video: CsvWriter? = null // video.csv, only when reels are watched
+    private var sensors: CsvWriter? = null // sensors.csv, only with logging.sensors
     private var cameraFrames: CsvWriter? = null // camera_frames.csv, only when the front camera records
     private var cameraSegments = 0
     private val flusher = Executors.newSingleThreadScheduledExecutor()
@@ -64,6 +65,15 @@ class SessionLog(val dir: File, initialMeta: JsonObject, logTouches: Boolean) {
         synchronized(lock) {
             if (finished) return
             w.row(tNs, action, pointerId, f1(x), f1(y), f3(pressure), f4(size), f1(major), f1(minor), stepId)
+        }
+    }
+
+    /** One motion sensor sample; `w` only for the rotation quaternion. */
+    fun sensorRow(tNs: Long, sensor: String, x: Float, y: Float, z: Float, w: Float?) {
+        synchronized(lock) {
+            if (finished) return
+            val out = sensors ?: csv("sensors.csv", SENSOR_COLUMNS).also { sensors = it }
+            out.row(tNs, sensor, fmt(x, 5), fmt(y, 5), fmt(z, 5), fmt(w, 5))
         }
     }
 
@@ -119,7 +129,7 @@ class SessionLog(val dir: File, initialMeta: JsonObject, logTouches: Boolean) {
             }
             writeMeta()
             finished = true
-            listOfNotNull(events, viewport.out, touch?.out, video?.out, cameraFrames?.out).forEach { it.close() }
+            listOfNotNull(events, viewport.out, touch?.out, video?.out, cameraFrames?.out, sensors?.out).forEach { it.close() }
         }
         flusher.shutdown()
     }
@@ -127,7 +137,7 @@ class SessionLog(val dir: File, initialMeta: JsonObject, logTouches: Boolean) {
     private fun flush() {
         synchronized(lock) {
             if (finished) return
-            listOfNotNull(events, viewport.out, touch?.out, video?.out, cameraFrames?.out).forEach { it.flush() }
+            listOfNotNull(events, viewport.out, touch?.out, video?.out, cameraFrames?.out, sensors?.out).forEach { it.flush() }
         }
     }
 
@@ -158,6 +168,7 @@ class SessionLog(val dir: File, initialMeta: JsonObject, logTouches: Boolean) {
         // Must match python/src/socialeyes/session/io.py
         val TOUCH_COLUMNS = listOf("t_ns", "action", "pointer_id", "x_px", "y_px", "pressure", "size", "major_px", "minor_px", "step_id")
         val CAMERA_COLUMNS = listOf("segment", "frame", "t_ns", "exposure_ns")
+        val SENSOR_COLUMNS = listOf("t_ns", "sensor", "x", "y", "z", "w")
         val VIDEO_COLUMNS = listOf("t_ns", "reel_id", "position_ms", "playing")
         val VIEWPORT_COLUMNS = listOf("t_ns", "frame", "scroll_y", "post_id", "element", "left", "top", "right", "bottom")
 

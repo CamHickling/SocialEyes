@@ -12,6 +12,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import org.socialeyes.pictogram.log.DeviceMonitor
+import org.socialeyes.pictogram.log.InterruptionMonitor
 import org.socialeyes.pictogram.study.StudyPackage
 import org.socialeyes.pictogram.ui.SessionScreen
 import org.socialeyes.pictogram.ui.SetupScreen
@@ -21,6 +22,7 @@ class MainActivity : ComponentActivity() {
     private var session by mutableStateOf<Session?>(null)
     private var setupError by mutableStateOf<String?>(null)
     private var monitor: DeviceMonitor? = null
+    private var interruptions: InterruptionMonitor? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -51,6 +53,7 @@ class MainActivity : ComponentActivity() {
         setupError = null
         hideSystemBars(true)
         monitor = DeviceMonitor(this, s.log).also { it.start() }
+        interruptions = InterruptionMonitor(this, s.log).also { it.start() }
         session = s
         s.begin()
     }
@@ -58,6 +61,8 @@ class MainActivity : ComponentActivity() {
     private fun endSession() {
         monitor?.stop()
         monitor = null
+        interruptions?.stop()
+        interruptions = null
         session?.let { if (!it.log.finished) it.abort() }
         session = null
         hideSystemBars(false)
@@ -87,9 +92,15 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onStop() {
+        interruptions?.leftScreen()
         session?.log?.event("app_state", fields = arrayOf("state" to "background"))
         session?.pauseCamera()
         super.onStop()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        interruptions?.windowFocus(hasFocus)
     }
 
     override fun onDestroy() {

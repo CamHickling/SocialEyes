@@ -18,6 +18,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import org.socialeyes.pictogram.log.Clocks
 import org.socialeyes.pictogram.log.FrontCameraConfig
 import org.socialeyes.pictogram.log.FrontCameraRecorder
+import org.socialeyes.pictogram.log.MotionSensors
 import org.socialeyes.pictogram.log.SessionLog
 import org.socialeyes.pictogram.log.TouchRecorder
 import org.socialeyes.pictogram.study.Plan
@@ -29,7 +30,10 @@ import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 
 /** One participant running through the procedure. Owns the session log. */
-class Session(val pkg: StudyPackage, val plan: Plan, val log: SessionLog, val camera: FrontCameraRecorder? = null) {
+class Session(
+    val pkg: StudyPackage, val plan: Plan, val log: SessionLog,
+    val camera: FrontCameraRecorder? = null, val sensors: MotionSensors? = null,
+) {
     val steps: List<Step> = pkg.steps
     val startNs: Long = Clocks.elapsedNs()
     val touches = TouchRecorder(log) { currentStep?.id ?: "" }
@@ -45,7 +49,17 @@ class Session(val pkg: StudyPackage, val plan: Plan, val log: SessionLog, val ca
     /** Current sync code bit (0/1), driven by the sync patch; -1 before the first frame. */
     var syncLevel by mutableIntStateOf(-1)
 
-    fun begin() = startStep()
+    fun begin() {
+        sensors?.start()
+        startStep()
+    }
+
+    /** Stops the recorders that write their own files, before the log ends. */
+    private fun stopRecorders() {
+        profilePhoto = null
+        camera?.release() // closes the open video file
+        sensors?.stop()
+    }
 
     /** Leaves the current step. `reason`: `continue`, `done_button` or `time_limit`. */
     fun next(reason: String = "continue") {
@@ -56,8 +70,7 @@ class Session(val pkg: StudyPackage, val plan: Plan, val log: SessionLog, val ca
     }
 
     fun abort() {
-        profilePhoto = null
-        camera?.release() // closes the open video file before the log ends
+        stopRecorders()
         log.finish("aborted")
     }
 
@@ -75,8 +88,7 @@ class Session(val pkg: StudyPackage, val plan: Plan, val log: SessionLog, val ca
     private fun startStep() {
         val step = currentStep
         if (step == null) {
-            profilePhoto = null
-            camera?.release()
+            stopRecorders()
             log.finish("completed") // procedure without an end step
             return
         }
@@ -84,8 +96,7 @@ class Session(val pkg: StudyPackage, val plan: Plan, val log: SessionLog, val ca
         // front camera: record during the study's chosen steps only
         camera?.let { if (it.config.records(step.id) && step.type != "end") it.start() else if (it.recording) it.stop(wait = false) }
         if (step.type == "end") {
-            profilePhoto = null
-            camera?.release()
+            stopRecorders()
             log.finish("completed")
         }
     }
@@ -122,7 +133,11 @@ class Session(val pkg: StudyPackage, val plan: Plan, val log: SessionLog, val ca
             }
             val log = SessionLog(dir, meta, logTouches = logging.flag("touches", true))
             val camera = cameraConfig?.let { FrontCameraRecorder(activity, dir, log, it) }
-            return Session(pkg, plan, log, camera)
+            val sensors = if (logging.flag("sensors", false)) {
+                val hz = (logging["sensor_hz"] as? JsonPrimitive)?.contentOrNull?.toDoubleOrNull()?.toInt() ?: 50
+                MotionSensors(activity, log, hz)
+            } else null
+            return Session(pkg, plan, log, camera, sensors)
         }
 
         /**
@@ -131,7 +146,6 @@ class Session(val pkg: StudyPackage, val plan: Plan, val log: SessionLog, val ca
          */
         private fun effectiveLogging(requested: JsonObject, frontCamera: Boolean): JsonObject {
             val out = LinkedHashMap(requested)
-            out["sensors"] = SessionLog.toJson(false)
             out["screen_recording"] = SessionLog.toJson(false)
             if (!frontCamera) out["front_camera"] = buildJsonObject { put("enabled", false) }
             return JsonObject(out)

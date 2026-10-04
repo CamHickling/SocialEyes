@@ -293,6 +293,42 @@ def test_sensors_are_optional(simulated, tmp_path):
     simulate_session(build, "P001", tmp_path / "s", sensors=True)
     s = load_session(tmp_path / "s")
     assert set(s.sensors["sensor"]) == {"accel", "gyro", "rotation"}
+    q = session_quality(s)
+    assert q["sensors"]["accel"]["hz"] == pytest.approx(50, rel=0.05)
+    assert not any("sampled at" in w for w in q["warnings"])
+
+
+def test_sensor_rate_and_missing_sensors(tmp_path):
+    ms = 1_000_000
+    meta = minimal_meta(logging={"sensors": True, "sensor_hz": 50},
+                        sensors={"hz": 50, "accel": "acc", "rotation": "rot"})  # no gyroscope
+    rows = [{"t_ns": i * 40 * ms, "sensor": "accel", "x": 0, "y": 9.8, "z": 0} for i in range(100)]  # 25 Hz
+    rows += [{"t_ns": i * 20 * ms, "sensor": "rotation", "x": 0, "y": 0, "z": 0, "w": 1} for i in range(100)]
+    write_session(tmp_path, meta, [], [], sensors=rows)
+    q = session_quality(load_session(tmp_path))
+    assert q["sensors"]["accel"]["hz"] == pytest.approx(25)
+    assert "gyro" not in q["sensors"]
+    assert any("no gyro sensor" in w for w in q["warnings"])
+    assert any("accel sampled at 25 Hz" in w for w in q["warnings"])
+    assert not any("rotation sampled" in w for w in q["warnings"])
+
+
+def test_interruptions_with_phases(tmp_path):
+    s = 1_000_000_000
+    meta = minimal_meta(end={"reason": "completed"})
+    events = [{"t_ns": 0, "type": "dnd", "filter": "off"},
+              {"t_ns": 5 * s, "type": "interruption", "kind": "focus_lost", "phase": "start"},
+              {"t_ns": 8 * s, "type": "interruption", "kind": "focus_lost", "phase": "end"},
+              {"t_ns": 20 * s, "type": "interruption", "kind": "notification", "phase": "start"},
+              {"t_ns": 21 * s, "type": "interruption", "kind": "notification", "phase": "end"},
+              {"t_ns": 30 * s, "type": "interruption", "kind": "focus_lost", "phase": "start"},
+              {"t_ns": 31 * s, "type": "interruption", "kind": "focus_lost", "phase": "end"}]
+    write_session(tmp_path, meta, events, [])
+    q = session_quality(load_session(tmp_path))
+    assert q["interruptions"] == {"focus_lost": 2, "notification": 1}
+    assert q["interruption_s"] == {"focus_lost": pytest.approx(4.0), "notification": pytest.approx(1.0)}
+    assert q["dnd_at_start"] == "off"
+    assert any("Do Not Disturb" in w for w in q["warnings"])
 
 
 # ---------------------------------------------------------------- front camera

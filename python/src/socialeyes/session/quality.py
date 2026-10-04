@@ -36,10 +36,13 @@ def session_quality(s: Session) -> dict:
     if n_background:
         warnings.append(f"app was in the background {n_background} time(s), {background_s:.1f} s in total")
 
-    interruptions = s.events_of("interruption")
-    by_kind = interruptions["kind"].value_counts().to_dict() if len(interruptions) else {}
+    by_kind, seconds_by_kind = interruption_summary(s)
     if by_kind:
         warnings.append(f"interruptions: {by_kind}")
+    dnd = s.events_of("dnd")
+    dnd_at_start = str(dnd["filter"].iloc[0]) if len(dnd) else None
+    if dnd_at_start == "off":
+        warnings.append("Do Not Disturb was off at the start: notifications could interrupt the session")
 
     jank = s.events_of("jank")
     frames_dropped = int(jank["frames_dropped"].sum()) if len(jank) else 0
@@ -71,6 +74,9 @@ def session_quality(s: Session) -> dict:
     camera = camera_quality(s)
     if camera:
         warnings += camera.pop("warnings")
+    sensors = sensor_quality(s)
+    if sensors:
+        warnings += sensors.pop("warnings")
 
     feed_start, feed_end = s.feed_window()
     return {
@@ -87,6 +93,8 @@ def session_quality(s: Session) -> dict:
         "background_s": round(background_s, 3),
         "n_background": n_background,
         "interruptions": by_kind,
+        "interruption_s": seconds_by_kind,
+        "dnd_at_start": dnd_at_start,
         "frames_dropped": frames_dropped,
         "longest_frame_ms": longest_frame_ms,
         "slept_s": slept_s,
@@ -94,9 +102,67 @@ def session_quality(s: Session) -> dict:
         "orientation_changes": n_rotations,
         "thermal_max": thermal_max,
         "camera": camera,
+        "sensors": sensors,
         "event_types": dict(sorted(ev["type"].value_counts().to_dict().items())) if len(types) else {},
         "warnings": warnings,
     }
+
+
+def interruption_summary(s: Session) -> tuple[dict, dict]:
+    """How often each kind of interruption happened, and for how long in total (s).
+
+    Events with `phase` come in start/end pairs (an unfinished one lasts until the
+    session ends); events without `phase` count once with no duration.
+    """
+    ev = s.events_of("interruption")
+    if not len(ev):
+        return {}, {}
+    counts: dict = {}
+    seconds: dict = {}
+    open_since: dict = {}
+    for _, e in ev.sort_values("t_ns").iterrows():
+        kind = e["kind"]
+        phase = e.get("phase") if "phase" in ev.columns else None
+        if phase == "end":
+            if kind in open_since:
+                seconds[kind] = seconds.get(kind, 0.0) + (int(e["t_ns"]) - open_since.pop(kind)) / 1e9
+            continue
+        counts[kind] = counts.get(kind, 0) + 1
+        if phase == "start":
+            open_since[kind] = int(e["t_ns"])
+    for kind, since in open_since.items():
+        seconds[kind] = seconds.get(kind, 0.0) + (s.end_ns - since) / 1e9
+    return counts, {k: round(v, 3) for k, v in seconds.items()}
+
+
+def sensor_quality(s: Session) -> dict | None:
+    """Motion-sensor checks: every sensor present, sampling rate, gaps."""
+    logging = s.meta.get("logging", {})
+    if not logging.get("sensors") and s.sensors is None:
+        return None
+    warnings: list[str] = []
+    if s.sensors is None or not len(s.sensors):
+        return {"warnings": ["motion sensors were switched on but sensors.csv is missing or empty"]}
+    hz = float(logging.get("sensor_hz", 50))
+    out: dict = {"hz_requested": hz}
+    available = s.meta.get("sensors")  # what the phone has, written by the app
+    expected = [k for k in ("accel", "gyro", "rotation") if available is None or k in available]
+    missing_on_phone = [k for k in ("accel", "gyro", "rotation") if available is not None and k not in available]
+    if missing_on_phone:
+        warnings.append(f"the phone has no {', '.join(missing_on_phone)} sensor")
+    for name in expected:
+        t = np.sort(s.sensors.loc[s.sensors["sensor"] == name, "t_ns"].to_numpy(np.int64))
+        if len(t) < 2:
+            warnings.append(f"no {name} samples in sensors.csv")
+            continue
+        gaps = np.diff(t)
+        achieved = 1e9 / float(np.median(gaps))  # robust to pauses in the background
+        longest = float(gaps.max()) / 1e9
+        out[name] = {"samples": int(len(t)), "hz": round(achieved, 1), "longest_gap_s": round(longest, 3)}
+        if achieved < 0.8 * hz:
+            warnings.append(f"{name} sampled at {achieved:.0f} Hz, below the requested {hz:.0f} Hz")
+    out["warnings"] = warnings
+    return out
 
 
 def camera_quality(s: Session) -> dict | None:

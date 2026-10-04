@@ -1,5 +1,9 @@
 package org.socialeyes.pictogram.ui
 
+import org.socialeyes.pictogram.log.InterruptionMonitor
+import kotlinx.coroutines.delay
+import androidx.compose.runtime.LaunchedEffect
+import android.provider.Settings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -136,6 +140,7 @@ fun SetupScreen(
                             OutlinedButton(onClick = { ask.launch(Manifest.permission.CAMERA) }) { Text("Allow camera") }
                         }
                     }
+                    DndHint()
                     Spacer(Modifier.height(4.dp))
                     Text("Participant (✓ = has data already)", fontWeight = FontWeight.SemiBold)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -186,4 +191,26 @@ fun SetupScreen(
             }
         }
     }
+}
+
+/** Reminds the researcher to turn on Do Not Disturb; re-checked while the screen is open. */
+@Composable
+private fun DndHint() {
+    val context = LocalContext.current
+    var dndOn by remember { mutableStateOf(InterruptionMonitor.dndOn(context)) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            dndOn = InterruptionMonitor.dndOn(context)
+            delay(1000)
+        }
+    }
+    if (dndOn) return
+    Text("Do Not Disturb is off. Turn it on so notifications and calls don't interrupt the session.",
+        fontSize = 13.sp)
+    OutlinedButton(onClick = {
+        val zen = Intent("android.settings.ZEN_MODE_SETTINGS")
+        runCatching { context.startActivity(zen) }.onFailure {
+            context.startActivity(Intent(Settings.ACTION_SOUND_SETTINGS))
+        }
+    }) { Text("Open Do Not Disturb settings") }
 }

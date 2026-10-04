@@ -211,7 +211,6 @@ class StudyPackage(val dir: File, val manifest: StudyManifest) {
     /** Features the study asks for that this app version can't do yet. Shown on the setup screen. */
     fun unsupportedFeatures(): List<String> = buildList {
         val logging = study.logging
-        if (logging.flag("sensors", false)) add("logging.sensors (motion sensors are not recorded yet)")
         if (logging.flag("screen_recording", false)) add("logging.screen_recording (not recorded yet)")
         if (study.neon.required) add("neon.required (Neon control is not built yet; sessions run without it)")
         val supportedSteps = setOf(

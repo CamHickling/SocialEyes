@@ -4,8 +4,8 @@
 > **Draft (format version 1).** This is the contract between the Pictogram app
 > (which writes these files) and the Python analysis (`socialeyes.session`,
 > which reads them). The app (`android/`) writes session.json, events.jsonl,
-> viewport.csv, touch.csv, video.csv and the front camera files; sensors and
-> screen recording are not built yet. `socialeyes.session.simulate` writes realistic fake
+> viewport.csv, touch.csv, video.csv, sensors.csv and the front camera files;
+> screen recording is not built yet. `socialeyes.session.simulate` writes realistic fake
 > sessions in this format.
 
 One folder per session:
@@ -162,7 +162,8 @@ the type. Unknown types must be ignored by readers, so the app can add new ones.
 | type | fields |
 |---|---|
 | `app_state` | `state` (`background` or `foreground`) |
-| `interruption` | `kind` (`notification`, `call`, `dialog`, `other`) |
+| `interruption` | `kind`, `phase` (`start` or `end`). Kinds: `notification` (a notification sound played; silent ones can't be seen), `call` (ringing or in a call), `alarm` (an alarm or timer sounding), `focus_lost` (something covered the app while it stayed on screen: notification shade, system dialog, power menu). Leaving the app is logged as `app_state` instead |
+| `dnd` | `filter`: Do Not Disturb, `off`, `priority`, `alarms` or `total_silence`; at start and on every change |
 | `orientation` | `rotation` (0, 90, 180, 270) |
 | `brightness` | `value` (0-1); at start and on every change |
 | `jank` | `frames_dropped`, `longest_frame_ms`: at most once per second, only when frames were dropped |
@@ -232,10 +233,15 @@ not count as visible.
 
 | column | meaning |
 |---|---|
-| `t_ns` | sample time (`SensorEvent.timestamp` is already on the elapsed base) |
-| `sensor` | `accel` (m/s², incl. gravity), `gyro` (rad/s), `rotation` (unit quaternion) |
+| `t_ns` | sample time (`SensorEvent.timestamp`, on the elapsed clock; converted on the few phones that use the `nanoTime` base) |
+| `sensor` | `accel` (m/s², incl. gravity), `gyro` (rad/s), `rotation` (unit quaternion from the game rotation vector: no magnetometer, so heading drifts slowly instead of jumping) |
 | `x`, `y`, `z` | values in device axes |
 | `w` | quaternion w (`rotation` only) |
+
+Only with `logging.sensors`, at `logging.sensor_hz` (Android may deliver slightly
+faster). session.json `sensors` lists the sensors the phone has (`hz` and each
+sensor's hardware name); a sensor the phone lacks is left out. Android may stop
+delivering samples while the app is in the background.
 
 ## Front camera
 
@@ -303,7 +309,7 @@ was covered.
 
 | file | contents |
 |---|---|
-| `quality.json` | duration, completed?, time in background, interruptions, dropped frames, phone slept?, Neon disconnects, thermal status, front camera checks |
+| `quality.json` | duration, completed?, time in background, interruptions (count and seconds per kind), Do Not Disturb at start, dropped frames, phone slept?, Neon disconnects, thermal status, front camera checks, motion sensor rate and gaps |
 | `strokes.csv` | one row per finger stroke: duration, distance, speed, `gesture` = `tap`, `double_tap`, `long_press`, `scroll`, `fling`, `pinch` |
 | `exposure.csv` | per post and element: seconds on screen (any part / fully / area-weighted), first time seen, times scrolled into view |
 | `touch_targets.csv` | every touch sample mapped to post, element, image pixel and AOI |
