@@ -328,7 +328,7 @@ fun CommentsSheet(
 
                     // study comments, each followed by the participant's replies to it
                     post.comments.forEachIndexed { i, c ->
-                        val id = "$i"
+                        val id = c.commentId.ifEmpty { "$i" } // packages compiled before comment ids: position
                         CommentLine(id, pkg.handle(c), pkg.manifest.accounts[c.accountId]?.avatar?.let(pkg::file), c.text, c.likeCount, id, reply = false)
                         Replies(id)
                     }

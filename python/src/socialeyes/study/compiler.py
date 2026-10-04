@@ -6,7 +6,7 @@ docs/STUDY_DESIGN.md):
 * accounts.csv  account_id, handle, avatar [, display_name, verified]
 * images.csv    image_id, file [, post_id, version, aoi_file]
 * posts.csv     post_id, role, account_id [, default_version, caption, like_count, posted_ago]
-* comments.csv  post_id, account_id, text [, variant, order, like_count]   (optional file)
+* comments.csv  post_id, account_id, text [, comment_id, variant, order, like_count]   (optional file)
 * captions.csv  post_id, variant, text                                       (optional file)
 * stories.csv   account_id, file [, story_id, order, duration_s, posted_ago, aoi_file]  (optional file)
 * reels.csv     account_id, file [, reel_id, order, caption, like_count, audio, posted_ago]  (optional file)
@@ -26,8 +26,9 @@ from __future__ import annotations
 
 import csv
 import json
+import re
 import shutil
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Optional
 
@@ -55,9 +56,9 @@ ATTRIBUTES = ("image_version", "label", "comment_variant", "caption_variant", "l
 # (required columns, optional columns) per CSV.
 COLUMNS: dict[str, tuple[list[str], list[str]]] = {
     "accounts": (["account_id", "handle", "avatar"], ["display_name", "verified"]),
-    "images": (["image_id", "file"], ["post_id", "version", "aoi_file"]),
+    "images": (["file"], ["image_id", "post_id", "version", "aoi_file"]),
     "posts": (["post_id", "role", "account_id"], ["default_version", "caption", "like_count", "posted_ago"]),
-    "comments": (["post_id", "account_id", "text"], ["variant", "order", "like_count"]),
+    "comments": (["post_id", "account_id", "text"], ["comment_id", "variant", "order", "like_count"]),
     "captions": (["post_id", "variant", "text"], []),
     "stories": (["account_id", "file"], ["story_id", "order", "duration_s", "posted_ago", "aoi_file"]),
     "reels": (["account_id", "file"], ["reel_id", "order", "caption", "like_count", "audio", "posted_ago"]),
@@ -114,6 +115,7 @@ class Post:
 
 @dataclass(frozen=True)
 class Comment:
+    comment_id: str
     post_id: str
     variant: str  # "" = the default set
     order: int
@@ -189,6 +191,30 @@ def _read_csv(path: Path, kind: str, rep: Report, required: bool = True) -> list
                 continue
             rows.append((where, values))
     return rows
+
+
+ID_CHARS = re.compile(r"[A-Za-z0-9_-]+")
+
+
+def _valid_id(value: str, where: str, column: str, rep: Report) -> bool:
+    """IDs end up in file names and data columns: letters, digits, _ and - only."""
+    if ID_CHARS.fullmatch(value):
+        return True
+    rep.errors.append(f"{where}: {column} {value!r} may only contain letters, digits, _ and -")
+    return False
+
+
+def _id_from_file(rel: str) -> str:
+    """Default id for a row with a file: the file name without extension (spaces etc. become _)."""
+    return re.sub(r"[^A-Za-z0-9_-]", "_", Path(rel.replace("\\", "/")).stem) or "_"
+
+
+def _reserved_comment_id(value: str, where: str, rep: Report) -> bool:
+    """p1, p2, ... name the participant's own comments in the session log."""
+    if re.fullmatch(r"p\d+", value):
+        rep.errors.append(f"{where}: comment_id {value!r} is reserved for participants' own comments (p1, p2, ...)")
+        return True
+    return False
 
 
 def _int(value: str, where: str, column: str, rep: Report, default: int = 0) -> int:
@@ -339,6 +365,8 @@ def check_study(study_dir: Path | str) -> tuple[Optional[StudyBundle], Report]:
     # accounts
     accounts: dict[str, Account] = {}
     for where, r in _read_csv(root / study.accounts, "accounts", rep):
+        if not _valid_id(r["account_id"], where, "account_id", rep):
+            continue
         if _duplicate(set(accounts), r["account_id"], where, "account_id", rep):
             continue
         avatar = _study_file(root, r["avatar"], where, "avatar", rep) or ""
@@ -350,6 +378,8 @@ def check_study(study_dir: Path | str) -> tuple[Optional[StudyBundle], Report]:
     # posts
     post_rows: list[tuple[str, dict[str, str]]] = []
     for where, r in _read_csv(root / study.posts, "posts", rep):
+        if not _valid_id(r["post_id"], where, "post_id", rep):
+            continue
         if _duplicate({p["post_id"] for _, p in post_rows}, r["post_id"], where, "post_id", rep):
             continue
         if r["role"] not in ("critical", "filler"):
@@ -365,6 +395,11 @@ def check_study(study_dir: Path | str) -> tuple[Optional[StudyBundle], Report]:
     post_ids = {r["post_id"] for _, r in post_rows}
     seen_versions: set[tuple[str, str]] = set()
     for where, r in _read_csv(root / study.images, "images", rep):
+        if r["image_id"]:
+            if not _valid_id(r["image_id"], where, "image_id", rep):
+                continue
+        else:
+            r["image_id"] = _id_from_file(r["file"])
         if _duplicate(set(images), r["image_id"], where, "image_id", rep):
             continue
         if r["post_id"] and r["post_id"] not in post_ids:
@@ -398,11 +433,22 @@ def check_study(study_dir: Path | str) -> tuple[Optional[StudyBundle], Report]:
             rep.errors.append(f"{where}: post_id {r['post_id']!r} is not in {study.posts}")
         if r["account_id"] not in accounts:
             rep.errors.append(f"{where}: account_id {r['account_id']!r} is not in {study.accounts}")
-        c = Comment(r["post_id"], r["variant"], _int(r["order"], where, "order", rep, default=n), r["account_id"],
-                    r["text"], _int(r["like_count"], where, "like_count", rep))
+        if r["comment_id"] and (not _valid_id(r["comment_id"], where, "comment_id", rep) or
+                                _reserved_comment_id(r["comment_id"], where, rep)):
+            continue
+        c = Comment(r["comment_id"], r["post_id"], r["variant"], _int(r["order"], where, "order", rep, default=n),
+                    r["account_id"], r["text"], _int(r["like_count"], where, "like_count", rep))
         comments.setdefault((c.post_id, c.variant), []).append(c)
-    for group in comments.values():
+    comment_ids: set[str] = set()
+    for (pid, variant), group in comments.items():
         group.sort(key=lambda c: c.order)
+        # default id: post, comment set and position (crit01_neutral_1, crit01_2): stable when rows are re-sorted
+        for k, c in enumerate(group):
+            if not c.comment_id:
+                group[k] = c = replace(c, comment_id="_".join(x for x in (pid, variant, str(k + 1)) if x))
+            if c.comment_id in comment_ids:
+                rep.errors.append(f"{study.comments}: comment_id {c.comment_id!r} is used twice")
+            comment_ids.add(c.comment_id)
 
     # captions (optional file)
     captions: dict[tuple[str, str], str] = {}
@@ -444,18 +490,19 @@ def _load_stories(b: StudyBundle, rep: Report) -> list[Story]:
     rows = _read_csv(b.root / name, "stories", rep, required=False)
     stories: list[Story] = []
     account_order: list[str] = []
-    per_account: dict[str, int] = {}
     for n, (where, r) in enumerate(rows):
         acc = r["account_id"]
         if acc not in b.accounts:
             rep.errors.append(f"{where}: account_id {acc!r} is not in {b.study.accounts}")
             continue
-        per_account[acc] = per_account.get(acc, 0) + 1
-        sid = r["story_id"] or f"{acc}_{per_account[acc]}"
+        if r["story_id"] and not _valid_id(r["story_id"], where, "story_id", rep):
+            continue
+        sid = r["story_id"] or _id_from_file(r["file"])
         if _duplicate({s.story_id for s in stories}, sid, where, "story_id", rep):
             continue
         if sid in b.images:
-            rep.errors.append(f"{where}: story_id {sid!r} is also an image_id in {b.study.images}; use another id")
+            rep.errors.append(f"{where}: story_id {sid!r} is also an image_id in {b.study.images}; "
+                              "rename the file or set story_id")
             continue
         duration = None
         if r["duration_s"]:
@@ -536,14 +583,14 @@ def _load_reels(b: StudyBundle, rep: Report) -> list[Reel]:
     """reels.csv (optional): short videos shown in the Reels tab."""
     rows = _read_csv(b.root / b.study.reels, "reels", rep, required=False)
     reels: list[Reel] = []
-    per_account: dict[str, int] = {}
     for n, (where, r) in enumerate(rows):
         acc = r["account_id"]
         if acc not in b.accounts:
             rep.errors.append(f"{where}: account_id {acc!r} is not in {b.study.accounts}")
             continue
-        per_account[acc] = per_account.get(acc, 0) + 1
-        rid = r["reel_id"] or f"{acc}_reel{per_account[acc]}"
+        if r["reel_id"] and not _valid_id(r["reel_id"], where, "reel_id", rep):
+            continue
+        rid = r["reel_id"] or _id_from_file(r["file"])
         if _duplicate({x.reel_id for x in reels}, rid, where, "reel_id", rep):
             continue
         file = _study_file(b.root, r["file"], where, "file", rep)
@@ -711,7 +758,8 @@ def _post_entry(b: StudyBundle, post: Post, levels: dict[str, str], cell: Option
         "like_count": _resolve(b, post, "like_count", values["like_count"]),
         "posted_ago": post.posted_ago,
         "comment_variant": values["comment_variant"] or "",
-        "comments": [{"account_id": c.account_id, "text": c.text, "like_count": c.like_count} for c in comments],
+        "comments": [{"comment_id": c.comment_id, "account_id": c.account_id, "text": c.text, "like_count": c.like_count}
+                     for c in comments],
     }
 
 

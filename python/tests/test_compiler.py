@@ -231,3 +231,35 @@ def test_reel_must_be_a_video(example):
     edit_file(example / "reels.csv", "reels/acc1_reel1.mp4", "images/fill01.png")
     _, rep = check_study(example)
     assert any("is not a readable video" in e for e in rep.errors)
+
+
+def test_ids_default_to_file_names_and_positions(example, tmp_path):
+    # image_id may be left out: the file name without extension
+    text = (example / "images.csv").read_text(encoding="utf-8")
+    (example / "images.csv").write_text("\n".join(l.split(",", 1)[1] for l in text.splitlines()) + "\n", encoding="utf-8")
+    out, rep = compile_study(example, tmp_path / "build")
+    study = json.loads((out / "study.json").read_text(encoding="utf-8"))
+    assert "crit01_original" in study["images"] and "foil01" in study["images"]
+    plan = json.loads((out / "plans" / "P001.json").read_text(encoding="utf-8"))
+    ids = [c["comment_id"] for p in plan["feed"] for c in p["comments"]]
+    assert "crit01_neutral_1" in ids or "crit01_appearance_1" in ids
+    assert len(ids) == len(set(ids))
+
+
+def test_explicit_comment_ids_and_id_rules(example):
+    edit_file(example / "comments.csv", "post_id,variant,", "comment_id,post_id,variant,")
+    text = (example / "comments.csv").read_text(encoding="utf-8").splitlines()
+    rows = [text[0]] + [f",{l}" for l in text[1:]]
+    rows[1] = "warm hello" + rows[1]   # space: not allowed
+    rows[2] = "p3" + rows[2]           # reserved for the participant's own comments
+    (example / "comments.csv").write_text("\n".join(rows) + "\n", encoding="utf-8")
+    edit_file(example / "accounts.csv", "acc1,", "acc 1,")
+    errors = errors_of(example)
+    assert "comment_id 'warm hello' may only contain letters, digits, _ and -" in errors
+    assert "comment_id 'p3' is reserved" in errors
+    assert "account_id 'acc 1' may only contain" in errors
+
+
+def test_story_ids_from_file_names_must_be_unique(example):
+    edit_file(example / "stories.csv", "acc3,stories/acc3_2.png", "acc3,stories/acc3_1.png")
+    assert "story_id 'acc3_1'" in errors_of(example)

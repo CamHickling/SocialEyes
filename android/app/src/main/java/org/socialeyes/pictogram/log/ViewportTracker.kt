@@ -36,7 +36,7 @@ class ViewportTracker(private val log: SessionLog) {
     var windowSize: Pair<Float, Float> = Float.MAX_VALUE to Float.MAX_VALUE
 
     /** An element drawn over the feed: the comments sheet's `sheet`, `sheet_input` and
-     *  `sheet_comment_<n>`, or an open `story` (with the story_id as [postId]). */
+     *  `sheet_comment_<comment_id>`, or an open `story` (with the story_id as [postId]). */
     fun updateOverlay(postId: String, element: String, coords: LayoutCoordinates) {
         if (!coords.isAttached) return
         val p = coords.positionInWindow()

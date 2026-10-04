@@ -17,7 +17,7 @@ CAMERA_COLUMNS = ["segment", "frame", "t_ns", "exposure_ns"]
 ELEMENTS = ("frame", "post", "header", "image", "label", "actions", "caption", "comments", "sheet", "sheet_input",
             "story", "reel")  # story / reel: an open story image or the reel video; post_id holds its id
 # comment n of the post in the comments sheet, or the participant's own comment pK
-SHEET_COMMENT = re.compile(r"sheet_comment_p?\d+")
+SHEET_COMMENT = re.compile(r"sheet_comment_[A-Za-z0-9_-]+")
 TOUCH_ACTIONS = ("down", "move", "up", "cancel")
 
 

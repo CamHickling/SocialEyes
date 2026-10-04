@@ -169,6 +169,7 @@ data class FeedPost(
 
 @Serializable
 data class Comment(
+    @SerialName("comment_id") val commentId: String = "",
     @SerialName("account_id") val accountId: String,
     val text: String,
     @SerialName("like_count") val likeCount: Int = 0,

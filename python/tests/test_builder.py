@@ -148,3 +148,14 @@ def test_index_html_is_up_to_date():
     spec.loader.exec_module(build)
     built = build._read(CORE.parents[1] / "index.html")
     assert build.render() == built, "builder/index.html is out of date: run python builder/build.py"
+
+
+def test_blank_study_has_only_the_baseline_feed():
+    t = core("Core.newStudy('blank')")
+    s, c = t["study"], t["content"]
+    assert s["feed"]["allow_likes"] is True
+    assert not any(s["feed"][k] for k in ("allow_saves", "allow_shares", "allow_comment_likes", "allow_comment_typing"))
+    assert not s["logging"]["sensors"] and not s["logging"]["screen_recording"]
+    assert not s["logging"]["front_camera"]["enabled"] and not s["neon"]["required"]
+    assert c["stories"] == 0 and c["reels"] == 0
+    assert {st["type"] for st in s["procedure"]} == {"instructions", "marker_calibration", "validation", "feed", "end"}

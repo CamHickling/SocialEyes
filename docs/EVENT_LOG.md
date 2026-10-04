@@ -123,7 +123,7 @@ the type. Unknown types must be ignored by readers, so the app can add new ones.
 | `like` | `post_id`, `liked` (true/false), `via` (`button` or `double_tap`) |
 | `comments_open` / `comments_close` | `post_id` (the comments sheet; posts show their first 2 comments inline) |
 | `comments_sheet` | `post_id`, `state` (`half` or `full`): the sheet came to rest at half height or full screen |
-| `comment_like` | `post_id`, `comment` (0-based position in the post's comments, or `p1`, `p2`, … for the participant's own), `liked` (true/false) |
+| `comment_like` | `post_id`, `comment` (the `comment_id`, or `p1`, `p2`, … for the participant's own), `liked` (true/false) |
 | `save` | `post_id`, `saved` (true/false): the bookmark button (`feed.allow_saves`) |
 | `share` | `post_id`: the send button; the app only shows "Sent" (`feed.allow_shares`) |
 | `home_tap` | the Home tab was tapped; the feed scrolls back to the top (with Reels open, it closes Reels) |
@@ -147,7 +147,7 @@ the type. Unknown types must be ignored by readers, so the app can add new ones.
 | `profile_tap` | `post_id`, `target` (`handle` or `avatar`) |
 | `label_tap` | `post_id` |
 | `image_tap` | `post_id` (a single tap on the image that did nothing else) |
-| `comment_submit` | `post_id`, `comment_id` (`p1`, `p2`, … numbered across the session), `text`, `reply_to` (the comment answered: a position, a `p` id, or null for a new comment), `typing_ms` (first change of the draft to posting). Only with `feed.allow_comment_typing` |
+| `comment_submit` | `post_id`, `comment_id` (`p1`, `p2`, … numbered across the session), `text`, `reply_to` (the comment answered: a `comment_id`, a `p` id, or null for a new comment), `typing_ms` (first change of the draft to posting). Only with `feed.allow_comment_typing` |
 | `comment_edit` | `post_id`, `text` (the whole draft after the change), `reply_to`: every change of the comment draft. Android keyboards report each typed character as a change, so this is close to a keystroke record of the text (key presses themselves, on the keyboard, are not logged) |
 
 **Sync and eye tracker**
@@ -186,7 +186,7 @@ Each logged frame is one `frame` row followed by one row per visible element.
 | `frame` | frame counter |
 | `scroll_y` | feed scroll offset in px (on `frame` rows) |
 | `post_id` | blank on `frame` rows |
-| `element` | `frame`, `post` (the whole card), `header`, `image`, `label`, `actions`, `caption`, `comments`; while the comments sheet is open also `sheet`, `sheet_input` (the comment box, with `feed.allow_comment_typing`) and `sheet_comment_<n>` (comment n of the post, 0-based) or `sheet_comment_p<k>` (the participant's own comment or reply pK); while a story is open also `story` (the story image; `post_id` holds the `story_id`); while Reels is open also `reel` (the video; `post_id` holds the `reel_id`; two while swiping between reels) |
+| `element` | `frame`, `post` (the whole card), `header`, `image`, `label`, `actions`, `caption`, `comments`; while the comments sheet is open also `sheet`, `sheet_input` (the comment box, with `feed.allow_comment_typing`) and `sheet_comment_<comment_id>` (a comment of the post) or `sheet_comment_p<k>` (the participant's own comment or reply pK); while a story is open also `story` (the story image; `post_id` holds the `story_id`); while Reels is open also `reel` (the video; `post_id` holds the `reel_id`; two while swiping between reels) |
 | `left`, `top`, `right`, `bottom` | element rectangle, screen px, unclipped (blank on `frame` rows) |
 
 When the feed step ends, the app writes one final `frame` row with no elements.
@@ -194,7 +194,7 @@ When the feed step ends, the app writes one final `frame` row with no elements.
 While the comments sheet is open, its rows carry the `post_id` of the post whose
 comments it shows. The sheet lies on top of the feed: the analysis maps a point on
 it to the sheet (or the comment under it) rather than to the post below, and counts
-feed elements as visible only above the sheet's top edge. `sheet_comment_<n>` rows
+feed elements as visible only above the sheet's top edge. `sheet_comment_*` rows
 are written only while that comment is in the sheet's visible area. An open story
 covers the whole screen: while a `story` row is present, feed elements do not count
 as visible. While a story is swiped sideways two `story` rows can be present (the

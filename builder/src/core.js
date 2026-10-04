@@ -111,8 +111,13 @@ const Core = (() => {
     platform: { name: "Pictogram", theme: "light", participant_handle: "you" },
     labels: {},
     factors: [],
-    feed: { order: "shuffle", lead_in_fillers: 2, done_button_after_s: 60, time_limit_s: null },
+    // only the baseline feed: every optional feature starts off and is switched on in the form
+    feed: {
+      order: "shuffle", lead_in_fillers: 2, done_button_after_s: 60, time_limit_s: null,
+      allow_likes: true, allow_saves: false, allow_shares: false, allow_comment_likes: false, allow_comment_typing: false,
+    },
     logging: { touches: true, sensors: false, screen_recording: false, front_camera: { enabled: false } },
+    neon: { required: false },
     procedure: [
       { id: "welcome", type: "instructions", title: "Welcome", text: "Please browse the feed as you normally would." },
       { id: "cal1", type: "marker_calibration", duration_s: 4 },

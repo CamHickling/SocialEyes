@@ -350,12 +350,12 @@ private fun FeedContent(session: Session, onDone: (reason: String) -> Unit) {
                 track = { element, coords -> tracker.updateOverlay(post.postId, element, coords) },
                 trackClip = tracker::setOverlayClip,
                 onCommentLike = { id, liked ->
-                    // study comments by position (0, 1, ...), the participant's own as p1, p2, ...
-                    log.event("comment_like", fields = arrayOf("post_id" to post.postId, "comment" to (id.toIntOrNull() ?: id), "liked" to liked))
+                    // study comments by comment_id, the participant's own as p1, p2, ...
+                    log.event("comment_like", fields = arrayOf("post_id" to post.postId, "comment" to id, "liked" to liked))
                 },
                 onDraftChange = { text, replyTo ->
                     if (draftStartNs == null && text.isNotEmpty()) draftStartNs = Clocks.elapsedNs()
-                    log.event("comment_edit", fields = arrayOf("post_id" to post.postId, "text" to text, "reply_to" to replyTo?.let { it.toIntOrNull() ?: it }))
+                    log.event("comment_edit", fields = arrayOf("post_id" to post.postId, "text" to text, "reply_to" to replyTo))
                 },
                 onSubmit = { text, replyTo, thread ->
                     ownCount++
@@ -366,7 +366,7 @@ private fun FeedContent(session: Session, onDone: (reason: String) -> Unit) {
                     log.event(
                         "comment_submit", fields = arrayOf(
                             "post_id" to post.postId, "comment_id" to id, "text" to text,
-                            "reply_to" to replyTo?.let { it.toIntOrNull() ?: it }, "typing_ms" to typingMs,
+                            "reply_to" to replyTo, "typing_ms" to typingMs,
                         )
                     )
                 },

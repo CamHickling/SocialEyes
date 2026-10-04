@@ -132,7 +132,7 @@
       <code>study.yaml</code> plus CSV files with a row for every piece of content your design needs.
       Everything stays in this browser; nothing is uploaded.</p>
       <div class="cards">
-        <div class="card"><h3>New study</h3><p>Start from an empty study with a minimal procedure.</p>${btn("new-blank", "Start blank", "primary")}</div>
+        <div class="card"><h3>New study</h3><p>Just the basic feed (posts, likes, comments to read) and the eye-tracking steps. Every optional feature starts off; switch on what you need.</p>${btn("new-blank", "Start blank", "primary")}</div>
         <div class="card"><h3>From the example</h3><p>The 2 x 2 x 2 retouching study from <code>studies/example</code>, to adapt.</p>${btn("new-example", "Use the example")}</div>
         <div class="card" id="drop"><h3>Open a study.yaml</h3><p>Edit an existing study. Comments in the file are not kept; your CSV files are not touched.</p>
           <label class="btn file">Choose file…<input type="file" id="open-file" accept=".yaml,.yml,text/yaml"></label>

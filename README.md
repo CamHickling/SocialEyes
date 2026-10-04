@@ -28,9 +28,9 @@
 <br>
 
 > [!WARNING]
-> **Work in progress (v0.1).** The study format, the study compiler and
-> command-line tool, and the eye-tracking building blocks exist. The phone
-> app and the end-to-end analysis pipeline are **not built yet**. Each part
+> **Work in progress (v0.1).** The study format (v1), the study compiler and
+> command-line tool, the experiment builder and the phone app work. Neon control
+> in the app and the gaze analysis pipeline are **not built yet**. Each part
 > below is marked ✅ working, 🟡 partial or ⏳ planned, so you know what you can
 > rely on today. Feedback from other labs is very welcome.
 
@@ -140,7 +140,7 @@ for mixed models in R.
 | Session log format (touches, scrolling, interactions, quality events) | 🟡 | `docs/EVENT_LOG.md` (draft; the app must implement it) |
 | Session analysis: gestures, time on screen, touch→AOI, finger occlusion, quality checks | ✅ | `python/src/socialeyes/session/` (tested on simulated sessions) |
 | Experiment builder: guided form that writes study.yaml and CSV skeletons | ✅ | `builder/index.html` (open in a browser) |
-| CSV format reference | 🟡 | `docs/STUDY_DESIGN.md` (draft, may still change) |
+| CSV format reference | ✅ | `docs/STUDY_DESIGN.md` (version 1) |
 | Android SocialEyes app: Instagram-style feed (stories row, comments sheet), sync patch, touch / scroll / viewport / quality logging, instructions, marker calibration, validation, questionnaires, image ratings, recognition test, camera check, front camera video, motion sensors, interruption detection | 🟡 | `android/` (tested on a Pixel 3) |
 | App: screen recording, Neon control | ⏳ | see [What the app doesn't do yet](#what-the-app-doesnt-do-yet) |
 | Neon integration (auto start/stop, clock sync) | ⏳ | |
@@ -213,10 +213,10 @@ java -version
 ## Designing a study
 
 > [!NOTE]
-> The format below is implemented by the compiler. The CSV columns are
-> documented in [`docs/STUDY_DESIGN.md`](docs/STUDY_DESIGN.md) and may still
-> change slightly before v1. [`studies/example/`](studies/example) is a complete
-> working study to copy from.
+> **Study format version 1.** The CSV columns are documented in
+> [`docs/STUDY_DESIGN.md`](docs/STUDY_DESIGN.md). Studies written for v1 keep
+> working: later versions only add optional columns and settings.
+> [`studies/example/`](studies/example) is a complete working study to copy from.
 
 A study is a folder:
 
@@ -668,7 +668,7 @@ Roughly in order:
 - [x] Project-local toolchain setup (Windows)
 - [x] **Study compiler** + `socialeyes` CLI (`validate`, `compile`, `case-sheet`)
 - [x] A complete **example study** with placeholder images
-- [ ] Finalise the CSV formats (draft in `docs/STUDY_DESIGN.md`)
+- [x] Finalise the CSV formats: version 1 (`docs/STUDY_DESIGN.md`)
 - [x] Session **log format** and touch / scrolling / quality analysis
       (tested on simulated sessions)
 - [ ] The **Android app**: feed rendering, procedure steps, event logging
@@ -685,6 +685,82 @@ Roughly in order:
 - [x] Commenting and replying in the comments sheet
 - [x] Stories (`stories.csv`, story viewer, story events and gaze-mappable story images)
 - [x] Reels (`reels.csv`, Reels tab with video playback, reel events, `video.csv`)
+- [ ] **Next: SocialEyes desktop app (Windows)**: one window that takes a study from design
+      to data, for researchers who don't use a terminal. Python + a small built-in browser
+      window (pywebview) showing the existing builder pages, calling the `socialeyes` package
+      directly; packaged as one installer / `.exe` that includes adb, so no Python, Android
+      Studio or toolchain is needed. Tabs:
+  - [ ] **Studies**: a list of your study folders with their status (designing, ready,
+        collecting data, number of sessions); new study from blank or from the example
+  - [ ] **Design**: the experiment builder, editing the study folder in place (no zip); the
+        compiler's own checks (missing images, AOI sizes, CSV mistakes) shown next to the
+        design checks. The standalone `builder/index.html` keeps working in a browser
+  - [ ] **Content**: checklist of every image, avatar, video and AOI the design needs, found
+        or missing ("14 of 38 files ready"); later, drop files onto their slot
+  - [ ] **Phone (experiment loader)**: pick a study → validate, compile and copy it to the
+        phone in one step; install or update the app if needed; check the phone is ready
+        (storage, battery, Do Not Disturb, camera permission). Load only unlocks when the
+        study validates
+  - [ ] **Data (data unloader)**: copy every new session off the phone, check each file
+        arrived intact (checksums), then delete it from the phone so participant data never
+        stays on the device; run the quality checks and show a summary; keep a session
+        register per study (participant, date, phone, completed, warnings; flags participant
+        IDs used twice); optionally make a second copy (e.g. a network or encrypted drive);
+        once Neon is integrated, also collect the matching Neon recording
+  - [ ] **Protection once data exists**: when a study has sessions, warn about or lock
+        changes that would break it (seed, post order, image file names, comment order) and
+        bump the study version when it is edited
+  - [ ] Order: Design in the app and saving to the folder → Phone → Data → Studies list →
+        Content checklist → protections
+- [ ] **Easier for non-technical users** (extra features, mostly in the desktop app):
+  - [ ] **AOI drawing tool**: open each critical image and draw rectangles or polygons
+        over the regions (face, waist, ...), name them, and the app writes the AOI file
+        with the right image size. Optional **Segment Anything (SAM)** assist: click on a
+        region and SAM proposes its outline, which becomes an editable polygon. SAM is an
+        optional download that runs locally (no images leave the computer); without it,
+        drawing by hand still works. To decide: which SAM version (SAM 2 or a small, fast
+        variant for CPU-only laptops), how it is installed, and how masks are simplified
+        into polygons
+  - [ ] **Match dropped images automatically**: drag a folder of images onto the app; it
+        matches files to the slots the design needs by name (`crit01_retouched.jpg` -> the
+        retouched version of post crit01), copies them into the study folder, lists what is
+        still missing and which files matched nothing (to assign by hand), and offers to
+        resize images that are far too large or the wrong shape
+  - [ ] **Phone setup wizard**: a one-time guide with pictures for turning on developer
+        mode and USB debugging, installing the app and allowing the camera; it detects the
+        phone's state and shows the next step
+  - [ ] **Feed preview**: see posts, labels, comments and stories as the participant will,
+        in the app or sent to the phone, before running anyone
+  - [ ] **"Fix it" buttons** on the checks that can be fixed automatically ("Use 12 plans",
+        "Add a camera check step", "Add a marker calibration before the feed")
+  - [ ] **Session-day mode**: a "Next participant" button with the next unused ID from the
+        session register; a pre-flight checklist (battery, storage, Do Not Disturb, glasses
+        connected); locks the phone into the app (Android screen pinning) during a session;
+        unload at the end of the day
+  - [ ] **Plain language everywhere**: hover explanations for terms (within-subjects, AOI,
+        seed, filler, ...), rarely used settings behind an "Advanced" switch, YAML never
+        shown unless asked for, error messages that say what to do
+  - [ ] **Safety nets**: undo, autosave, and a saved copy of the study each time it is
+        loaded onto a phone, so you can always see and restore what participants ran
+  - [ ] **One-click tidy data export**: combine every session of a study into tables ready
+        for Excel, SPSS or R: one row per participant x post (group, the post's conditions,
+        time on screen, likes, comment opens, ratings, recognition answers, and later gaze
+        dwell per AOI and time to first fixation) and one row per participant
+        (questionnaire answers, group, session length, quality flags for exclusions); the
+        R templates read these files
+  - [ ] **Short guides**: a printable "running a session" sheet and short screen
+        recordings of the main tasks (design a study, add content, load a phone, unload data)
+- [ ] **Different phones and screen sizes**: run and test on other Android phones (Samsung,
+      Pixel, Motorola, ...), Android 10-15, and small to large screens (about 5.5" to 6.9",
+      tall and short aspect ratios, notches and camera cutouts, gesture and button
+      navigation, 60-120 Hz). Includes: a test matrix and a short device report the loader
+      writes for each phone; layouts checked at the phone's display size and font size
+      settings (logged in session.json, with a warning when they are not the default);
+      on-screen AprilTag and sync patch sizes checked on each screen; phone-case marker
+      sheets per phone model (`socialeyes case-sheet` for its dimensions); front-camera
+      fallbacks for other camera drivers (the Pixel 3 needed a hidden preview stream);
+      manufacturer battery savers that stop apps (Samsung, Xiaomi) handled by the loader's
+      readiness check. Tablets and foldables are out of scope at first
 - [ ] *Stretch:* **generated content**: draft comments and account usernames automatically,
       optionally based on what each post's image shows, written into `comments.csv` /
       `accounts.csv` for the researcher to review and edit before compiling
