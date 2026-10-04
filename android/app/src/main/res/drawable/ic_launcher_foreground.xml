@@ -11,16 +11,16 @@
         android:translateX="24"
         android:translateY="31">
         <path
-            android:fillColor="#E4572E"
+            android:fillColor="#6750A4"
             android:pathData="M90,10 H210 A70,70 0 0 1 280,80 V120 A70,70 0 0 1 210,190 H90 A70,70 0 0 1 20,120 V80 A70,70 0 0 1 90,10 Z" />
         <path
-            android:fillColor="#E4572E"
+            android:fillColor="#6750A4"
             android:pathData="M70,170 L52,226 L118,184 Z" />
         <path
             android:fillColor="#FFFFFF"
             android:pathData="M62,100 Q150,30 238,100 Q150,170 62,100 Z" />
         <path
-            android:fillColor="#1B1E28"
+            android:fillColor="#21005D"
             android:pathData="M122,100 A28,28 0 1 1 178,100 A28,28 0 1 1 122,100 Z" />
         <path
             android:fillColor="#FFFFFF"

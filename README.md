@@ -8,12 +8,12 @@
 
 **A controllable mock social media feed + eye tracking, for body-image research.**
 
-![status](https://img.shields.io/badge/status-work%20in%20progress-E4572E?style=flat-square)
-![version](https://img.shields.io/badge/version-0.1-1B1E28?style=flat-square)
-![python](https://img.shields.io/badge/python-3.10%2B-1B1E28?style=flat-square&logo=python&logoColor=white)
-![platform](https://img.shields.io/badge/app-Android-1B1E28?style=flat-square&logo=android&logoColor=white)
-![eye tracker](https://img.shields.io/badge/eye%20tracker-Pupil%20Labs%20Neon-1B1E28?style=flat-square)
-![stats](https://img.shields.io/badge/stats-R%20%C2%B7%20lme4-1B1E28?style=flat-square&logo=r&logoColor=white)
+![status](https://img.shields.io/badge/status-work%20in%20progress-6750A4?style=flat-square)
+![version](https://img.shields.io/badge/version-0.1-21005D?style=flat-square)
+![python](https://img.shields.io/badge/python-3.10%2B-21005D?style=flat-square&logo=python&logoColor=white)
+![platform](https://img.shields.io/badge/app-Android-21005D?style=flat-square&logo=android&logoColor=white)
+![eye tracker](https://img.shields.io/badge/eye%20tracker-Pupil%20Labs%20Neon-21005D?style=flat-square)
+![stats](https://img.shields.io/badge/stats-R%20%C2%B7%20lme4-21005D?style=flat-square&logo=r&logoColor=white)
 
 [How it works](#how-it-works) ·
 [Status](#feature-status) ·
@@ -604,7 +604,8 @@ studies/example/         a complete worked example with placeholder images
 docs/
   STUDY_DESIGN.md        CSV reference, balance rules, compiler output
   EVENT_LOG.md           session log format (app <-> analysis contract)
-  assets/                logos, banners, avatar, favicons (PNG + SVG)
+  assets/                logos, banners, avatar, favicons (PNG + SVG); lavender palette:
+                         #6750A4 primary, #21005D deep purple, #D0BCFF on dark backgrounds
 ```
 
 ---
