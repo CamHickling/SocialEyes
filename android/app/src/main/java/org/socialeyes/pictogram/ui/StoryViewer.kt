@@ -69,6 +69,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -449,18 +450,25 @@ private fun StoryPage(
                     }
                 }
                 Spacer(Modifier.height(10.dp))
+                // The handle gives way (with "…") when the story is narrow, e.g. while the
+                // keyboard is open, so the ⋮ and ✕ always keep their place at the right.
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (account != null) Avatar(pkg.file(account.avatar), 32.dp)
                     Spacer(Modifier.width(10.dp))
-                    Text(account?.handle ?: story.accountId, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                    story.postedAgo?.takeIf { it.isNotBlank() }?.let {
-                        Text("  $it", color = Color.White.copy(alpha = 0.7f), fontSize = 14.sp)
+                    Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            account?.handle ?: story.accountId, color = Color.White, fontWeight = FontWeight.SemiBold,
+                            fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                        story.postedAgo?.takeIf { it.isNotBlank() }?.let {
+                            Text("  $it", color = Color.White.copy(alpha = 0.7f), fontSize = 14.sp, maxLines = 1, softWrap = false)
+                        }
                     }
-                    Spacer(Modifier.weight(1f))
-                    Icon(FeedIcons.MoreVertical, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                    Icon(FeedIcons.MoreVertical, null, tint = Color.White, modifier = Modifier.padding(start = 8.dp).size(20.dp))
                     Text(
                         "✕", color = Color.White, fontSize = 22.sp,
-                        modifier = Modifier.clickable { close("close_button") }.padding(start = 16.dp, end = 4.dp),
+                        modifier = Modifier.clickable { close("close_button") }.padding(start = 14.dp, end = 4.dp),
                     )
                 }
             }
