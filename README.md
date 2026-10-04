@@ -91,7 +91,7 @@ for mixed models in R.
  │  study compiler     │──────────────────────────────────────────────┐
  │  (Python)           │                                              ▼
  └─────────────────────┘                                   ┌────────────────────┐
-                                                           │ "Pictogram" app    │
+                                                           │ SocialEyes app     │
    Neon glasses ◄──── starts/stops recording, syncs ──────►│ (Android phone)    │
         │                                                  └────────────────────┘
         │ scene video + gaze                                         │ event log
@@ -110,7 +110,8 @@ for mixed models in R.
 2. **The compiler** validates it, builds the counterbalancing and writes a
    reproducible plan for every participant: which condition each critical post
    is in, and the feed order.
-3. **The phone app** ("Pictogram", a neutral name so we don't use any real
+3. **The phone app** (SocialEyes; inside the study its feed is branded with a
+   neutral platform name, "Pictogram" by default, so we don't use any real
    platform's trademark) runs the procedure: instructions, calibration,
    questionnaires, the feed, ratings and a recognition test. It logs every
    scroll, dwell, like and tap with timestamps.
@@ -139,7 +140,7 @@ for mixed models in R.
 | Session log format (touches, scrolling, interactions, quality events) | 🟡 | `docs/EVENT_LOG.md` (draft; the app must implement it) |
 | Session analysis: gestures, time on screen, touch→AOI, finger occlusion, quality checks | ✅ | `python/src/socialeyes/session/` (tested on simulated sessions) |
 | CSV format reference | 🟡 | `docs/STUDY_DESIGN.md` (draft, may still change) |
-| Android "Pictogram" app: Instagram-style feed (stories row, comments sheet), sync patch, touch / scroll / viewport / quality logging, instructions, marker calibration, validation, questionnaires, image ratings, recognition test | 🟡 | `android/` (tested on a Pixel 3) |
+| Android SocialEyes app: Instagram-style feed (stories row, comments sheet), sync patch, touch / scroll / viewport / quality logging, instructions, marker calibration, validation, questionnaires, image ratings, recognition test | 🟡 | `android/` (tested on a Pixel 3) |
 | App: camera check, front camera, sensors, Neon control | ⏳ | see [What the app doesn't do yet](#what-the-app-doesnt-do-yet) |
 | Neon integration (auto start/stop, clock sync) | ⏳ | |
 | Gaze-to-screen mapping and AOI analysis | ⏳ | |
@@ -501,7 +502,7 @@ adb install -r app\build\outputs\apk\debug\app-debug.apk
 adb push ..\build\example /sdcard/Android/data/org.socialeyes.pictogram/files/studies/
 ```
 
-Open **Pictogram** (the app drawer, or tap **Add to home screen** on its setup screen once
+Open **SocialEyes** (the app drawer, or tap **Add to home screen** on its setup screen once
 for a home-screen shortcut), pick the study and a participant, and start. Press Back to stop a
 session. The first time the app goes full screen, Android shows a "Viewing full screen"
 notice; tap **Got it** during a test run so participants never see it.
@@ -599,13 +600,13 @@ python/
                          occlusion, quality; simulate.py writes fake sessions
     cli.py               the `socialeyes` command
   tests/                 pytest suite (runs against studies/example)
-android/                 the Pictogram app (Kotlin, Jetpack Compose)
+android/                 the SocialEyes Android app (Kotlin, Jetpack Compose)
 studies/example/         a complete worked example with placeholder images
 docs/
   STUDY_DESIGN.md        CSV reference, balance rules, compiler output
   EVENT_LOG.md           session log format (app <-> analysis contract)
   assets/                logos, banners, avatar, favicons (PNG + SVG); lavender palette:
-                         #6750A4 primary, #21005D deep purple, #D0BCFF on dark backgrounds
+                         #6750A4 primary, #21005D deep purple, #A28BE0 on dark backgrounds
 ```
 
 ---
