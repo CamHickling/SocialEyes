@@ -128,8 +128,13 @@ the type. Unknown types must be ignored by readers, so the app can add new ones.
 | `home_tap` | the Home tab was tapped; the feed scrolls back to the top |
 | `story_open` | `account_id`: a story circle was tapped |
 | `story_start` | `story_id`, `account_id`: a story appears |
-| `story_end` | `story_id`, `account_id`, `reason` (`auto`, `tap_forward`, `tap_back`, `swipe_down`, `close_button`, `back`), `shown_ms`, `paused_ms` (time held down) |
+| `story_end` | `story_id`, `account_id`, `reason` (`auto`, `tap_forward`, `tap_back`, `swipe_next`, `swipe_back`, `swipe_down`, `close_button`, `back`), `shown_ms`, `paused_ms` (time held down or dragging) |
+| `story_swipe` | `story_id`, `direction` (`next` or `previous` account), `max_fraction` (how far it was dragged, 0-1 of the screen width), `completed` (false: a "peek" that snapped back) |
 | `story_close` | `reason`: the story viewer closed (after the last story, or as in `story_end`) |
+| `story_like` | `story_id`, `liked` (true/false): the heart in the story's reply bar (`feed.allow_likes`) |
+| `story_share` | `story_id`: the paper plane; the app only shows "Sent" (`feed.allow_shares`) |
+| `story_reply` | `story_id`, `text`, `typing_ms`: a message sent from the reply box (`feed.allow_comment_typing`); the story is paused while typing |
+| `story_reply_edit` | `story_id`, `text` (the whole draft after the change): every change of the reply draft, like `comment_edit` |
 | `caption_expand` | `post_id` |
 | `profile_tap` | `post_id`, `target` (`handle` or `avatar`) |
 | `label_tap` | `post_id` |
@@ -183,7 +188,10 @@ it to the sheet (or the comment under it) rather than to the post below, and cou
 feed elements as visible only above the sheet's top edge. `sheet_comment_<n>` rows
 are written only while that comment is in the sheet's visible area. An open story
 covers the whole screen: while a `story` row is present, feed elements do not count
-as visible.
+as visible. While a story is swiped sideways two `story` rows can be present (the
+current and the peeked story). During the swipe the stories turn like the faces of a
+cube, so their rectangles (and gaze mapped onto them) are approximate until the
+`story_swipe` event; exclude those moments if exact image positions matter.
 A post is "visible" if any part of its `post` rectangle is on screen.
 
 ## touch.csv

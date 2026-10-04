@@ -537,7 +537,11 @@ rest of the session works.
 real logos. Liking, saving (bookmark), sending (shows "Sent"), captions and comments work, and the
 Home tab scrolls back to the top. With a `stories.csv`, tapping a story circle opens the
 account's stories full screen (progress bars, tap right/left to skip/go back, hold to
-pause, swipe down to close, 5 s each by default via `feed.story_duration_s`); watched
+pause, swipe sideways to turn, cube-style, to the next/previous account or drag part way
+to peek, swipe down to close, 5 s each by default via `feed.story_duration_s`). The
+story's reply bar works too: typing a reply pauses the story and sends it (logged, with
+every draft edit, under `feed.allow_comment_typing`), the heart likes the story and the
+paper plane shows "Sent"; watched
 accounts get a grey ring. The top-bar icons and the other tabs are for the look only. Each post shows its first 2 comments; with more, "View all N comments"
 opens the comments sheet, so use the `order` column in `comments.csv` to choose which
 comments are visible without a tap. The sheet opens at half height and can be pulled up

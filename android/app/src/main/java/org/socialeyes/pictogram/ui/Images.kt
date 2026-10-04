@@ -4,7 +4,9 @@ import android.graphics.BitmapFactory
 import android.util.LruCache
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
-import androidx.compose.runtime.produceState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import kotlinx.coroutines.Dispatchers
@@ -36,9 +38,16 @@ object ImageCache {
     }
 }
 
-/** The decoded image, or null while it loads (or if it can't be read). */
+/**
+ * The decoded image, or null while it loads (or if it can't be read). A new
+ * [file] always gets a fresh state, so a reused slot (e.g. the story viewer
+ * moving to the next story) never keeps showing the previous image.
+ */
 @Composable
-fun rememberImage(file: File, maxWidth: Int): State<ImageBitmap?> =
-    produceState(ImageCache.peek(file, maxWidth), file, maxWidth) {
-        if (value == null) value = ImageCache.load(file, maxWidth)
+fun rememberImage(file: File, maxWidth: Int): State<ImageBitmap?> {
+    val state = remember(file, maxWidth) { mutableStateOf(ImageCache.peek(file, maxWidth)) }
+    LaunchedEffect(file, maxWidth) {
+        if (state.value == null) state.value = ImageCache.load(file, maxWidth)
     }
+    return state
+}

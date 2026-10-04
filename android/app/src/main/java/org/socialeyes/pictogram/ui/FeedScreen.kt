@@ -111,6 +111,7 @@ private fun FeedContent(session: Session, onDone: (reason: String) -> Unit) {
     // stories: grouped by account in stories.csv order; which have been seen; which account is open
     val storyGroups = remember { pkg.manifest.stories.groupBy { it.accountId }.values.toList() }
     val seenStories = remember { mutableStateMapOf<String, Boolean>() }
+    val storyLikes = remember { mutableStateMapOf<String, Boolean>() }
     var openStoryGroup by remember { mutableStateOf<Int?>(null) }
     var toast by remember { mutableStateOf<Pair<String, Long>?>(null) } // text, id
     val scope = rememberCoroutineScope()
@@ -282,8 +283,13 @@ private fun FeedContent(session: Session, onDone: (reason: String) -> Unit) {
             startGroup = g,
             topInset = topStrip,
             track = { storyId, coords -> tracker.updateOverlay(storyId, "story", coords) },
+            untrack = { storyId -> tracker.removeOverlay(storyId, "story") },
             event = { type, fields -> log.event(type, fields = fields) },
             onSeen = { seenStories[it] = true },
+            allowReplies = cfg.allowCommentTyping,
+            allowLikes = cfg.allowLikes,
+            allowShares = cfg.allowShares,
+            storyLikes = storyLikes,
             onClose = { reason ->
                 log.event("story_close", fields = arrayOf("reason" to reason))
                 tracker.clearOverlay()
