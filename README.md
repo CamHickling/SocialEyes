@@ -268,6 +268,7 @@ seed: 20251001                 # change it and every plan changes; never change 
 platform:
   name: Pictogram              # never use a real platform's name or logo
   theme: light
+  participant_handle: you      # name the participant's own comments appear under
 
 labels:
   edited:
@@ -345,11 +346,22 @@ participants:
 **Procedure step types:** `instructions`, `marker_calibration` (on-screen tags
 and sync flash; do one before and after the feed), `camera_check` (researcher
 framing check for the optional front camera; never shows the video),
+`profile_photo` (optional selfie as the participant's profile picture, with `text`
+and `allow_skip`; see below),
 `validation` (look-and-tap
 dots, 5/9/13 points, used to measure gaze accuracy), `questionnaire` (items of
 kind `vas`, `likert`, `choice`, `text`, `number`), `feed` (exactly one),
 `image_rating`, `recognition` (old/new test with `foils` and/or the
 `alternate_version` of a seen image as lures) and `end` (must be last).
+
+**Profile photo.** A `profile_photo` step lets the participant take a selfie with the
+front camera; it replaces the default avatar in their story, the profile tab and their
+comments. The photo is kept only in the app's memory and deleted when the session ends
+(it is never saved to the phone or the session data); the log records only whether a
+photo was taken, skipped or the camera was unavailable. Seeing one's own face can itself
+affect body-image measures, so keep the step the same across conditions or pilot it.
+If the study has this step, the setup screen offers **Allow camera** so the researcher
+grants camera access once and participants never see Android's permission prompt.
 
 The schema rejects typos and impossible designs with a clear error. Unknown
 keys, a factor without two levels, two factors setting the same attribute, and
@@ -514,7 +526,6 @@ rest of the session works.
 | `logging.sensors` (accelerometer / gyroscope) | not recorded |
 | `logging.screen_recording` | not recorded |
 | Neon control (start/stop recording, `neon` events, `neon.required`) | sessions run without the glasses being controlled; start the Neon recording by hand |
-| Writing comments and replying (`feed.allow_comment_typing`, `comment_submit`) | planned; comments can be read and liked, the "Reply" links do nothing |
 | Stories (tapping a story circle opens it) | planned; the stories row is for the look only |
 | Reels | planned; the Reels tab does nothing |
 | `interruption` events (notifications, calls) | not logged; `app_state` still shows when the app left the screen |
@@ -529,8 +540,13 @@ the look only. Each post shows its first 2 comments; with more, "View all N comm
 opens the comments sheet, so use the `order` column in `comments.csv` to choose which
 comments are visible without a tap. The sheet opens at half height and can be pulled up
 over the whole screen; comments in it can be liked, and their positions are logged so
-gaze can be mapped to single comments. `feed.allow_likes`, `allow_saves`,
-`allow_shares` and `allow_comment_likes` switch the actions off per study.
+gaze can be mapped to single comments. With `feed.allow_comment_typing: true`
+participants can also write comments and reply ("Replying to …", shown indented under the
+comment); their comments appear under `platform.participant_handle` with a default
+avatar, in the sheet and under the post. The posted text and every change of the draft
+are logged (`comment_submit`, `comment_edit`). `feed.allow_likes`, `allow_saves`,
+`allow_shares`, `allow_comment_likes` and `allow_comment_typing` switch the actions on
+or off per study.
 The "I'm done" button sits in the top bar so it never covers a post.
 
 `session.json` records only what was actually recorded: sensors, screen recording
@@ -636,7 +652,8 @@ Roughly in order:
 - [ ] **R templates** for the standard mixed models
       (`dwell ~ edit * label + (1|participant) + (1|post)`)
 - [ ] More tests and docs, macOS/Linux setup
-- [ ] App features still to come: writing comments and replying, stories, reels
+- [x] Commenting and replying in the comments sheet
+- [ ] App features still to come: stories, reels (each on its own branch)
 - [ ] *Stretch:* **generated content**: draft comments and account usernames automatically,
       optionally based on what each post's image shows, written into `comments.csv` /
       `accounts.csv` for the researcher to review and edit before compiling

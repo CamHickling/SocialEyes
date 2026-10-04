@@ -83,6 +83,8 @@ fun PostCard(
     allowSaves: Boolean,
     allowShares: Boolean,
     onShared: () -> Unit,
+    participantHandle: String,
+    ownComments: List<OwnComment>,
     track: (element: String, LayoutCoordinates) -> Unit,
     event: (type: String, fields: Array<Pair<String, Any?>>) -> Unit,
     onOpenComments: () -> Unit,
@@ -264,16 +266,18 @@ fun PostCard(
             )
         }
 
-        if (post.comments.isNotEmpty()) {
+        val ownTopLevel = ownComments.filter { it.thread == null }
+        val totalComments = post.comments.size + ownComments.size
+        if (post.comments.isNotEmpty() || ownTopLevel.isNotEmpty()) {
             Column(
                 Modifier
                     .fillMaxWidth()
                     .onGloballyPositioned { track("comments", it) }
                     .padding(horizontal = 12.dp),
             ) {
-                if (post.comments.size > INLINE_COMMENTS) {
+                if (totalComments > INLINE_COMMENTS) {
                     Text(
-                        "View all ${post.comments.size} comments",
+                        "View all $totalComments comments",
                         color = secondary,
                         fontSize = 14.sp,
                         modifier = Modifier
@@ -287,6 +291,15 @@ fun PostCard(
                 for (c in post.comments.take(INLINE_COMMENTS)) {
                     Text(
                         handleAndText(pkg.handle(c), c.text),
+                        color = primary,
+                        fontSize = 14.sp,
+                        modifier = Modifier.padding(vertical = 2.dp),
+                    )
+                }
+                // the participant's own comments show under the post too
+                for (c in ownTopLevel) {
+                    Text(
+                        handleAndText(participantHandle, c.text),
                         color = primary,
                         fontSize = 14.sp,
                         modifier = Modifier.padding(vertical = 2.dp),

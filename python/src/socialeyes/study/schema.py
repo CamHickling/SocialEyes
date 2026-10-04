@@ -23,6 +23,8 @@ class Platform(_Strict):
     name: str = "Pictogram"
     """App name drawn in the feed's top bar. Do not use a real platform's trademark."""
     theme: Literal["light", "dark"] = "light"
+    participant_handle: str = Field("you", min_length=1, max_length=30)
+    """Name the participant's own comments and replies appear under."""
 
 
 class SyncPatch(_Strict):
@@ -147,6 +149,8 @@ class Feed(_Strict):
     done_button_after_s: Optional[float] = Field(60, ge=0)
     """Show an 'I'm done' button after this many seconds (null = never)."""
     allow_comment_typing: bool = False
+    """Participants can write comments and replies. The final text and every edit
+    of the draft are logged (comment_submit / comment_edit); keystrokes are not."""
     allow_likes: bool = True
     allow_saves: bool = True
     """Bookmark button saves/unsaves the post."""
@@ -213,6 +217,20 @@ class CameraCheckStep(_Step):
     instructions: str = "Hold the phone as you normally would and look at the screen."
 
 
+class ProfilePhotoStep(_Step):
+    """The participant may take a selfie with the front camera as their profile picture.
+
+    It replaces the default avatar wherever the participant appears (their story,
+    the profile tab, their comments). The photo is kept only in the app's memory
+    and deleted when the session ends; the log records only whether one was taken.
+    Note that seeing one's own face can itself affect body-image measures.
+    """
+
+    type: Literal["profile_photo"]
+    text: str = "Take a photo for your profile picture. It is only used during this session and is deleted afterwards."
+    allow_skip: bool = True
+
+
 class ValidationStep(_Step):
     type: Literal["validation"]
     points: Literal[5, 9, 13] = 9
@@ -258,6 +276,7 @@ Step = Annotated[
         InstructionsStep,
         MarkerCalibrationStep,
         CameraCheckStep,
+        ProfilePhotoStep,
         ValidationStep,
         QuestionnaireStep,
         FeedStep,

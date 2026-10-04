@@ -114,9 +114,10 @@ def sheet(post, top, comments=2):
 
 
 def test_sheet_lies_on_top_of_the_feed():
-    lay = Layout(viewport_rows([(0, 0, card("a", 0) + sheet("a", 800))]))
-    r = lay.locate([0, 0, 0], [10, 10, 10], [500, 900, 1100])
-    assert r["element"].tolist() == ["image", "sheet", "sheet_comment_0"]
+    own = [("a", "sheet_comment_p1", 0, 1300, 1000, 1450), ("a", "sheet_input", 0, 1850, 1000, 2000)]
+    lay = Layout(viewport_rows([(0, 0, card("a", 0) + sheet("a", 800) + own)]))
+    r = lay.locate([0] * 5, [10] * 5, [500, 900, 1100, 1350, 1900])
+    assert r["element"].tolist() == ["image", "sheet", "sheet_comment_0", "sheet_comment_p1", "sheet_input"]
 
 
 def test_sheet_hides_the_feed_below_it():

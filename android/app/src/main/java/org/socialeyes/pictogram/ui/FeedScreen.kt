@@ -35,6 +35,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
@@ -102,6 +103,9 @@ private fun FeedContent(session: Session, onDone: (reason: String) -> Unit) {
     var finished by remember { mutableStateOf(false) }
     var commentsFor by remember { mutableStateOf<FeedPost?>(null) }
     val commentLikes = remember { mutableStateMapOf<String, Boolean>() }
+    val ownComments = remember { mutableStateMapOf<String, List<OwnComment>>() } // post_id -> comments
+    var ownCount by remember { mutableIntStateOf(0) }
+    var draftStartNs by remember { mutableStateOf<Long?>(null) }
     var toast by remember { mutableStateOf<Pair<String, Long>?>(null) } // text, id
     val scope = rememberCoroutineScope()
     val dark = isDarkTheme()
@@ -213,6 +217,8 @@ private fun FeedContent(session: Session, onDone: (reason: String) -> Unit) {
                         allowSaves = cfg.allowSaves,
                         allowShares = cfg.allowShares,
                         onShared = { toast = "Sent" to System.nanoTime() },
+                        participantHandle = pkg.study.platform.participantHandle,
+                        ownComments = ownComments[post.postId].orEmpty(),
                         track = { element, coords -> tracker.update(post.postId, element, coords) },
                         event = { type, fields -> log.event(type, fields = arrayOf("post_id" to post.postId, *fields)) },
                         onOpenComments = {
@@ -239,7 +245,7 @@ private fun FeedContent(session: Session, onDone: (reason: String) -> Unit) {
             BarIcon(FeedIcons.Search)
             BarIcon(FeedIcons.Create)
             BarIcon(FeedIcons.Reels)
-            Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) { DefaultAvatar(27.dp, dark) }
+            Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) { ParticipantAvatar(27.dp, dark) }
         }
     }
 
@@ -265,16 +271,38 @@ private fun FeedContent(session: Session, onDone: (reason: String) -> Unit) {
                 post = post,
                 topInset = topStrip,
                 allowCommentLikes = cfg.allowCommentLikes,
+                allowTyping = cfg.allowCommentTyping,
+                participantHandle = pkg.study.platform.participantHandle,
+                ownComments = ownComments[post.postId].orEmpty(),
                 commentLikes = commentLikes,
                 track = { element, coords -> tracker.updateOverlay(post.postId, element, coords) },
                 trackClip = tracker::setOverlayClip,
-                onCommentLike = { i, liked ->
-                    log.event("comment_like", fields = arrayOf("post_id" to post.postId, "comment" to i, "liked" to liked))
+                onCommentLike = { id, liked ->
+                    // study comments by position (0, 1, ...), the participant's own as p1, p2, ...
+                    log.event("comment_like", fields = arrayOf("post_id" to post.postId, "comment" to (id.toIntOrNull() ?: id), "liked" to liked))
+                },
+                onDraftChange = { text, replyTo ->
+                    if (draftStartNs == null && text.isNotEmpty()) draftStartNs = Clocks.elapsedNs()
+                    log.event("comment_edit", fields = arrayOf("post_id" to post.postId, "text" to text, "reply_to" to replyTo?.let { it.toIntOrNull() ?: it }))
+                },
+                onSubmit = { text, replyTo, thread ->
+                    ownCount++
+                    val id = "p$ownCount"
+                    ownComments[post.postId] = ownComments[post.postId].orEmpty() + OwnComment(id, text, replyTo, thread)
+                    val typingMs = draftStartNs?.let { (Clocks.elapsedNs() - it) / 1_000_000 }
+                    draftStartNs = null
+                    log.event(
+                        "comment_submit", fields = arrayOf(
+                            "post_id" to post.postId, "comment_id" to id, "text" to text,
+                            "reply_to" to replyTo?.let { it.toIntOrNull() ?: it }, "typing_ms" to typingMs,
+                        )
+                    )
                 },
                 onState = { state ->
                     log.event("comments_sheet", fields = arrayOf("post_id" to post.postId, "state" to state.name.lowercase()))
                 },
                 onClose = {
+                    draftStartNs = null
                     log.event("comments_close", fields = arrayOf("post_id" to post.postId))
                     tracker.clearOverlay()
                     commentsFor = null
@@ -316,7 +344,7 @@ private fun StoriesTray(pkg: StudyPackage, feed: List<FeedPost>) {
         item {
             StoryBubble("Your story") {
                 Box {
-                    DefaultAvatar(62.dp, isDarkTheme(), Modifier.padding(3.dp))
+                    ParticipantAvatar(62.dp, isDarkTheme(), Modifier.padding(3.dp))
                     Box(
                         Modifier.align(Alignment.BottomEnd).size(22.dp)
                             .border(2.dp, MaterialTheme.colorScheme.background, CircleShape)

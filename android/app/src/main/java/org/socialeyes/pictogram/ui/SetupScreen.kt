@@ -32,7 +32,12 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import android.content.Intent
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.pm.ShortcutInfoCompat
@@ -113,6 +118,19 @@ fun SetupScreen(
                     pkg.unsupportedFeatures().takeIf { it.isNotEmpty() }?.let { notes ->
                         Text("Not supported by this app version yet:", color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
                         notes.forEach { Text("• $it", fontSize = 13.sp) }
+                    }
+                    // Ask for the camera here, so participants never see Android's permission dialog.
+                    if (pkg.steps.any { it.type == "profile_photo" }) {
+                        val context = LocalContext.current
+                        var cameraOk by remember {
+                            mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
+                        }
+                        val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { cameraOk = it }
+                        if (!cameraOk) {
+                            Text("This study has a profile photo step. Allow camera access now, so participants don't see Android's permission prompt.",
+                                fontSize = 13.sp)
+                            OutlinedButton(onClick = { ask.launch(Manifest.permission.CAMERA) }) { Text("Allow camera") }
+                        }
                     }
                     Spacer(Modifier.height(4.dp))
                     Text("Participant (✓ = has data already)", fontWeight = FontWeight.SemiBold)

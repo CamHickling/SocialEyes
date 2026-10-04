@@ -17,15 +17,17 @@ NO_HIT = 10_000
 
 
 def _rank(element: str) -> int:
-    if element.startswith("sheet_comment_"):
+    if element == "sheet_input":  # the comment box lies over the bottom of the sheet
         return 0
-    if element == "sheet":
+    if element.startswith("sheet_comment_"):
         return 1
-    return 2 + PRIORITY.index(element)
+    if element == "sheet":
+        return 2
+    return 3 + PRIORITY.index(element)
 
 
 def _is_sheet(element: str) -> bool:
-    return element == "sheet" or element.startswith("sheet_comment_")
+    return element in ("sheet", "sheet_input") or element.startswith("sheet_comment_")
 
 
 class Layout:

@@ -15,6 +15,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -46,6 +47,7 @@ fun SessionScreen(session: Session, onExit: () -> Unit) {
         var confirmAbort by remember { mutableStateOf(false) }
         BackHandler { if (session.log.finished) onExit() else confirmAbort = true }
 
+        CompositionLocalProvider(LocalParticipantPhoto provides session.profilePhoto) {
         Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
             val step = session.currentStep
             key(session.stepIndex) {
@@ -60,6 +62,7 @@ fun SessionScreen(session: Session, onExit: () -> Unit) {
                     "feed" -> FeedScreen(session, step) { reason -> session.next(reason) }
                     "marker_calibration" -> MarkerCalibrationStep(session, step) { session.next() }
                     "validation" -> ValidationStep(session, step) { session.next() }
+                    "profile_photo" -> ProfilePhotoStep(session, step) { session.next() }
                     "questionnaire" -> QuestionnaireStep(session, step) { session.next() }
                     "image_rating" -> ImageRatingStep(session, step) { session.next() }
                     "recognition" -> RecognitionStep(session, step) { session.next() }
@@ -88,6 +91,7 @@ fun SessionScreen(session: Session, onExit: () -> Unit) {
                     dismissButton = { TextButton(onClick = { confirmAbort = false }) { Text("Continue session") } },
                 )
             }
+        }
         }
     }
 }

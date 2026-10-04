@@ -505,6 +505,14 @@ def _check_design(b: StudyBundle, rep: Report) -> None:
     elif checks:
         rep.warnings.append("the procedure has a camera_check step but logging.front_camera is not enabled")
 
+    photos = [k for k, s in enumerate(study.procedure) if s.type == "profile_photo"]
+    feed_at = next((k for k, s in enumerate(study.procedure) if s.type == "feed"), None)
+    if photos and feed_at is not None and photos[0] > feed_at:
+        rep.warnings.append("the profile_photo step comes after the feed, so the photo is never seen in the feed")
+    if photos and cam.enabled and (cam.steps == "all" or any(ids[k] in cam.steps for k in photos)):
+        rep.warnings.append("logging.front_camera records during the profile_photo step, but the camera can only "
+                            "do one at a time; leave that step out of logging.front_camera.steps")
+
     for step in study.procedure:
         if isinstance(step, RecognitionStep):
             if step.lures in ("foils", "both"):

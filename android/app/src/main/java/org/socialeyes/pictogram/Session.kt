@@ -5,6 +5,8 @@ import android.os.Build
 import android.util.DisplayMetrics
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.runtime.setValue
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -31,6 +33,9 @@ class Session(val pkg: StudyPackage, val plan: Plan, val log: SessionLog) {
 
     val currentStep: Step? get() = steps.getOrNull(stepIndex)
 
+    /** The participant's selfie from a profile_photo step. Memory only; cleared when the session ends. */
+    var profilePhoto by mutableStateOf<ImageBitmap?>(null)
+
     /** Current sync code bit (0/1), driven by the sync patch; -1 before the first frame. */
     var syncLevel by mutableIntStateOf(-1)
 
@@ -44,16 +49,23 @@ class Session(val pkg: StudyPackage, val plan: Plan, val log: SessionLog) {
         startStep()
     }
 
-    fun abort() = log.finish("aborted")
+    fun abort() {
+        profilePhoto = null
+        log.finish("aborted")
+    }
 
     private fun startStep() {
         val step = currentStep
         if (step == null) {
+            profilePhoto = null
             log.finish("completed") // procedure without an end step
             return
         }
         log.event("step_start", fields = arrayOf("step_id" to step.id, "step_type" to step.type))
-        if (step.type == "end") log.finish("completed")
+        if (step.type == "end") {
+            profilePhoto = null
+            log.finish("completed")
+        }
     }
 
     companion object {

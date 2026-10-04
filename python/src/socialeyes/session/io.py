@@ -14,8 +14,9 @@ TOUCH_COLUMNS = ["t_ns", "action", "pointer_id", "x_px", "y_px", "pressure", "si
 VIEWPORT_COLUMNS = ["t_ns", "frame", "scroll_y", "post_id", "element", "left", "top", "right", "bottom"]
 SENSOR_COLUMNS = ["t_ns", "sensor", "x", "y", "z", "w"]
 CAMERA_COLUMNS = ["segment", "frame", "t_ns", "exposure_ns"]
-ELEMENTS = ("frame", "post", "header", "image", "label", "actions", "caption", "comments", "sheet")
-SHEET_COMMENT = re.compile(r"sheet_comment_\d+")  # comment n of the post, in the comments sheet
+ELEMENTS = ("frame", "post", "header", "image", "label", "actions", "caption", "comments", "sheet", "sheet_input")
+# comment n of the post in the comments sheet, or the participant's own comment pK
+SHEET_COMMENT = re.compile(r"sheet_comment_p?\d+")
 TOUCH_ACTIONS = ("down", "move", "up", "cancel")
 
 

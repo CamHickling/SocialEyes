@@ -13,6 +13,7 @@ seed: 20251001                 # change it and every plan changes; never change 
 platform:
   name: Pictogram              # never use a real platform's name or logo
   theme: light
+  participant_handle: you      # name the participant's own comments appear under
 
 labels:
   edited:
@@ -47,6 +48,7 @@ feed:
   done_button_after_s: 60
   time_limit_s: null
   allow_likes: true
+  allow_comment_typing: true   # participants can comment and reply (text and draft edits are logged)
 
 logging:                       # besides gaze; see docs/EVENT_LOG.md
   touches: true                # raw touch points
@@ -61,6 +63,7 @@ logging:                       # besides gaze; see docs/EVENT_LOG.md
 procedure:
   - {id: welcome, type: instructions, title: Welcome,
      text: "Please browse the feed as you normally would."}
+  - {id: photo, type: profile_photo}  # optional selfie as profile picture; kept in memory only, deleted after the session
   - {id: cal1, type: marker_calibration, duration_s: 4}
   - {id: val1, type: validation, points: 9}
   - id: pre

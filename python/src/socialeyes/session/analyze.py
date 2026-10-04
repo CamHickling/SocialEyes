@@ -14,8 +14,9 @@ from .quality import session_quality
 from .touch import occlusion, touch_targets
 from .viewport import Layout
 
-INTERACTION_TYPES = ("like", "comments_open", "comments_close", "caption_expand", "profile_tap",
-                     "label_tap", "image_tap", "comment_submit", "done_button_shown")
+INTERACTION_TYPES = ("like", "comments_open", "comments_close", "comments_sheet", "comment_like", "caption_expand",
+                     "profile_tap", "label_tap", "image_tap", "save", "share", "home_tap", "comment_submit",
+                     "done_button_shown")  # comment_edit (every draft change) stays in events.jsonl only
 
 
 def analyze_session(session_dir: Path | str, build_dir: Path | str | None = None,

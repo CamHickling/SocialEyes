@@ -183,3 +183,13 @@ def test_caption_variants(example):
         for e in p["feed"]:
             if e["role"] == "critical":
                 assert e["caption"].startswith(p["between"]["tone"] + " caption")
+
+
+def test_profile_photo_step(example):
+    _, rep = check_study(example)
+    assert rep.errors == [] and not any("profile_photo" in w for w in rep.warnings)
+    y = example / "study.yaml"
+    edit_file(y, "  - {id: photo, type: profile_photo}", "")
+    edit_file(y, "  - {id: feed, type: feed}", "  - {id: feed, type: feed}\n  - {id: photo, type: profile_photo}")
+    _, rep = check_study(example)
+    assert any("profile_photo step comes after the feed" in w for w in rep.warnings)

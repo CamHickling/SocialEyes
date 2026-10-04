@@ -52,7 +52,11 @@ data class StudyConfig(
 )
 
 @Serializable
-data class Platform(val name: String = "Pictogram", val theme: String = "light")
+data class Platform(
+    val name: String = "Pictogram",
+    val theme: String = "light",
+    @SerialName("participant_handle") val participantHandle: String = "you",
+)
 
 @Serializable
 data class Display(@SerialName("sync_patch") val syncPatch: SyncPatchConfig = SyncPatchConfig())
@@ -81,6 +85,7 @@ data class FeedConfig(
     @SerialName("time_limit_s") val timeLimitS: Double? = null,
     @SerialName("done_button_after_s") val doneButtonAfterS: Double? = 60.0,
     @SerialName("allow_likes") val allowLikes: Boolean = true,
+    @SerialName("allow_comment_typing") val allowCommentTyping: Boolean = false,
     @SerialName("allow_saves") val allowSaves: Boolean = true,
     @SerialName("allow_shares") val allowShares: Boolean = true,
     @SerialName("allow_comment_likes") val allowCommentLikes: Boolean = true,
@@ -183,7 +188,8 @@ class StudyPackage(val dir: File, val manifest: StudyManifest) {
         if (camera != null && camera.flag("enabled", false)) add("logging.front_camera (not recorded yet)")
         if (study.neon.required) add("neon.required (Neon control is not built yet; sessions run without it)")
         val supportedSteps = setOf(
-            "instructions", "marker_calibration", "validation", "questionnaire", "feed", "image_rating", "recognition", "end",
+            "instructions", "marker_calibration", "validation", "questionnaire", "feed", "image_rating", "recognition",
+            "profile_photo", "end",
         )
         steps.filter { it.type !in supportedSteps }.forEach {
             add("step '${it.id}' (${it.type}) is shown as a placeholder")
