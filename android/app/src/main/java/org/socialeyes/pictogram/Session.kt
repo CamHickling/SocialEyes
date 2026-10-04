@@ -11,7 +11,13 @@ import androidx.compose.runtime.setValue
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
 import org.socialeyes.pictogram.log.Clocks
+import org.socialeyes.pictogram.log.FrontCameraConfig
+import org.socialeyes.pictogram.log.FrontCameraRecorder
 import org.socialeyes.pictogram.log.SessionLog
 import org.socialeyes.pictogram.log.TouchRecorder
 import org.socialeyes.pictogram.study.Plan
@@ -23,7 +29,7 @@ import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 
 /** One participant running through the procedure. Owns the session log. */
-class Session(val pkg: StudyPackage, val plan: Plan, val log: SessionLog) {
+class Session(val pkg: StudyPackage, val plan: Plan, val log: SessionLog, val camera: FrontCameraRecorder? = null) {
     val steps: List<Step> = pkg.steps
     val startNs: Long = Clocks.elapsedNs()
     val touches = TouchRecorder(log) { currentStep?.id ?: "" }
@@ -51,19 +57,35 @@ class Session(val pkg: StudyPackage, val plan: Plan, val log: SessionLog) {
 
     fun abort() {
         profilePhoto = null
+        camera?.release() // closes the open video file before the log ends
         log.finish("aborted")
+    }
+
+    /** The app went to the background: Android takes the camera away, so close the file cleanly. */
+    fun pauseCamera() {
+        camera?.takeIf { it.recording }?.stop()
+    }
+
+    /** Back in the foreground: carry on recording (in a new segment) if this step is recorded. */
+    fun resumeCamera() {
+        val step = currentStep ?: return
+        if (!log.finished && camera?.config?.records(step.id) == true) camera.start()
     }
 
     private fun startStep() {
         val step = currentStep
         if (step == null) {
             profilePhoto = null
+            camera?.release()
             log.finish("completed") // procedure without an end step
             return
         }
         log.event("step_start", fields = arrayOf("step_id" to step.id, "step_type" to step.type))
+        // front camera: record during the study's chosen steps only
+        camera?.let { if (it.config.records(step.id) && step.type != "end") it.start() else if (it.recording) it.stop(wait = false) }
         if (step.type == "end") {
             profilePhoto = null
+            camera?.release()
             log.finish("completed")
         }
     }
@@ -83,7 +105,8 @@ class Session(val pkg: StudyPackage, val plan: Plan, val log: SessionLog) {
             val dir = File(dataRoot(activity), "${pkg.study.id}/$participantId/$uid")
             check(dir.mkdirs()) { "could not create $dir" }
 
-            val logging = effectiveLogging(pkg.study.logging)
+            val cameraConfig = frontCameraConfig(pkg.study.logging)
+            val logging = effectiveLogging(pkg.study.logging, cameraConfig != null)
             val meta = buildJsonObject {
                 put("format", "socialeyes-session")
                 put("format_version", FORMAT_VERSION)
@@ -97,19 +120,37 @@ class Session(val pkg: StudyPackage, val plan: Plan, val log: SessionLog) {
                 put("device", deviceInfo(activity))
                 put("logging", logging)
             }
-            return Session(pkg, plan, SessionLog(dir, meta, logTouches = logging.flag("touches", true)))
+            val log = SessionLog(dir, meta, logTouches = logging.flag("touches", true))
+            val camera = cameraConfig?.let { FrontCameraRecorder(activity, dir, log, it) }
+            return Session(pkg, plan, log, camera)
         }
 
         /**
          * The study's `logging:` section with what this app version can't record yet
          * switched off, so session.json says what was actually recorded.
          */
-        private fun effectiveLogging(requested: JsonObject): JsonObject {
+        private fun effectiveLogging(requested: JsonObject, frontCamera: Boolean): JsonObject {
             val out = LinkedHashMap(requested)
             out["sensors"] = SessionLog.toJson(false)
             out["screen_recording"] = SessionLog.toJson(false)
-            out["front_camera"] = buildJsonObject { put("enabled", false) }
+            if (!frontCamera) out["front_camera"] = buildJsonObject { put("enabled", false) }
             return JsonObject(out)
+        }
+
+        /** The study's logging.front_camera settings, or null if it is off. */
+        private fun frontCameraConfig(logging: JsonObject): FrontCameraConfig? {
+            val c = logging["front_camera"] as? JsonObject ?: return null
+            if (!c.flag("enabled", false)) return null
+            fun str(k: String) = (c[k] as? JsonPrimitive)?.contentOrNull
+            val steps = c["steps"]
+            return FrontCameraConfig(
+                resolution = str("resolution") ?: "720p",
+                fps = str("fps")?.toDoubleOrNull()?.toInt() ?: 30,
+                bitrateMbps = str("bitrate_mbps")?.toDoubleOrNull() ?: 3.0,
+                steps = if (steps is JsonPrimitive && steps.content == "all") null
+                else (steps as? JsonArray)?.map { it.jsonPrimitive.content } ?: listOf("feed"),
+                segmentS = str("segment_s")?.toDoubleOrNull()?.toInt() ?: 60,
+            )
         }
 
         @Suppress("DEPRECATION") // getRealMetrics/defaultDisplay: the replacements need API 30

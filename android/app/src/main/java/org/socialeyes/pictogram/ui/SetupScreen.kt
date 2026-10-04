@@ -47,6 +47,7 @@ import org.socialeyes.pictogram.BuildConfig
 import org.socialeyes.pictogram.MainActivity
 import org.socialeyes.pictogram.R
 import org.socialeyes.pictogram.study.StudyPackage
+import org.socialeyes.pictogram.study.flag
 import java.io.File
 
 /** Asks the launcher to put a Pictogram shortcut on the home screen (it shows its own confirmation). */
@@ -120,14 +121,17 @@ fun SetupScreen(
                         notes.forEach { Text("• $it", fontSize = 13.sp) }
                     }
                     // Ask for the camera here, so participants never see Android's permission dialog.
-                    if (pkg.steps.any { it.type == "profile_photo" }) {
+                    val cameraSettings = pkg.study.logging["front_camera"] as? kotlinx.serialization.json.JsonObject
+                    val usesCamera = pkg.steps.any { it.type == "profile_photo" || it.type == "camera_check" } ||
+                        cameraSettings?.flag("enabled", false) == true
+                    if (usesCamera) {
                         val context = LocalContext.current
                         var cameraOk by remember {
                             mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
                         }
                         val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { cameraOk = it }
                         if (!cameraOk) {
-                            Text("This study has a profile photo step. Allow camera access now, so participants don't see Android's permission prompt.",
+                            Text("This study uses the front camera. Allow camera access now, so participants don't see Android's permission prompt.",
                                 fontSize = 13.sp)
                             OutlinedButton(onClick = { ask.launch(Manifest.permission.CAMERA) }) { Text("Allow camera") }
                         }

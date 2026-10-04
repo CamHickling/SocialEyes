@@ -63,6 +63,7 @@ fun SessionScreen(session: Session, onExit: () -> Unit) {
                     "marker_calibration" -> MarkerCalibrationStep(session, step) { session.next() }
                     "validation" -> ValidationStep(session, step) { session.next() }
                     "profile_photo" -> ProfilePhotoStep(session, step) { session.next() }
+                    "camera_check" -> CameraCheckStep(session, step) { session.next() }
                     "questionnaire" -> QuestionnaireStep(session, step) { session.next() }
                     "image_rating" -> ImageRatingStep(session, step) { session.next() }
                     "recognition" -> RecognitionStep(session, step) { session.next() }

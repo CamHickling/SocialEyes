@@ -140,8 +140,8 @@ for mixed models in R.
 | Session log format (touches, scrolling, interactions, quality events) | 🟡 | `docs/EVENT_LOG.md` (draft; the app must implement it) |
 | Session analysis: gestures, time on screen, touch→AOI, finger occlusion, quality checks | ✅ | `python/src/socialeyes/session/` (tested on simulated sessions) |
 | CSV format reference | 🟡 | `docs/STUDY_DESIGN.md` (draft, may still change) |
-| Android SocialEyes app: Instagram-style feed (stories row, comments sheet), sync patch, touch / scroll / viewport / quality logging, instructions, marker calibration, validation, questionnaires, image ratings, recognition test | 🟡 | `android/` (tested on a Pixel 3) |
-| App: camera check, front camera, sensors, Neon control | ⏳ | see [What the app doesn't do yet](#what-the-app-doesnt-do-yet) |
+| Android SocialEyes app: Instagram-style feed (stories row, comments sheet), sync patch, touch / scroll / viewport / quality logging, instructions, marker calibration, validation, questionnaires, image ratings, recognition test, camera check, front camera video | 🟡 | `android/` (tested on a Pixel 3) |
+| App: sensors, Neon control | ⏳ | see [What the app doesn't do yet](#what-the-app-doesnt-do-yet) |
 | Neon integration (auto start/stop, clock sync) | ⏳ | |
 | Gaze-to-screen mapping and AOI analysis | ⏳ | |
 | R analysis templates | ⏳ | |
@@ -525,7 +525,6 @@ rest of the session works.
 
 | Missing | What happens now |
 |---|---|
-| `camera_check` step and `logging.front_camera` | placeholder screen; no video recorded |
 | `logging.sensors` (accelerometer / gyroscope) | not recorded |
 | `logging.screen_recording` | not recorded |
 | Neon control (start/stop recording, `neon` events, `neon.required`) | sessions run without the glasses being controlled; start the Neon recording by hand |
@@ -560,8 +559,8 @@ are logged (`comment_submit`, `comment_edit`). `feed.allow_likes`, `allow_saves`
 or off per study.
 The "I'm done" button sits in the top bar so it never covers a post.
 
-`session.json` records only what was actually recorded: sensors, screen recording
-and the front camera are always `false` there for now.
+`session.json` records only what was actually recorded: sensors and screen recording
+are always `false` there for now.
 
 ---
 

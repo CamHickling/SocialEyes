@@ -83,10 +83,12 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         session?.log?.event("app_state", fields = arrayOf("state" to "foreground"))
+        session?.resumeCamera()
     }
 
     override fun onStop() {
         session?.log?.event("app_state", fields = arrayOf("state" to "background"))
+        session?.pauseCamera()
         super.onStop()
     }
 

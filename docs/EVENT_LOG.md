@@ -4,8 +4,8 @@
 > **Draft (format version 1).** This is the contract between the Pictogram app
 > (which writes these files) and the Python analysis (`socialeyes.session`,
 > which reads them). The app (`android/`) writes session.json, events.jsonl,
-> viewport.csv and touch.csv; sensors, screen recording and the front camera
-> are not built yet. `socialeyes.session.simulate` writes realistic fake
+> viewport.csv, touch.csv, video.csv and the front camera files; sensors and
+> screen recording are not built yet. `socialeyes.session.simulate` writes realistic fake
 > sessions in this format.
 
 One folder per session:
@@ -76,15 +76,16 @@ the analysis map a screen point to exact image pixels.
   "logging": {"touches": true, "sensors": false, "sensor_hz": 50,
               "screen_recording": false, "screen_recording_fps": 30,
               "front_camera": {"enabled": false}},
-  "camera": {"lens": "front", "width": 1280, "height": 720, "fps": 30, "timestamp_source": "realtime"},
+  "camera": {"lens": "front", "width": 1024, "height": 768, "fps": 30, "timestamp_source": "realtime", "orientation": 270},
   "end": {"reason": "completed", "clock": {"elapsed_ns": 0, "uptime_ns": 0, "wall_ms": 0}}
 }
 ```
 
 `logging` is a copy of the study's `logging:` section. `camera` (only when
 recording the front camera) gives the resolution
-and frame rate actually achieved, which can differ from what was requested, and
-the camera's timestamp source (see Front camera).
+and frame rate actually achieved, which can differ from what was requested, the
+camera's timestamp source (see Front camera) and the sensor orientation in degrees
+(the MP4s carry it as a rotation flag, so players show them upright).
 
 `sync_patch` is the sync patch's screen rectangle `[left, top, right, bottom]`
 (absent when the patch is disabled).
@@ -244,15 +245,21 @@ camera records only during the steps listed in `logging.front_camera.steps`
 researcher under their ethics approval; the app records whenever the study
 enables the camera.
 
-**Recording.** The app uses Camera2 (or CameraX with Camera2 interop) feeding a
-hardware `MediaCodec` encoder: H.264, the configured resolution, frame rate and
-bitrate, no audio. No preview is shown to the participant at any time.
+**Recording.** The app uses Camera2 feeding a hardware `MediaCodec` encoder:
+H.264, the configured frame rate and bitrate, no audio. No preview is shown to the
+participant at any time. `resolution` picks the size whose short side is closest,
+among sizes with the sensor's own aspect ratio (usually 4:3), so the whole field of
+view is kept: `720p` gives 1024x768 on the Pixel 3. Next to the encoder the camera
+also fills a small hidden preview-type stream that is thrown away; some drivers
+(the Pixel 3's) drop every video frame without one.
 
 **Segments.** A new file starts every `segment_s` seconds and at every
 recording start: `camera/front_000.mp4`, `front_001.mp4`, ..., numbered across
 the whole session. An MP4 is unreadable if the app dies before closing it, so
 segments limit what a crash can destroy. A `camera` event marks each start,
-new segment and stop.
+new segment and stop. When the app goes to the background, Android takes the
+camera away: the file is closed (`stopped`), and recording resumes in a new
+segment when the app returns.
 
 **Timing.** The front camera cannot see the sync patch, so video timing comes
 from the camera's own per-frame timestamps. For every encoded frame the app
@@ -267,15 +274,18 @@ writes one row to `camera_frames.csv`:
 
 If the camera reports `SENSOR_INFO_TIMESTAMP_SOURCE = REALTIME`, its timestamps
 are already on the elapsed clock. If it reports `UNKNOWN`, they are on the
-`nanoTime` base and the app must convert them like touch times (see Clocks).
-Either way, write the source to `camera.timestamp_source` (`realtime` or
-`unknown`).
+`nanoTime` base and are converted like touch times (see Clocks). The source is
+written to `camera.timestamp_source` (`realtime` or `unknown`). Android shifts the
+timestamps the encoder sees onto the monotonic clock, so the app matches every
+encoded frame to its capture result (within 1 ms) and writes that result's exact
+timestamp and exposure.
 
 **Framing check.** The `camera_check` procedure step is run by the researcher.
 The screen shows a framing guide and a face-detected indicator, **never the
 video itself**: seeing your own image right before a body-image task would be a
 manipulation in its own right. Continue unlocks after a face has been detected
-continuously for `min_face_s` seconds.
+continuously for `min_face_s` seconds; after 15 s "Continue without face" lets the
+session go on anyway, and the `camera_check` event records `failed`.
 
 **Performance.** The app logs `thermal` events whatever the settings. Expect
 the phone to warm up over long sessions; pilot sessions should check the

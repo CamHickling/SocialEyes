@@ -213,12 +213,10 @@ class StudyPackage(val dir: File, val manifest: StudyManifest) {
         val logging = study.logging
         if (logging.flag("sensors", false)) add("logging.sensors (motion sensors are not recorded yet)")
         if (logging.flag("screen_recording", false)) add("logging.screen_recording (not recorded yet)")
-        val camera = logging["front_camera"] as? JsonObject
-        if (camera != null && camera.flag("enabled", false)) add("logging.front_camera (not recorded yet)")
         if (study.neon.required) add("neon.required (Neon control is not built yet; sessions run without it)")
         val supportedSteps = setOf(
             "instructions", "marker_calibration", "validation", "questionnaire", "feed", "image_rating", "recognition",
-            "profile_photo", "end",
+            "profile_photo", "camera_check", "end",
         )
         steps.filter { it.type !in supportedSteps }.forEach {
             add("step '${it.id}' (${it.type}) is shown as a placeholder")
