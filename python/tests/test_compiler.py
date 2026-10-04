@@ -164,6 +164,14 @@ def test_infeasible_feed_constraints(example):
     assert "min_fillers_between_critical=3" in errors_of(example)
 
 
+def test_between_only_design_ignores_run_rule(example):
+    # no within-subject factor: every critical post shares one cell
+    for name in ("edit", "label"):
+        edit_file(example / "study.yaml", f"  - name: {name}\n    design: within", f"  - name: {name}\n    design: between")
+    b, rep = check_study(example)
+    assert rep.errors == []
+
+
 def test_warnings_for_unbalanced_numbers(example):
     edit_file(example / "study.yaml", "n_plans: 16", "n_plans: 10")
     b, rep = check_study(example)

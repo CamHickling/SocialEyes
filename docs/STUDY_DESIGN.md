@@ -22,6 +22,10 @@ studies/my_study/
   aois/            one AOI file per image (see "AOIs" in the README)
 ```
 
+The [experiment builder](../builder/index.html) (open it in a browser) writes
+`study.yaml` and these CSV files for you, with a row for every piece of content
+your design needs.
+
 Check it, then build the package the phone app loads:
 
 ```powershell

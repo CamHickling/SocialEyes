@@ -139,6 +139,7 @@ for mixed models in R.
 | Example study (placeholder images) and tests | ✅ | `studies/example/`, `python/tests/` |
 | Session log format (touches, scrolling, interactions, quality events) | 🟡 | `docs/EVENT_LOG.md` (draft; the app must implement it) |
 | Session analysis: gestures, time on screen, touch→AOI, finger occlusion, quality checks | ✅ | `python/src/socialeyes/session/` (tested on simulated sessions) |
+| Experiment builder: guided form that writes study.yaml and CSV skeletons | ✅ | `builder/index.html` (open in a browser) |
 | CSV format reference | 🟡 | `docs/STUDY_DESIGN.md` (draft, may still change) |
 | Android SocialEyes app: Instagram-style feed (stories row, comments sheet), sync patch, touch / scroll / viewport / quality logging, instructions, marker calibration, validation, questionnaires, image ratings, recognition test, camera check, front camera video, motion sensors, interruption detection | 🟡 | `android/` (tested on a Pixel 3) |
 | App: screen recording, Neon control | ⏳ | see [What the app doesn't do yet](#what-the-app-doesnt-do-yet) |
@@ -234,6 +235,19 @@ studies/my_study/
 ```
 
 The CSV columns are described in [`docs/STUDY_DESIGN.md`](docs/STUDY_DESIGN.md).
+
+### Experiment builder
+
+Open [`builder/index.html`](builder/index.html) in a browser (double-click it; it
+works offline and nothing is uploaded). It walks you through the decisions
+(factors, content, feed, procedure, recording, participants), explains each choice,
+and checks the design as you go: balance of posts and participants, factor
+mappings, procedure rules and recording conflicts. It downloads a zip with
+`study.yaml`, CSV files with one row for every piece of content the design needs
+(every image version, comment set and caption variant), and a `NEXT_STEPS.txt`
+listing what is still to add (images, avatars, AOIs, texts). It can also open an
+existing `study.yaml` to edit it; comments in the file are not kept, and the CSV
+files are only written if you ask for them.
 
 ### Key ideas
 
@@ -609,6 +623,10 @@ python/
     cli.py               the `socialeyes` command
   tests/                 pytest suite (runs against studies/example)
 android/                 the SocialEyes Android app (Kotlin, Jetpack Compose)
+builder/
+  index.html             the experiment builder (open in a browser; built file)
+  src/                   its source: core.js (logic), ui.js (form), page.html
+  build.py               stitches src/ and vendor/js-yaml into index.html
 studies/example/         a complete worked example with placeholder images
 docs/
   STUDY_DESIGN.md        CSV reference, balance rules, compiler output
@@ -662,8 +680,8 @@ Roughly in order:
 - [ ] **R templates** for the standard mixed models
       (`dwell ~ edit * label + (1|participant) + (1|post)`)
 - [ ] More tests and docs, macOS/Linux setup
-- [ ] **Experiment builder**: a form that walks you through the study's decisions
-      (factors, procedure, feed, logging) and writes `study.yaml` (and CSV templates) for you
+- [x] **Experiment builder**: a form that walks you through the study's decisions
+      (factors, procedure, feed, logging) and writes `study.yaml` and CSV skeletons for you
 - [x] Commenting and replying in the comments sheet
 - [x] Stories (`stories.csv`, story viewer, story events and gaze-mappable story images)
 - [x] Reels (`reels.csv`, Reels tab with video playback, reel events, `video.csv`)

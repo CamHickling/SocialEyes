@@ -85,7 +85,8 @@ def order_feed(
     """Order post ids. ``critical`` is [(post_id, cell_key)].
 
     Constraints: ``lead_in_fillers`` fillers first; among critical posts (taken in
-    feed order) no more than ``max_run_same_cell`` consecutive share a cell; at
+    feed order) no more than ``max_run_same_cell`` consecutive share a cell (when
+    there is more than one cell); at
     least ``min_fillers_between_critical`` fillers between consecutive critical
     posts. Raises ValueError if the constraints cannot be met.
     """
@@ -98,9 +99,12 @@ def order_feed(
     lead, rest = fillers[: feed.lead_in_fillers], fillers[feed.lead_in_fillers :]
 
     crit = critical[:]
+    # With a single cell (no within-subject factor) every critical post shares it,
+    # so the run rule can't apply; just shuffle.
+    one_cell = len({c for _, c in crit}) <= 1
     for _ in range(20000):
         rng.shuffle(crit)
-        if _max_run([c for _, c in crit]) <= feed.max_run_same_cell:
+        if one_cell or _max_run([c for _, c in crit]) <= feed.max_run_same_cell:
             break
     else:
         raise ValueError(
