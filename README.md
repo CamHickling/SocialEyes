@@ -664,6 +664,8 @@ Roughly in order:
 - [ ] **R templates** for the standard mixed models
       (`dwell ~ edit * label + (1|participant) + (1|post)`)
 - [ ] More tests and docs, macOS/Linux setup
+- [ ] **Experiment builder**: a form that walks you through the study's decisions
+      (factors, procedure, feed, logging) and writes `study.yaml` (and CSV templates) for you
 - [x] Commenting and replying in the comments sheet
 - [x] Stories (`stories.csv`, story viewer, story events and gaze-mappable story images)
 - [x] Reels (`reels.csv`, Reels tab with video playback, reel events, `video.csv`)
