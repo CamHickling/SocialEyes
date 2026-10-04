@@ -125,7 +125,7 @@ the type. Unknown types must be ignored by readers, so the app can add new ones.
 | `comment_like` | `post_id`, `comment` (0-based position in the post's comments, or `p1`, `p2`, … for the participant's own), `liked` (true/false) |
 | `save` | `post_id`, `saved` (true/false): the bookmark button (`feed.allow_saves`) |
 | `share` | `post_id`: the send button; the app only shows "Sent" (`feed.allow_shares`) |
-| `home_tap` | the Home tab was tapped; the feed scrolls back to the top |
+| `home_tap` | the Home tab was tapped; the feed scrolls back to the top (with Reels open, it closes Reels) |
 | `story_open` | `account_id`: a story circle was tapped |
 | `story_start` | `story_id`, `account_id`: a story appears |
 | `story_end` | `story_id`, `account_id`, `reason` (`auto`, `tap_forward`, `tap_back`, `swipe_next`, `swipe_back`, `swipe_down`, `close_button`, `back`), `shown_ms`, `paused_ms` (time held down or dragging) |
@@ -135,6 +135,13 @@ the type. Unknown types must be ignored by readers, so the app can add new ones.
 | `story_share` | `story_id`: the paper plane; the app only shows "Sent" (`feed.allow_shares`) |
 | `story_reply` | `story_id`, `text`, `typing_ms`: a message sent from the reply box (`feed.allow_comment_typing`); the story is paused while typing |
 | `story_reply_edit` | `story_id`, `text` (the whole draft after the change): every change of the reply draft, like `comment_edit` |
+| `reels_open` / `reels_close` | the Reels tab was opened / left (`reason`: `home_tab`, `back`) |
+| `reel_start` | `reel_id`, `account_id`: a reel starts playing |
+| `reel_end` | `reel_id`, `reason` (`swipe`, `closed`, `back`), `watched_ms`, `loops` (times it restarted) |
+| `reel_like` | `reel_id`, `liked`, `via` (`button` or `double_tap`) (`feed.allow_likes`) |
+| `reel_share` | `reel_id`: the send button; the app only shows "Sent" (`feed.allow_shares`) |
+| `reel_mute` | `reel_id`, `muted` (true/false): reels start muted, a tap toggles the sound |
+| `reel_pause` / `reel_resume` | `reel_id`, `position_ms`: the participant held the reel to pause it |
 | `caption_expand` | `post_id` |
 | `profile_tap` | `post_id`, `target` (`handle` or `avatar`) |
 | `label_tap` | `post_id` |
@@ -177,7 +184,7 @@ Each logged frame is one `frame` row followed by one row per visible element.
 | `frame` | frame counter |
 | `scroll_y` | feed scroll offset in px (on `frame` rows) |
 | `post_id` | blank on `frame` rows |
-| `element` | `frame`, `post` (the whole card), `header`, `image`, `label`, `actions`, `caption`, `comments`; while the comments sheet is open also `sheet`, `sheet_input` (the comment box, with `feed.allow_comment_typing`) and `sheet_comment_<n>` (comment n of the post, 0-based) or `sheet_comment_p<k>` (the participant's own comment or reply pK); while a story is open also `story` (the story image; `post_id` holds the `story_id`) |
+| `element` | `frame`, `post` (the whole card), `header`, `image`, `label`, `actions`, `caption`, `comments`; while the comments sheet is open also `sheet`, `sheet_input` (the comment box, with `feed.allow_comment_typing`) and `sheet_comment_<n>` (comment n of the post, 0-based) or `sheet_comment_p<k>` (the participant's own comment or reply pK); while a story is open also `story` (the story image; `post_id` holds the `story_id`); while Reels is open also `reel` (the video; `post_id` holds the `reel_id`; two while swiping between reels) |
 | `left`, `top`, `right`, `bottom` | element rectangle, screen px, unclipped (blank on `frame` rows) |
 
 When the feed step ends, the app writes one final `frame` row with no elements.
@@ -205,6 +212,20 @@ A post is "visible" if any part of its `post` rectangle is on screen.
 | `pressure`, `size` | as reported by Android (device-specific; blank if unavailable) |
 | `major_px`, `minor_px` | contact ellipse axes (blank if unavailable) |
 | `step_id` | procedure step on screen |
+
+## video.csv
+
+Written only when reels are watched: one row per drawn frame while a reel is on
+screen. With the `reel` rectangle in viewport.csv, this maps gaze to a video frame.
+The Reels screen covers the feed: while a `reel` row is present, feed elements do
+not count as visible.
+
+| column | meaning |
+|---|---|
+| `t_ns` | frame time (see Clocks) |
+| `reel_id` | the reel playing |
+| `position_ms` | playback position in the video |
+| `playing` | 1 if playing, 0 if paused or still loading |
 
 ## sensors.csv
 

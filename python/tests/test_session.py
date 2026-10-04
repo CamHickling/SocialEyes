@@ -142,6 +142,13 @@ def test_open_story_hides_the_feed():
     assert lay.locate([1500 * MS], [10], [500])["element"].tolist() == ["story"]
 
 
+def test_reels_screen_hides_the_feed():
+    frames = [(0, 0, card("a", 0)), (1000, 0, card("a", 0) + [("acc3_reel1", "reel", 0, 0, 1000, 1780)]), (2000, None, [])]
+    e = Layout(viewport_rows(frames)).exposure(2000 * MS, (0, 0, 1000, 2000)).set_index(["post_id", "element"])
+    assert e.loc[("a", "image"), "visible_s"] == pytest.approx(1.0)
+    assert e.loc[("acc3_reel1", "reel"), "visible_s"] == pytest.approx(1.0)
+
+
 # ---------------------------------------------------------------- touch mapping and occlusion
 
 

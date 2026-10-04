@@ -18,6 +18,8 @@ INTERACTION_TYPES = ("like", "comments_open", "comments_close", "comments_sheet"
                      "profile_tap", "label_tap", "image_tap", "save", "share", "home_tap", "comment_submit",
                      "story_open", "story_start", "story_end", "story_swipe", "story_close", "story_like",
                      "story_share", "story_reply",
+                     "reels_open", "reels_close", "reel_start", "reel_end", "reel_like", "reel_share", "reel_mute",
+                     "reel_pause", "reel_resume",
                      "done_button_shown")  # comment_edit, story_reply_edit (every draft change) stay in events.jsonl only
 
 

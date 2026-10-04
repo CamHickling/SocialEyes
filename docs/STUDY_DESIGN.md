@@ -16,6 +16,7 @@ studies/my_study/
   comments.csv     comment sets (optional)
   captions.csv     caption variants (optional)
   stories.csv      stories shown from the story circles (optional)
+  reels.csv        short videos for the Reels tab (optional)
   images/          image files
   avatars/         profile pictures
   aois/            one AOI file per image (see "AOIs" in the README)
@@ -102,6 +103,27 @@ One row per comment. Comments are grouped into **variants** per post.
 If a factor sets `comment_variant: "{level}"`, every post the factor applies
 to needs at least one comment for each level (e.g. variants `neutral` and
 `appearance`). A post without default comments simply has none.
+
+## reels.csv (optional)
+
+Short videos shown in the Reels tab, swiped up and down in this order. Every
+participant sees the same reels (they are not manipulated by factors). Without
+this file the Reels tab does nothing.
+
+| column | required | meaning |
+|---|---|---|
+| `account_id` | yes | who posted it |
+| `file` | yes | video path: MP4 (H.264 or MPEG-4) is safest; 9:16 portrait looks like a real reel |
+| `reel_id` | no | unique key (default `<account_id>_reel<n>`) |
+| `order` | no | position (default: file order) |
+| `caption` | no | caption text |
+| `like_count` | no | whole number (default 0) |
+| `audio` | no | text on the audio line, e.g. `fitwithsam · Original audio` |
+| `posted_ago` | no | display text such as `2d` |
+
+The compiler reads each video's size and length (with OpenCV). The video is always
+shown whole, and its playback position is logged on every frame (`video.csv`), so
+gaze can be mapped to video frames. Reels start muted; participants tap to unmute.
 
 ## captions.csv (optional)
 

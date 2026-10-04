@@ -17,7 +17,7 @@ NO_HIT = 10_000
 
 
 def _rank(element: str) -> int:
-    if element == "story":  # an open story covers the whole screen
+    if element in ("story", "reel"):  # an open story or the reels screen covers the feed
         return 0
     if element == "sheet_input":  # the comment box lies over the bottom of the sheet
         return 1
@@ -29,8 +29,8 @@ def _rank(element: str) -> int:
 
 
 def _is_overlay(element: str) -> bool:
-    """Elements drawn over the feed: the comments sheet and an open story."""
-    return element in ("sheet", "sheet_input", "story") or element.startswith("sheet_comment_")
+    """Elements drawn over the feed: the comments sheet, an open story and the reels screen."""
+    return element in ("sheet", "sheet_input", "story", "reel") or element.startswith("sheet_comment_")
 
 
 class Layout:
@@ -113,8 +113,8 @@ class Layout:
         sheet_top = np.full(len(self.times), np.inf)
         is_sheet_row = (el["element"] == "sheet").to_numpy()
         np.minimum.at(sheet_top, el["fi"].to_numpy()[is_sheet_row], T[is_sheet_row])
-        is_story_row = (el["element"] == "story").to_numpy()
-        sheet_top[el["fi"].to_numpy()[is_story_row]] = -np.inf
+        is_story_row = el["element"].isin(["story", "reel"]).to_numpy()
+        sheet_top[el["fi"].to_numpy()[is_story_row]] = -np.inf  # a story or the reels screen hides the whole feed
         bottom = np.where(sheet, aB, np.minimum(aB, sheet_top[el["fi"].to_numpy()]))
         top = np.where(sheet, -np.inf, aT)
         w = np.clip(np.minimum(R, aR) - np.maximum(L, aL), 0, None)

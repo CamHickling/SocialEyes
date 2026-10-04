@@ -228,6 +228,7 @@ studies/my_study/
   comments.csv     # comment sets that can be attached to posts (optional)
   captions.csv     # caption variants (optional)
   stories.csv      # stories behind the story circles (optional)
+  reels.csv        # short videos for the Reels tab (optional)
   images/          # the image files
   aois/            # one AOI file per image (see below)
 ```
@@ -528,7 +529,6 @@ rest of the session works.
 | `logging.sensors` (accelerometer / gyroscope) | not recorded |
 | `logging.screen_recording` | not recorded |
 | Neon control (start/stop recording, `neon` events, `neon.required`) | sessions run without the glasses being controlled; start the Neon recording by hand |
-| Reels | planned; the Reels tab does nothing |
 | `interruption` events (notifications, calls) | not logged; `app_state` still shows when the app left the screen |
 | Testing on more phones | tested on a Pixel 3 (Android 12): a full session runs and `socialeyes session` reads it; other screen sizes and Android versions are untested |
 
@@ -543,7 +543,11 @@ to peek, swipe down to close, 5 s each by default via `feed.story_duration_s`). 
 story's reply bar works too: typing a reply pauses the story and sends it (logged, with
 every draft edit, under `feed.allow_comment_typing`), the heart likes the story and the
 paper plane shows "Sent"; watched
-accounts get a grey ring. The top-bar icons and the other tabs are for the look only. Each post shows its first 2 comments; with more, "View all N comments"
+accounts get a grey ring.
+With a `reels.csv`, the Reels tab opens full-screen vertical videos (swipe up/down, loop,
+muted until tapped, hold to pause, double-tap or heart to like, send shows "Sent"), with
+the playback position logged on every frame so gaze can be mapped to video frames. The
+top-bar icons and the other tabs are for the look only. Each post shows its first 2 comments; with more, "View all N comments"
 opens the comments sheet, so use the `order` column in `comments.csv` to choose which
 comments are visible without a tap. The sheet opens at half height and can be pulled up
 over the whole screen; comments in it can be liked, and their positions are logged so
@@ -662,7 +666,7 @@ Roughly in order:
 - [ ] More tests and docs, macOS/Linux setup
 - [x] Commenting and replying in the comments sheet
 - [x] Stories (`stories.csv`, story viewer, story events and gaze-mappable story images)
-- [ ] App features still to come: reels (on its own branch)
+- [x] Reels (`reels.csv`, Reels tab with video playback, reel events, `video.csv`)
 - [ ] *Stretch:* **generated content**: draft comments and account usernames automatically,
       optionally based on what each post's image shows, written into `comments.csv` /
       `accounts.csv` for the researcher to review and edit before compiling

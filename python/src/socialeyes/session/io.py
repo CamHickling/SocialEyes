@@ -15,7 +15,7 @@ VIEWPORT_COLUMNS = ["t_ns", "frame", "scroll_y", "post_id", "element", "left", "
 SENSOR_COLUMNS = ["t_ns", "sensor", "x", "y", "z", "w"]
 CAMERA_COLUMNS = ["segment", "frame", "t_ns", "exposure_ns"]
 ELEMENTS = ("frame", "post", "header", "image", "label", "actions", "caption", "comments", "sheet", "sheet_input",
-            "story")  # story: the open story's image; its row's post_id holds the story_id
+            "story", "reel")  # story / reel: an open story image or the reel video; post_id holds its id
 # comment n of the post in the comments sheet, or the participant's own comment pK
 SHEET_COMMENT = re.compile(r"sheet_comment_p?\d+")
 TOUCH_ACTIONS = ("down", "move", "up", "cancel")

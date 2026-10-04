@@ -112,12 +112,40 @@ def main() -> None:
     for n in range(1, 7):
         avatar(300 + n).save(HERE / "avatars" / f"acc{n}.png", optimize=True)
     make_stories()
+    make_reels()
 
 
 def make_stories() -> None:
     (HERE / "stories").mkdir(exist_ok=True)
     for n, name in enumerate(["acc3_1", "acc3_2", "acc6_1", "acc6_2", "acc5_1", "acc1_1"], start=1):
         story(400 + n).save(HERE / "stories" / f"{name}.png", optimize=True)
+
+
+def make_reels(seconds: float = 6.0, fps: int = 30) -> None:
+    """Short 9:16 MPEG-4 videos (plays on every Android phone): a figure or scene that slowly zooms, with a moving dot."""
+    import cv2  # OpenCV, part of the toolchain
+    import numpy as np
+
+    RW, RH = 540, 960  # 9:16
+    (HERE / "reels").mkdir(exist_ok=True)
+    for n, name in enumerate(["acc3_reel1", "acc1_reel1", "acc6_reel1"], start=1):
+        rng = random.Random(500 + n)
+        base = Image.new("RGB", (RW, RH), rng.choice(BACKGROUNDS))
+        inner = figure(500 + n, False)[0] if n % 2 else scene(500 + n)
+        base.paste(inner, (0, (RH - H) // 2))
+        SW, SH = RW, RH
+        out = cv2.VideoWriter(str(HERE / "reels" / f"{name}.mp4"), cv2.VideoWriter_fourcc(*"mp4v"), fps, (SW, SH))
+        frames = int(seconds * fps)
+        for k in range(frames):
+            t = k / frames
+            zoom = 1.0 + 0.12 * t
+            w, h = int(SW / zoom), int(SH / zoom)
+            frame = base.crop(((SW - w) // 2, (SH - h) // 2, (SW + w) // 2, (SH + h) // 2)).resize((SW, SH))
+            d = ImageDraw.Draw(frame)
+            x = int(60 + (SW - 120) * t)
+            d.ellipse((x - 18, 120, x + 18, 156), fill=(255, 255, 255))
+            out.write(cv2.cvtColor(np.asarray(frame), cv2.COLOR_RGB2BGR))
+        out.release()
 
 
 if __name__ == "__main__":
