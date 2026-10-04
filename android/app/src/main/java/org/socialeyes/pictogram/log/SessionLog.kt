@@ -29,6 +29,7 @@ class SessionLog(val dir: File, initialMeta: JsonObject, logTouches: Boolean) {
     private val events = writer("events.jsonl")
     private val viewport = csv("viewport.csv", VIEWPORT_COLUMNS)
     private val touch = if (logTouches) csv("touch.csv", TOUCH_COLUMNS) else null
+    private var video: CsvWriter? = null // video.csv, only when reels are watched
     private val flusher = Executors.newSingleThreadScheduledExecutor()
 
     @Volatile
@@ -64,6 +65,15 @@ class SessionLog(val dir: File, initialMeta: JsonObject, logTouches: Boolean) {
         }
     }
 
+    /** One drawn frame of a playing (or paused) reel: where in the video it was. */
+    fun videoRow(tNs: Long, reelId: String, positionMs: Long, playing: Boolean) {
+        synchronized(lock) {
+            if (finished) return
+            val w = video ?: csv("video.csv", VIDEO_COLUMNS).also { video = it }
+            w.row(tNs, reelId, positionMs, if (playing) 1 else 0)
+        }
+    }
+
     fun viewportFrame(tNs: Long, frame: Long, scrollY: Float) {
         synchronized(lock) {
             if (!finished) viewport.row(tNs, frame, f1(scrollY), "", "frame", "", "", "", "")
@@ -95,7 +105,7 @@ class SessionLog(val dir: File, initialMeta: JsonObject, logTouches: Boolean) {
             }
             writeMeta()
             finished = true
-            listOfNotNull(events, viewport.out, touch?.out).forEach { it.close() }
+            listOfNotNull(events, viewport.out, touch?.out, video?.out).forEach { it.close() }
         }
         flusher.shutdown()
     }
@@ -103,7 +113,7 @@ class SessionLog(val dir: File, initialMeta: JsonObject, logTouches: Boolean) {
     private fun flush() {
         synchronized(lock) {
             if (finished) return
-            listOfNotNull(events, viewport.out, touch?.out).forEach { it.flush() }
+            listOfNotNull(events, viewport.out, touch?.out, video?.out).forEach { it.flush() }
         }
     }
 
@@ -133,6 +143,7 @@ class SessionLog(val dir: File, initialMeta: JsonObject, logTouches: Boolean) {
     companion object {
         // Must match python/src/socialeyes/session/io.py
         val TOUCH_COLUMNS = listOf("t_ns", "action", "pointer_id", "x_px", "y_px", "pressure", "size", "major_px", "minor_px", "step_id")
+        val VIDEO_COLUMNS = listOf("t_ns", "reel_id", "position_ms", "playing")
         val VIEWPORT_COLUMNS = listOf("t_ns", "frame", "scroll_y", "post_id", "element", "left", "top", "right", "bottom")
 
         private val prettyJson = Json(StudyJson) { prettyPrint = true }

@@ -27,9 +27,9 @@ class ViewportTracker(private val log: SessionLog) {
 
     var scrollY: () -> Float = { 0f }
 
-    // The comments sheet, drawn over the feed: element -> rectangle (window coordinates).
-    private val overlay = LinkedHashMap<String, ScreenRect>()
-    private var overlayPost: String? = null
+    // Drawn over the feed (the comments sheet, open stories): (post_id, element) -> rectangle
+    // (window coordinates). Several stories can be on screen at once while swiping.
+    private val overlay = LinkedHashMap<Pair<String, String>, ScreenRect>()
     private var overlayClip: ScreenRect? = null
 
     /** Window size, for deciding whether sheet elements are on screen. */
@@ -40,11 +40,16 @@ class ViewportTracker(private val log: SessionLog) {
         if (!coords.isAttached) return
         val p = coords.positionInWindow()
         val r = ScreenRect(p.x, p.y, p.x + coords.size.width, p.y + coords.size.height)
-        if (overlayPost != postId) { overlay.clear(); overlayPost = postId }
-        if (overlay[element] != r) {
-            overlay[element] = r
+        val key = postId to element
+        if (overlay[key] != r) {
+            overlay[key] = r
             dirty = true
         }
+    }
+
+    /** An overlay element left the screen (e.g. a story swiped away). */
+    fun removeOverlay(postId: String, element: String) {
+        if (overlay.remove(postId to element) != null) dirty = true
     }
 
     /** The part of the sheet comments are visible in (below its header). */
@@ -56,9 +61,8 @@ class ViewportTracker(private val log: SessionLog) {
     }
 
     fun clearOverlay() {
-        if (overlayPost == null) return
+        if (overlay.isEmpty() && overlayClip == null) return
         overlay.clear()
-        overlayPost = null
         overlayClip = null
         dirty = true
     }
@@ -94,10 +98,13 @@ class ViewportTracker(private val log: SessionLog) {
                 if (element != "post") log.viewportElement(t, frame, postId, element, r.offset(windowX, windowY))
             }
         }
-        overlayPost?.let { postId ->
+        if (overlay.isNotEmpty()) {
             val window = ScreenRect(0f, 0f, windowSize.first, windowSize.second)
-            for ((element, r) in overlay) {
-                val inView = r.intersects(window) && (element == "sheet" || overlayClip?.let(r::intersects) != false)
+            for ((key, r) in overlay) {
+                val (postId, element) = key
+                // only comments are clipped to the sheet's list area
+                val inView = r.intersects(window) &&
+                    (!element.startsWith("sheet_comment_") || overlayClip?.let(r::intersects) != false)
                 if (inView) log.viewportElement(t, frame, postId, element, r.offset(windowX, windowY))
             }
         }
@@ -109,6 +116,5 @@ class ViewportTracker(private val log: SessionLog) {
         log.viewportFrame(Clocks.elapsedNs(), frame, scrollY())
         posts.clear()
         overlay.clear()
-        overlayPost = null
     }
 }

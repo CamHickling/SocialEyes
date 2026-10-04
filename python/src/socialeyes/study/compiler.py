@@ -8,6 +8,7 @@ docs/STUDY_DESIGN.md):
 * posts.csv     post_id, role, account_id [, default_version, caption, like_count, posted_ago]
 * comments.csv  post_id, account_id, text [, variant, order, like_count]   (optional file)
 * captions.csv  post_id, variant, text                                       (optional file)
+* reels.csv     account_id, file [, reel_id, order, caption, like_count, audio, posted_ago]  (optional file)
 
 ``check_study`` collects every problem it can find instead of stopping at the
 first one, so a researcher can fix a whole batch at once. ``compile_study``
@@ -57,6 +58,7 @@ COLUMNS: dict[str, tuple[list[str], list[str]]] = {
     "posts": (["post_id", "role", "account_id"], ["default_version", "caption", "like_count", "posted_ago"]),
     "comments": (["post_id", "account_id", "text"], ["variant", "order", "like_count"]),
     "captions": (["post_id", "variant", "text"], []),
+    "reels": (["account_id", "file"], ["reel_id", "order", "caption", "like_count", "audio", "posted_ago"]),
 }
 
 
@@ -131,6 +133,7 @@ class StudyBundle:
     captions: dict[tuple[str, str], str]  # (post_id, variant) -> caption
     image_sizes: dict[str, tuple[int, int]]
     aois: dict[str, AOISet]
+    reels: list["Reel"] = field(default_factory=list)  # in display order
 
     @property
     def critical(self) -> list[Post]:
@@ -407,6 +410,7 @@ def check_study(study_dir: Path | str) -> tuple[Optional[StudyBundle], Report]:
             captions[(r["post_id"], r["variant"])] = r["text"]
 
     b = StudyBundle(root, study, accounts, images, posts, comments, captions, image_sizes, {})
+    b.reels = _load_reels(b, rep)
     _check_aois(b, rep)
     _check_design(b, rep)
     if not rep.errors:
@@ -416,6 +420,68 @@ def check_study(study_dir: Path | str) -> tuple[Optional[StudyBundle], Report]:
             rep.errors.append(str(e))
     rep.dedupe()
     return (None if rep.errors else b), rep
+
+
+@dataclass(frozen=True)
+class Reel:
+    reel_id: str
+    account_id: str
+    file: str
+    order: int
+    caption: str
+    like_count: int
+    audio: str
+    posted_ago: str
+    width: int
+    height: int
+    duration_s: float
+
+
+VIDEO_SUFFIXES = (".mp4", ".m4v", ".mov", ".3gp", ".webm", ".mkv")
+
+
+def _video_info(path: Path) -> Optional[tuple[int, int, float]]:
+    """(width, height, duration in s) of a video file, or None if it can't be read."""
+    import cv2  # needs OpenCV; imported here so studies without reels don't need it
+
+    if path.suffix.lower() not in VIDEO_SUFFIXES:
+        return None
+    cap = cv2.VideoCapture(str(path), cv2.CAP_FFMPEG)  # FFmpeg only: other readers open images as "videos"
+    try:
+        if not cap.isOpened():
+            return None
+        w, h = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        fps, frames = cap.get(cv2.CAP_PROP_FPS), cap.get(cv2.CAP_PROP_FRAME_COUNT)
+        if w <= 0 or h <= 0 or fps <= 0 or frames < 2:  # a still image opens as a 1-frame "video"
+            return None
+        return w, h, round(frames / fps, 3)
+    finally:
+        cap.release()
+
+
+def _load_reels(b: StudyBundle, rep: Report) -> list[Reel]:
+    """reels.csv (optional): short videos shown in the Reels tab."""
+    rows = _read_csv(b.root / b.study.reels, "reels", rep, required=False)
+    reels: list[Reel] = []
+    per_account: dict[str, int] = {}
+    for n, (where, r) in enumerate(rows):
+        acc = r["account_id"]
+        if acc not in b.accounts:
+            rep.errors.append(f"{where}: account_id {acc!r} is not in {b.study.accounts}")
+            continue
+        per_account[acc] = per_account.get(acc, 0) + 1
+        rid = r["reel_id"] or f"{acc}_reel{per_account[acc]}"
+        if _duplicate({x.reel_id for x in reels}, rid, where, "reel_id", rep):
+            continue
+        file = _study_file(b.root, r["file"], where, "file", rep)
+        info = _video_info(b.root / file) if file else None
+        if file and info is None:
+            rep.errors.append(f"{where}: {file!r} is not a readable video (use MP4: H.264 or MPEG-4)")
+        w, h, dur = info or (0, 0, 0.0)
+        reels.append(Reel(rid, acc, file or "", _int(r["order"], where, "order", rep, default=n), r["caption"],
+                          _int(r["like_count"], where, "like_count", rep), r["audio"], r["posted_ago"], w, h, dur))
+    reels.sort(key=lambda x: x.order)
+    return reels
 
 
 def _check_aois(b: StudyBundle, rep: Report) -> None:
@@ -678,7 +744,7 @@ def compile_study(study_dir: Path | str, out_dir: Path | str | None = None, clea
         _write_json(out / "plans" / f"{plan['participant_id']}.json", plan)
     _write_plans_csv(out / "plans.csv", b, plans)
 
-    media = {a.avatar for a in b.accounts.values()} | {i.file for i in b.images.values()}
+    media = {a.avatar for a in b.accounts.values()} | {i.file for i in b.images.values()} | {r.file for r in b.reels}
     for rel in sorted(media):
         dest = out / "media" / rel
         dest.parent.mkdir(parents=True, exist_ok=True)
@@ -720,6 +786,21 @@ def _study_manifest(b: StudyBundle) -> dict:
             }
             for i in b.images.values()
         },
+        "reels": [
+            {
+                "reel_id": r.reel_id,
+                "account_id": r.account_id,
+                "file": f"media/{r.file}",
+                "width": r.width,
+                "height": r.height,
+                "duration_s": r.duration_s,
+                "caption": r.caption,
+                "like_count": r.like_count,
+                "audio": r.audio or None,
+                "posted_ago": r.posted_ago or None,
+            }
+            for r in b.reels
+        ],
         "sync_code": {"bits": m_sequence(), "bit_ms": sync.bit_ms},
         "validation_points": {
             s.id: [list(p) for p in validation_points(s.points)]

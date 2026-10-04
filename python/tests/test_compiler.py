@@ -193,3 +193,18 @@ def test_profile_photo_step(example):
     edit_file(y, "  - {id: feed, type: feed}", "  - {id: feed, type: feed}\n  - {id: photo, type: profile_photo}")
     _, rep = check_study(example)
     assert any("profile_photo step comes after the feed" in w for w in rep.warnings)
+
+
+def test_reels(example, tmp_path):
+    out, rep = compile_study(example, tmp_path / "build")
+    reels = json.loads((out / "study.json").read_text(encoding="utf-8"))["reels"]
+    assert [r["reel_id"] for r in reels] == ["acc3_reel1", "acc1_reel1", "acc6_reel1"]
+    assert (reels[0]["width"], reels[0]["height"]) == (540, 960)
+    assert reels[0]["duration_s"] == pytest.approx(6.0, abs=0.1)
+    assert (out / reels[0]["file"]).is_file()
+
+
+def test_reel_must_be_a_video(example):
+    edit_file(example / "reels.csv", "reels/acc1_reel1.mp4", "images/fill01.png")
+    _, rep = check_study(example)
+    assert any("is not a readable video" in e for e in rep.errors)

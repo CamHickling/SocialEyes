@@ -227,6 +227,7 @@ studies/my_study/
   posts.csv        # which posts exist; which are critical vs. filler
   comments.csv     # comment sets that can be attached to posts (optional)
   captions.csv     # caption variants (optional)
+  reels.csv        # short videos for the Reels tab (optional)
   images/          # the image files
   aois/            # one AOI file per image (see below)
 ```
@@ -528,7 +529,6 @@ rest of the session works.
 | `logging.screen_recording` | not recorded |
 | Neon control (start/stop recording, `neon` events, `neon.required`) | sessions run without the glasses being controlled; start the Neon recording by hand |
 | Stories (tapping a story circle opens it) | planned; the stories row is for the look only |
-| Reels | planned; the Reels tab does nothing |
 | `interruption` events (notifications, calls) | not logged; `app_state` still shows when the app left the screen |
 | Testing on more phones | tested on a Pixel 3 (Android 12): a full session runs and `socialeyes session` reads it; other screen sizes and Android versions are untested |
 
@@ -536,7 +536,10 @@ rest of the session works.
 (stories row, post header, thin-line icons, likes, captions with "… more", comments,
 "2 days ago", tab bar) under the neutral name Pictogram and a free script font, with no
 real logos. Liking, saving (bookmark), sending (shows "Sent"), captions and comments work, and the
-Home tab scrolls back to the top; stories, the top-bar icons and the other tabs are for
+Home tab scrolls back to the top. With a `reels.csv`, the Reels tab opens full-screen
+vertical videos (swipe up/down, loop, muted until tapped, hold to pause, double-tap or
+heart to like, send shows "Sent"), with the playback position logged on every frame so
+gaze can be mapped to video frames. Stories, the top-bar icons and the other tabs are for
 the look only. Each post shows its first 2 comments; with more, "View all N comments"
 opens the comments sheet, so use the `order` column in `comments.csv` to choose which
 comments are visible without a tap. The sheet opens at half height and can be pulled up
@@ -655,7 +658,8 @@ Roughly in order:
       (`dwell ~ edit * label + (1|participant) + (1|post)`)
 - [ ] More tests and docs, macOS/Linux setup
 - [x] Commenting and replying in the comments sheet
-- [ ] App features still to come: stories, reels (each on its own branch)
+- [x] Reels (`reels.csv`, Reels tab with video playback, reel events, `video.csv`)
+- [ ] App features still to come: stories (on its own branch)
 - [ ] *Stretch:* **generated content**: draft comments and account usernames automatically,
       optionally based on what each post's image shows, written into `comments.csv` /
       `accounts.csv` for the researcher to review and edit before compiling

@@ -17,17 +17,20 @@ NO_HIT = 10_000
 
 
 def _rank(element: str) -> int:
-    if element == "sheet_input":  # the comment box lies over the bottom of the sheet
+    if element == "reel":  # the reels screen covers the feed
         return 0
-    if element.startswith("sheet_comment_"):
+    if element == "sheet_input":  # the comment box lies over the bottom of the sheet
         return 1
-    if element == "sheet":
+    if element.startswith("sheet_comment_"):
         return 2
-    return 3 + PRIORITY.index(element)
+    if element == "sheet":
+        return 3
+    return 4 + PRIORITY.index(element)
 
 
 def _is_sheet(element: str) -> bool:
-    return element in ("sheet", "sheet_input") or element.startswith("sheet_comment_")
+    """Elements drawn over the feed: the comments sheet and the reels screen."""
+    return element in ("sheet", "sheet_input", "reel") or element.startswith("sheet_comment_")
 
 
 class Layout:
@@ -109,6 +112,8 @@ class Layout:
         sheet_top = np.full(len(self.times), np.inf)
         is_sheet_row = (el["element"] == "sheet").to_numpy()
         np.minimum.at(sheet_top, el["fi"].to_numpy()[is_sheet_row], T[is_sheet_row])
+        is_reel_row = (el["element"] == "reel").to_numpy()
+        sheet_top[el["fi"].to_numpy()[is_reel_row]] = -np.inf  # the reels screen hides the whole feed
         bottom = np.where(sheet, aB, np.minimum(aB, sheet_top[el["fi"].to_numpy()]))
         top = np.where(sheet, -np.inf, aT)
         w = np.clip(np.minimum(R, aR) - np.maximum(L, aL), 0, None)

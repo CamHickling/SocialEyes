@@ -106,6 +106,9 @@ private fun FeedContent(session: Session, onDone: (reason: String) -> Unit) {
     val ownComments = remember { mutableStateMapOf<String, List<OwnComment>>() } // post_id -> comments
     var ownCount by remember { mutableIntStateOf(0) }
     var draftStartNs by remember { mutableStateOf<Long?>(null) }
+    // Reels tab
+    var reelsOpen by remember { mutableStateOf(false) }
+    val reelLikes = remember { mutableStateMapOf<String, Boolean>() }
     var toast by remember { mutableStateOf<Pair<String, Long>?>(null) } // text, id
     val scope = rememberCoroutineScope()
     val dark = isDarkTheme()
@@ -231,22 +234,57 @@ private fun FeedContent(session: Session, onDone: (reason: String) -> Unit) {
             }
         }
 
-        HorizontalDivider(thickness = 0.5.dp, color = FeedColors.divider(dark))
+        // the tab bar turns dark while Reels is open, as in the app
+        val barTint = if (reelsOpen) Color.White else MaterialTheme.colorScheme.onBackground
+        HorizontalDivider(thickness = 0.5.dp, color = if (reelsOpen) Color(0xFF262626) else FeedColors.divider(dark))
         // Tab bar. Home scrolls back to the top of the feed; the other tabs are for the look only.
         Row(
-            Modifier.fillMaxWidth().height(50.dp),
+            Modifier.fillMaxWidth().height(50.dp).background(if (reelsOpen) Color.Black else MaterialTheme.colorScheme.background),
             horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            BarIcon(FeedIcons.HomeFilled) {
-                log.event("home_tap")
-                scope.launch { listState.animateScrollToItem(0) }
+            BarIcon(FeedIcons.HomeFilled, barTint) {
+                if (reelsOpen) {
+                    reelsOpen = false // ReelsScreen logs reel_end on close via onClose
+                    log.event("reels_close", fields = arrayOf("reason" to "home_tab"))
+                    tracker.clearOverlay()
+                } else {
+                    log.event("home_tap")
+                    scope.launch { listState.animateScrollToItem(0) }
+                }
             }
-            BarIcon(FeedIcons.Search)
-            BarIcon(FeedIcons.Create)
-            BarIcon(FeedIcons.Reels)
+            BarIcon(FeedIcons.Search, barTint)
+            BarIcon(FeedIcons.Create, barTint)
+            BarIcon(FeedIcons.Reels, barTint) {
+                if (!reelsOpen && pkg.manifest.reels.isNotEmpty()) {
+                    log.event("reels_open")
+                    reelsOpen = true
+                }
+            }
             Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) { ParticipantAvatar(27.dp, dark) }
         }
+    }
+
+    // Reels: over everything but the tab bar
+    if (reelsOpen) {
+        ReelsScreen(
+            pkg = pkg,
+            reels = pkg.manifest.reels,
+            topInset = topStrip,
+            allowLikes = cfg.allowLikes,
+            allowShares = cfg.allowShares,
+            reelLikes = reelLikes,
+            track = { reelId, coords -> tracker.updateOverlay(reelId, "reel", coords) },
+            untrack = { reelId -> tracker.removeOverlay(reelId, "reel") },
+            event = { type, fields -> log.event(type, fields = fields) },
+            videoRow = log::videoRow,
+            onClose = { reason ->
+                if (reelsOpen) log.event("reels_close", fields = arrayOf("reason" to reason))
+                reelsOpen = false
+                tracker.clearOverlay()
+            },
+            modifier = Modifier.padding(bottom = 50.5.dp), // the tab bar stays visible
+        )
     }
 
     // "Sent" confirmation, like the app's own short pop-ups.
@@ -314,7 +352,7 @@ private fun FeedContent(session: Session, onDone: (reason: String) -> Unit) {
 }
 
 @Composable
-private fun BarIcon(icon: ImageVector, onClick: (() -> Unit)? = null) {
+private fun BarIcon(icon: ImageVector, tint: Color = Color.Unspecified, onClick: (() -> Unit)? = null) {
     Box(
         Modifier
             .size(44.dp)
@@ -325,7 +363,7 @@ private fun BarIcon(icon: ImageVector, onClick: (() -> Unit)? = null) {
             ),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, null, tint = MaterialTheme.colorScheme.onBackground, modifier = Modifier.size(26.dp))
+        Icon(icon, null, tint = if (tint == Color.Unspecified) MaterialTheme.colorScheme.onBackground else tint, modifier = Modifier.size(26.dp))
     }
 }
 

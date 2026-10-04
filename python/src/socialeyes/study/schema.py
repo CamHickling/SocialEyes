@@ -358,6 +358,7 @@ class Study(_Strict):
     comments: str = "comments.csv"
     """Optional: a missing file means no post has comments."""
     captions: str = "captions.csv"
+    reels: str = "reels.csv"
     """Optional: only needed when a factor sets caption_variant."""
     labels: dict[str, Label] = {}
     factors: list[Factor] = []

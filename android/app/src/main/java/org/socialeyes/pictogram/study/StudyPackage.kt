@@ -34,6 +34,22 @@ data class StudyManifest(
     @SerialName("sync_code") val syncCode: SyncCode,
     @SerialName("validation_points") val validationPoints: Map<String, List<List<Double>>> = emptyMap(),
     @SerialName("screen_tags") val screenTags: Map<String, String> = emptyMap(),
+    val reels: List<ReelItem> = emptyList(),
+)
+
+/** A reel from reels.csv, as resolved by the compiler (in display order). */
+@Serializable
+data class ReelItem(
+    @SerialName("reel_id") val reelId: String,
+    @SerialName("account_id") val accountId: String,
+    val file: String,
+    val width: Int,
+    val height: Int,
+    @SerialName("duration_s") val durationS: Double = 0.0,
+    val caption: String = "",
+    @SerialName("like_count") val likeCount: Int = 0,
+    val audio: String? = null,
+    @SerialName("posted_ago") val postedAgo: String? = null,
 )
 
 @Serializable

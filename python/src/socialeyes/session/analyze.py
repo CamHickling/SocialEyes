@@ -16,6 +16,8 @@ from .viewport import Layout
 
 INTERACTION_TYPES = ("like", "comments_open", "comments_close", "comments_sheet", "comment_like", "caption_expand",
                      "profile_tap", "label_tap", "image_tap", "save", "share", "home_tap", "comment_submit",
+                     "reels_open", "reels_close", "reel_start", "reel_end", "reel_like", "reel_share", "reel_mute",
+                     "reel_pause", "reel_resume",
                      "done_button_shown")  # comment_edit (every draft change) stays in events.jsonl only
 
 
