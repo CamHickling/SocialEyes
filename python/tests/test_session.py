@@ -131,6 +131,17 @@ def test_sheet_hides_the_feed_below_it():
     assert e.loc["sheet_comment_1", "visible_s"] == pytest.approx(2.0)
 
 
+def test_open_story_hides_the_feed():
+    area = (0, 0, 1000, 2000)
+    story = [("acc3_1", "story", 0, 100, 1000, 1880)]
+    frames = [(0, 0, card("a", 0)), (1000, 0, card("a", 0) + story), (3000, None, [])]
+    lay = Layout(viewport_rows(frames))
+    e = lay.exposure(3000 * MS, area).set_index(["post_id", "element"])
+    assert e.loc[("a", "image"), "visible_s"] == pytest.approx(1.0)
+    assert e.loc[("acc3_1", "story"), "visible_s"] == pytest.approx(2.0)
+    assert lay.locate([1500 * MS], [10], [500])["element"].tolist() == ["story"]
+
+
 # ---------------------------------------------------------------- touch mapping and occlusion
 
 

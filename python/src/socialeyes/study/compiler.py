@@ -8,6 +8,7 @@ docs/STUDY_DESIGN.md):
 * posts.csv     post_id, role, account_id [, default_version, caption, like_count, posted_ago]
 * comments.csv  post_id, account_id, text [, variant, order, like_count]   (optional file)
 * captions.csv  post_id, variant, text                                       (optional file)
+* stories.csv   account_id, file [, story_id, order, duration_s, posted_ago, aoi_file]  (optional file)
 
 ``check_study`` collects every problem it can find instead of stopping at the
 first one, so a researcher can fix a whole batch at once. ``compile_study``
@@ -57,6 +58,7 @@ COLUMNS: dict[str, tuple[list[str], list[str]]] = {
     "posts": (["post_id", "role", "account_id"], ["default_version", "caption", "like_count", "posted_ago"]),
     "comments": (["post_id", "account_id", "text"], ["variant", "order", "like_count"]),
     "captions": (["post_id", "variant", "text"], []),
+    "stories": (["account_id", "file"], ["story_id", "order", "duration_s", "posted_ago", "aoi_file"]),
 }
 
 
@@ -130,7 +132,8 @@ class StudyBundle:
     comments: dict[tuple[str, str], list[Comment]]  # (post_id, variant) -> comments in display order
     captions: dict[tuple[str, str], str]  # (post_id, variant) -> caption
     image_sizes: dict[str, tuple[int, int]]
-    aois: dict[str, AOISet]
+    aois: dict[str, AOISet]  # by image_id, and by story_id for stories with AOIs
+    stories: list["Story"] = field(default_factory=list)  # grouped by account, in display order
 
     @property
     def critical(self) -> list[Post]:
@@ -407,6 +410,7 @@ def check_study(study_dir: Path | str) -> tuple[Optional[StudyBundle], Report]:
             captions[(r["post_id"], r["variant"])] = r["text"]
 
     b = StudyBundle(root, study, accounts, images, posts, comments, captions, image_sizes, {})
+    b.stories = _load_stories(b, rep)
     _check_aois(b, rep)
     _check_design(b, rep)
     if not rep.errors:
@@ -416,6 +420,75 @@ def check_study(study_dir: Path | str) -> tuple[Optional[StudyBundle], Report]:
             rep.errors.append(str(e))
     rep.dedupe()
     return (None if rep.errors else b), rep
+
+
+@dataclass(frozen=True)
+class Story:
+    story_id: str
+    account_id: str
+    file: str
+    order: int
+    duration_s: Optional[float]
+    posted_ago: str
+    width: int
+    height: int
+
+
+def _load_stories(b: StudyBundle, rep: Report) -> list[Story]:
+    """stories.csv (optional): stories per account, shown from the story circles."""
+    name = b.study.stories
+    rows = _read_csv(b.root / name, "stories", rep, required=False)
+    stories: list[Story] = []
+    account_order: list[str] = []
+    per_account: dict[str, int] = {}
+    for n, (where, r) in enumerate(rows):
+        acc = r["account_id"]
+        if acc not in b.accounts:
+            rep.errors.append(f"{where}: account_id {acc!r} is not in {b.study.accounts}")
+            continue
+        per_account[acc] = per_account.get(acc, 0) + 1
+        sid = r["story_id"] or f"{acc}_{per_account[acc]}"
+        if _duplicate({s.story_id for s in stories}, sid, where, "story_id", rep):
+            continue
+        if sid in b.images:
+            rep.errors.append(f"{where}: story_id {sid!r} is also an image_id in {b.study.images}; use another id")
+            continue
+        duration = None
+        if r["duration_s"]:
+            try:
+                duration = float(r["duration_s"])
+                if not 0 < duration <= 60:
+                    raise ValueError
+            except ValueError:
+                rep.errors.append(f"{where}: duration_s must be a number of seconds between 0 and 60")
+        file = _study_file(b.root, r["file"], where, "file", rep)
+        size = (0, 0)
+        if file:
+            try:
+                with PILImage.open(b.root / file) as im:
+                    size = im.size
+            except OSError:
+                rep.errors.append(f"{where}: {file!r} is not a readable image")
+        if acc not in account_order:
+            account_order.append(acc)
+        stories.append(Story(sid, acc, file or "", _int(r["order"], where, "order", rep, default=n),
+                             duration, r["posted_ago"], *size))
+        # AOIs are optional for stories: an explicit aoi_file, or aois/<file name>.json if present
+        rel = r["aoi_file"] or f"aois/{Path(r['file']).stem}.json"
+        if file and (r["aoi_file"] or (b.root / rel).is_file()):
+            path = _study_file(b.root, rel, where, "AOI file", rep)
+            if path:
+                try:
+                    aois = load_aoi_file(b.root / path)
+                    if (aois.width, aois.height) != size:
+                        rep.errors.append(f"{where}: AOI file {path!r} is for a {aois.width}x{aois.height} image "
+                                          f"but {file!r} is {size[0]}x{size[1]}")
+                    else:
+                        b.aois[sid] = aois
+                except (ValueError, KeyError, TypeError, json.JSONDecodeError) as e:
+                    rep.errors.append(f"{where}: cannot read AOI file {path!r}: {e}")
+    stories.sort(key=lambda s: (account_order.index(s.account_id), s.order))
+    return stories
 
 
 def _check_aois(b: StudyBundle, rep: Report) -> None:
@@ -678,7 +751,7 @@ def compile_study(study_dir: Path | str, out_dir: Path | str | None = None, clea
         _write_json(out / "plans" / f"{plan['participant_id']}.json", plan)
     _write_plans_csv(out / "plans.csv", b, plans)
 
-    media = {a.avatar for a in b.accounts.values()} | {i.file for i in b.images.values()}
+    media = {a.avatar for a in b.accounts.values()} | {i.file for i in b.images.values()} | {s.file for s in b.stories}
     for rel in sorted(media):
         dest = out / "media" / rel
         dest.parent.mkdir(parents=True, exist_ok=True)
@@ -720,6 +793,19 @@ def _study_manifest(b: StudyBundle) -> dict:
             }
             for i in b.images.values()
         },
+        "stories": [
+            {
+                "story_id": s.story_id,
+                "account_id": s.account_id,
+                "file": f"media/{s.file}",
+                "width": s.width,
+                "height": s.height,
+                "duration_s": s.duration_s if s.duration_s is not None else study.feed.story_duration_s,
+                "posted_ago": s.posted_ago or None,
+                "aoi": f"aois/{s.story_id}.json" if s.story_id in b.aois else None,
+            }
+            for s in b.stories
+        ],
         "sync_code": {"bits": m_sequence(), "bit_ms": sync.bit_ms},
         "validation_points": {
             s.id: [list(p) for p in validation_points(s.points)]

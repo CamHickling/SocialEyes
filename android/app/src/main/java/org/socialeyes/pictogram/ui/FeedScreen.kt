@@ -21,6 +21,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import org.socialeyes.pictogram.study.StoryItem
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -106,6 +108,11 @@ private fun FeedContent(session: Session, onDone: (reason: String) -> Unit) {
     val ownComments = remember { mutableStateMapOf<String, List<OwnComment>>() } // post_id -> comments
     var ownCount by remember { mutableIntStateOf(0) }
     var draftStartNs by remember { mutableStateOf<Long?>(null) }
+    // stories: grouped by account in stories.csv order; which have been seen; which account is open
+    val storyGroups = remember { pkg.manifest.stories.groupBy { it.accountId }.values.toList() }
+    val seenStories = remember { mutableStateMapOf<String, Boolean>() }
+    val storyLikes = remember { mutableStateMapOf<String, Boolean>() }
+    var openStoryGroup by remember { mutableStateOf<Int?>(null) }
     var toast by remember { mutableStateOf<Pair<String, Long>?>(null) } // text, id
     val scope = rememberCoroutineScope()
     val dark = isDarkTheme()
@@ -206,7 +213,12 @@ private fun FeedContent(session: Session, onDone: (reason: String) -> Unit) {
                         }
                     },
             ) {
-                item(key = "stories") { StoriesTray(pkg, session.plan.feed) }
+                item(key = "stories") {
+                    StoriesTray(pkg, session.plan.feed, storyGroups, seenStories) { g ->
+                        log.event("story_open", fields = arrayOf("account_id" to storyGroups[g].first().accountId))
+                        openStoryGroup = g
+                    }
+                }
                 items(session.plan.feed, key = { it.postId }) { post ->
                     DisposableEffect(post.postId) { onDispose { tracker.remove(post.postId) } }
                     PostCard(
@@ -262,6 +274,28 @@ private fun FeedContent(session: Session, onDone: (reason: String) -> Unit) {
                 .background(Color(0xE6262626), RoundedCornerShape(8.dp))
                 .padding(horizontal = 18.dp, vertical = 10.dp),
         ) { Text(text, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold) }
+    }
+
+    openStoryGroup?.let { g ->
+        StoryViewer(
+            pkg = pkg,
+            groups = storyGroups,
+            startGroup = g,
+            topInset = topStrip,
+            track = { storyId, coords -> tracker.updateOverlay(storyId, "story", coords) },
+            untrack = { storyId -> tracker.removeOverlay(storyId, "story") },
+            event = { type, fields -> log.event(type, fields = fields) },
+            onSeen = { seenStories[it] = true },
+            allowReplies = cfg.allowCommentTyping,
+            allowLikes = cfg.allowLikes,
+            allowShares = cfg.allowShares,
+            storyLikes = storyLikes,
+            onClose = { reason ->
+                log.event("story_close", fields = arrayOf("reason" to reason))
+                tracker.clearOverlay()
+                openStoryGroup = null
+            },
+        )
     }
 
     commentsFor?.let { post ->
@@ -334,9 +368,20 @@ private fun BarIcon(icon: ImageVector, onClick: (() -> Unit)? = null) {
  * the feed. For the look only; tapping does nothing (the touch is still in touch.csv).
  */
 @Composable
-private fun StoriesTray(pkg: StudyPackage, feed: List<FeedPost>) {
-    val accounts = remember(feed) { feed.map { it.accountId }.distinct() }
+private fun StoriesTray(
+    pkg: StudyPackage,
+    feed: List<FeedPost>,
+    storyGroups: List<List<StoryItem>>,
+    seen: Map<String, Boolean>,
+    onOpen: (group: Int) -> Unit,
+) {
+    // With stories.csv: the accounts that have stories, and tapping opens them.
+    // Without: the feed's accounts, for the look only.
+    val accounts = remember(feed, storyGroups) {
+        if (storyGroups.isNotEmpty()) storyGroups.map { it.first().accountId } else feed.map { it.accountId }.distinct()
+    }
     val ring = storyRing()
+    val seenRing = FeedColors.divider(isDarkTheme())
     LazyRow(
         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -354,10 +399,22 @@ private fun StoriesTray(pkg: StudyPackage, feed: List<FeedPost>) {
                 }
             }
         }
-        items(accounts) { id ->
+        itemsIndexed(accounts) { g, id ->
             val account = pkg.manifest.accounts.getValue(id)
-            StoryBubble(account.handle) {
-                Box(Modifier.size(68.dp).border(2.dp, ring, CircleShape).padding(4.dp)) {
+            val group = storyGroups.getOrNull(g)
+            val allSeen = group != null && group.all { seen[it.storyId] == true }
+            StoryBubble(
+                account.handle,
+                modifier = if (group != null) {
+                    Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onOpen(g) }
+                } else Modifier,
+            ) {
+                Box(
+                    Modifier
+                        .size(68.dp)
+                        .then(if (allSeen) Modifier.border(1.dp, seenRing, CircleShape) else Modifier.border(2.dp, ring, CircleShape))
+                        .padding(4.dp),
+                ) {
                     Avatar(pkg.file(account.avatar), 60.dp)
                 }
             }
@@ -373,8 +430,8 @@ private fun storyRing() = Brush.linearGradient(
 )
 
 @Composable
-private fun StoryBubble(name: String, circle: @Composable () -> Unit) {
-    Column(Modifier.width(76.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+private fun StoryBubble(name: String, modifier: Modifier = Modifier, circle: @Composable () -> Unit) {
+    Column(modifier.width(76.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         circle()
         Spacer(Modifier.height(4.dp))
         Text(name, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,

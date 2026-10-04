@@ -158,6 +158,8 @@ class Feed(_Strict):
     """Send button shows "Sent" (nothing is actually sent)."""
     allow_comment_likes: bool = True
     """Comments can be liked in the comments sheet."""
+    story_duration_s: float = Field(5.0, gt=0, le=60)
+    """How long each story shows before moving on; stories.csv can override it per story."""
 
 
 # ---------------------------------------------------------------- procedure steps
@@ -358,6 +360,7 @@ class Study(_Strict):
     comments: str = "comments.csv"
     """Optional: a missing file means no post has comments."""
     captions: str = "captions.csv"
+    stories: str = "stories.csv"
     """Optional: only needed when a factor sets caption_variant."""
     labels: dict[str, Label] = {}
     factors: list[Factor] = []
