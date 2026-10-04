@@ -15,6 +15,7 @@ studies/my_study/
   posts.csv        the posts; which are critical and which are fillers
   comments.csv     comment sets (optional)
   captions.csv     caption variants (optional)
+  stories.csv      stories shown from the story circles (optional)
   images/          image files
   avatars/         profile pictures
   aois/            one AOI file per image (see "AOIs" in the README)
@@ -112,6 +113,24 @@ the `caption` column of `posts.csv`.
 | `post_id` | yes | |
 | `variant` | yes | matches the values the factor produces |
 | `text` | yes | the caption |
+
+## stories.csv (optional)
+
+Stories, opened by tapping an account's circle at the top of the feed. Every
+participant sees the same stories (they are not manipulated by factors).
+Without this file the story circles are only decoration.
+
+| column | required | meaning |
+|---|---|---|
+| `account_id` | yes | whose story it is; the circles appear in the order accounts first occur in this file |
+| `file` | yes | image path; 9:16 portrait (e.g. 1080x1920) looks like a real story, any size works |
+| `story_id` | no | unique key (default `<account_id>_<n>`); must not equal an `image_id` |
+| `order` | no | position among the account's stories (default: file order) |
+| `duration_s` | no | seconds before it moves on (default `feed.story_duration_s`, 5) |
+| `posted_ago` | no | display text such as `2h` |
+| `aoi_file` | no | AOI file for the story image (default `aois/<image file name>.json` if it exists) |
+
+The image is always shown whole, so gaze on it can be mapped to image pixels and AOIs.
 
 ## How factors pick content
 

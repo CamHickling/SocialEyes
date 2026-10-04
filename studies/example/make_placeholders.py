@@ -17,6 +17,7 @@ from PIL import Image, ImageDraw
 
 HERE = Path(__file__).parent
 W, H = 540, 675  # 4:5 portrait, the usual feed aspect ratio
+SW, SH = 540, 960  # 9:16, stories
 
 SKIN = [(224, 172, 140), (198, 140, 105), (141, 96, 70), (241, 194, 160)]
 CLOTHES = [(46, 94, 170), (190, 60, 70), (40, 140, 110), (120, 80, 160), (220, 150, 40)]
@@ -71,6 +72,20 @@ def scene(seed: int) -> Image.Image:
     return im
 
 
+def story(seed: int) -> Image.Image:
+    """A 9:16 story: a figure or a scene on a vertical gradient."""
+    rng = random.Random(seed)
+    top, bottom = rng.choice(BACKGROUNDS), tuple(int(c * 0.75) for c in rng.choice(BACKGROUNDS))
+    im = Image.new("RGB", (SW, SH))
+    d = ImageDraw.Draw(im)
+    for y in range(SH):
+        t = y / SH
+        d.line((0, y, SW, y), fill=tuple(int(a + (b - a) * t) for a, b in zip(top, bottom)))
+    inner = figure(seed, False)[0] if rng.random() < 0.5 else scene(seed)
+    im.paste(inner, (0, (SH - H) // 2))
+    return im
+
+
 def avatar(seed: int) -> Image.Image:
     rng = random.Random(seed)
     im = Image.new("RGB", (128, 128), rng.choice(BACKGROUNDS))
@@ -96,6 +111,13 @@ def main() -> None:
         scene(200 + n).save(HERE / "images" / f"fill{n:02d}.png", optimize=True)
     for n in range(1, 7):
         avatar(300 + n).save(HERE / "avatars" / f"acc{n}.png", optimize=True)
+    make_stories()
+
+
+def make_stories() -> None:
+    (HERE / "stories").mkdir(exist_ok=True)
+    for n, name in enumerate(["acc3_1", "acc3_2", "acc6_1", "acc6_2", "acc5_1", "acc1_1"], start=1):
+        story(400 + n).save(HERE / "stories" / f"{name}.png", optimize=True)
 
 
 if __name__ == "__main__":

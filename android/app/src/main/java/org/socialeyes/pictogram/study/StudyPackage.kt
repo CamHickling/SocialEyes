@@ -34,6 +34,19 @@ data class StudyManifest(
     @SerialName("sync_code") val syncCode: SyncCode,
     @SerialName("validation_points") val validationPoints: Map<String, List<List<Double>>> = emptyMap(),
     @SerialName("screen_tags") val screenTags: Map<String, String> = emptyMap(),
+    val stories: List<StoryItem> = emptyList(),
+)
+
+/** A story from stories.csv, as resolved by the compiler (grouped by account, in display order). */
+@Serializable
+data class StoryItem(
+    @SerialName("story_id") val storyId: String,
+    @SerialName("account_id") val accountId: String,
+    val file: String,
+    val width: Int,
+    val height: Int,
+    @SerialName("duration_s") val durationS: Double = 5.0,
+    @SerialName("posted_ago") val postedAgo: String? = null,
 )
 
 @Serializable

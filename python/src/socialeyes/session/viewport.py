@@ -17,17 +17,20 @@ NO_HIT = 10_000
 
 
 def _rank(element: str) -> int:
-    if element == "sheet_input":  # the comment box lies over the bottom of the sheet
+    if element == "story":  # an open story covers the whole screen
         return 0
-    if element.startswith("sheet_comment_"):
+    if element == "sheet_input":  # the comment box lies over the bottom of the sheet
         return 1
-    if element == "sheet":
+    if element.startswith("sheet_comment_"):
         return 2
-    return 3 + PRIORITY.index(element)
+    if element == "sheet":
+        return 3
+    return 4 + PRIORITY.index(element)
 
 
-def _is_sheet(element: str) -> bool:
-    return element in ("sheet", "sheet_input") or element.startswith("sheet_comment_")
+def _is_overlay(element: str) -> bool:
+    """Elements drawn over the feed: the comments sheet and an open story."""
+    return element in ("sheet", "sheet_input", "story") or element.startswith("sheet_comment_")
 
 
 class Layout:
@@ -91,8 +94,8 @@ class Layout:
 
         ``area`` is the screen rectangle the feed is visible in; ``end_ns`` closes
         the last frame. While the comments sheet is open, feed elements count as
-        visible only above the sheet's top edge; the sheet and its comments may
-        extend above ``area`` (it can cover the top bar). Columns: post_id, element, visible_s (any part on
+        visible only above the sheet's top edge, and not at all while a story is
+        open; the sheet, its comments and stories may extend above ``area``. Columns: post_id, element, visible_s (any part on
         screen), full_s (>= 99.9% on screen), weighted_s (time x visible area
         fraction), first_visible_ns, entries (times it came into view).
         """
@@ -104,11 +107,14 @@ class Layout:
         dt = (next_t - self.times) / 1e9
         L, T, R, B = (el[c].to_numpy(float) for c in ("left", "top", "right", "bottom"))
         aL, aT, aR, aB = area
-        sheet = el["element"].map(_is_sheet).to_numpy(bool)
-        # top of the sheet in each frame (inf when it is closed)
+        sheet = el["element"].map(_is_overlay).to_numpy(bool)
+        # what hides the feed in each frame: the sheet's top edge, everything while
+        # a story is open (inf when nothing covers it)
         sheet_top = np.full(len(self.times), np.inf)
         is_sheet_row = (el["element"] == "sheet").to_numpy()
         np.minimum.at(sheet_top, el["fi"].to_numpy()[is_sheet_row], T[is_sheet_row])
+        is_story_row = (el["element"] == "story").to_numpy()
+        sheet_top[el["fi"].to_numpy()[is_story_row]] = -np.inf
         bottom = np.where(sheet, aB, np.minimum(aB, sheet_top[el["fi"].to_numpy()]))
         top = np.where(sheet, -np.inf, aT)
         w = np.clip(np.minimum(R, aR) - np.maximum(L, aL), 0, None)

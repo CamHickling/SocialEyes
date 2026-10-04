@@ -226,6 +226,7 @@ studies/my_study/
   posts.csv        # which posts exist; which are critical vs. filler
   comments.csv     # comment sets that can be attached to posts (optional)
   captions.csv     # caption variants (optional)
+  stories.csv      # stories behind the story circles (optional)
   images/          # the image files
   aois/            # one AOI file per image (see below)
 ```
@@ -526,7 +527,6 @@ rest of the session works.
 | `logging.sensors` (accelerometer / gyroscope) | not recorded |
 | `logging.screen_recording` | not recorded |
 | Neon control (start/stop recording, `neon` events, `neon.required`) | sessions run without the glasses being controlled; start the Neon recording by hand |
-| Stories (tapping a story circle opens it) | planned; the stories row is for the look only |
 | Reels | planned; the Reels tab does nothing |
 | `interruption` events (notifications, calls) | not logged; `app_state` still shows when the app left the screen |
 | Testing on more phones | tested on a Pixel 3 (Android 12): a full session runs and `socialeyes session` reads it; other screen sizes and Android versions are untested |
@@ -535,8 +535,10 @@ rest of the session works.
 (stories row, post header, thin-line icons, likes, captions with "… more", comments,
 "2 days ago", tab bar) under the neutral name Pictogram and a free script font, with no
 real logos. Liking, saving (bookmark), sending (shows "Sent"), captions and comments work, and the
-Home tab scrolls back to the top; stories, the top-bar icons and the other tabs are for
-the look only. Each post shows its first 2 comments; with more, "View all N comments"
+Home tab scrolls back to the top. With a `stories.csv`, tapping a story circle opens the
+account's stories full screen (progress bars, tap right/left to skip/go back, hold to
+pause, swipe down to close, 5 s each by default via `feed.story_duration_s`); watched
+accounts get a grey ring. The top-bar icons and the other tabs are for the look only. Each post shows its first 2 comments; with more, "View all N comments"
 opens the comments sheet, so use the `order` column in `comments.csv` to choose which
 comments are visible without a tap. The sheet opens at half height and can be pulled up
 over the whole screen; comments in it can be liked, and their positions are logged so
@@ -654,7 +656,8 @@ Roughly in order:
       (`dwell ~ edit * label + (1|participant) + (1|post)`)
 - [ ] More tests and docs, macOS/Linux setup
 - [x] Commenting and replying in the comments sheet
-- [ ] App features still to come: stories, reels (each on its own branch)
+- [x] Stories (`stories.csv`, story viewer, story events and gaze-mappable story images)
+- [ ] App features still to come: reels (on its own branch)
 - [ ] *Stretch:* **generated content**: draft comments and account usernames automatically,
       optionally based on what each post's image shows, written into `comments.csv` /
       `accounts.csv` for the researcher to review and edit before compiling

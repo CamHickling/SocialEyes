@@ -35,7 +35,8 @@ class ViewportTracker(private val log: SessionLog) {
     /** Window size, for deciding whether sheet elements are on screen. */
     var windowSize: Pair<Float, Float> = Float.MAX_VALUE to Float.MAX_VALUE
 
-    /** A comments-sheet element: `sheet` or `sheet_comment_<n>`. */
+    /** An element drawn over the feed: the comments sheet's `sheet`, `sheet_input` and
+     *  `sheet_comment_<n>`, or an open `story` (with the story_id as [postId]). */
     fun updateOverlay(postId: String, element: String, coords: LayoutCoordinates) {
         if (!coords.isAttached) return
         val p = coords.positionInWindow()
@@ -97,7 +98,9 @@ class ViewportTracker(private val log: SessionLog) {
         overlayPost?.let { postId ->
             val window = ScreenRect(0f, 0f, windowSize.first, windowSize.second)
             for ((element, r) in overlay) {
-                val inView = r.intersects(window) && (element == "sheet" || overlayClip?.let(r::intersects) != false)
+                // only comments are clipped to the sheet's list area
+                val inView = r.intersects(window) &&
+                    (!element.startsWith("sheet_comment_") || overlayClip?.let(r::intersects) != false)
                 if (inView) log.viewportElement(t, frame, postId, element, r.offset(windowX, windowY))
             }
         }

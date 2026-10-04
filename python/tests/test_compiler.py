@@ -193,3 +193,18 @@ def test_profile_photo_step(example):
     edit_file(y, "  - {id: feed, type: feed}", "  - {id: feed, type: feed}\n  - {id: photo, type: profile_photo}")
     _, rep = check_study(example)
     assert any("profile_photo step comes after the feed" in w for w in rep.warnings)
+
+
+def test_stories(example, tmp_path):
+    out, rep = compile_study(example, tmp_path / "build")
+    stories = json.loads((out / "study.json").read_text(encoding="utf-8"))["stories"]
+    assert [s["story_id"] for s in stories[:3]] == ["acc3_1", "acc3_2", "acc6_1"]  # grouped by account, csv order
+    assert stories[0]["width"] == 540 and stories[0]["height"] == 960
+    assert stories[0]["duration_s"] == 5.0  # feed.story_duration_s default
+    assert (out / stories[0]["file"]).is_file()
+
+
+def test_story_errors(example):
+    edit_file(example / "stories.csv", "acc5,stories/acc5_1.png,8h", "nobody,stories/missing.png,8h")
+    _, rep = check_study(example)
+    assert any("account_id 'nobody'" in e for e in rep.errors)
