@@ -30,6 +30,7 @@ import yaml
 from .. import settings
 from ..session import register
 from .adb import APP_FILES, PACKAGE, Adb, AdbError
+from ..study.compiler import CHECKSUM_FILE
 from .loader import build_study, discard, parse_sha256sum
 
 SAFE = re.compile(r"[A-Za-z0-9_.-]+")
@@ -212,7 +213,7 @@ def _unload_one(adb: Adb, sid: str, pid: str, uid: str, data: Path, second: Opti
         try:
             from ..session.analyze import analyze_session, write_results
 
-            results = analyze_session(final, build.build if build else None)
+            results = analyze_session(final, _build_for(final, sid, build))
             quality = results["quality"]
             write_results(results, settings.analysis_dir(sid) / pid / uid)
             s.completed = quality["completed"]
@@ -240,6 +241,19 @@ def _unload_one(adb: Adb, sid: str, pid: str, uid: str, data: Path, second: Opti
     except (OSError, AdbError) as e:
         s.error = str(e)
     return s
+
+
+def _build_for(session: Path, sid: str, fresh) -> Optional[Path]:
+    """The exact build the session ran (kept when it was loaded), else the study as compiled now."""
+    try:
+        sha = json.loads((session / "session.json").read_text(encoding="utf-8")).get("package_sha256")
+    except (OSError, ValueError):
+        sha = None
+    if sha:
+        snap = settings.build_snapshot(sid, sha)
+        if (snap / CHECKSUM_FILE).is_file():
+            return snap
+    return fresh.build if fresh else None
 
 
 def _tidy_phone(adb: Adb, sid: str) -> None:

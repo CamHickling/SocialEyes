@@ -305,6 +305,14 @@ def _assess(adb: Adb, study_dir: Optional[Path | str]) -> tuple[Result, Optional
         except StudyError as e:
             errors = e.errors
     r.checks = readiness(r.phone, study, apk, errors)
+    if study is not None:  # edits made outside the Design tab (e.g. CSVs in Excel) are caught here
+        from ..study.protect import against_sessions
+
+        p = against_sessions(study.id, study.build)
+        if p:
+            r.checks.insert(0, Check("block", f"This version would break the {p['sessions']} session(s) already "
+                                              f"collected: {' '.join(p['reasons'])} Save it as version "
+                                              f"{p['version'] + 1} in the Design tab (or raise version: in study.yaml)."))
     r.update_available = bool(apk and r.phone.app_installed and r.phone.app_version_code is not None
                               and apk.version_code > r.phone.app_version_code)
     r.needs_confirmation = warned(r.checks) and not blocked(r.checks)
@@ -359,6 +367,7 @@ def load(study_dir: Path | str, serial: Optional[str] = None, update_app: bool =
             if r.phone.app_running:
                 step("SocialEyes is open on the phone: close it and open it again to see the study.")
         r.loaded = True
+        keep_snapshot(study)
         return r
     except AdbError as e:
         r.error = str(e)
@@ -366,6 +375,25 @@ def load(study_dir: Path | str, serial: Optional[str] = None, update_app: bool =
         return r
     finally:
         discard(study)
+
+
+def keep_snapshot(study: StudyInfo) -> Optional[Path]:
+    """Keeps a copy of the build that went onto the phone, so its sessions can always be analysed
+    with (and new edits compared against) exactly what participants saw."""
+    from .. import settings
+
+    dest = settings.build_snapshot(study.id, study.package_sha256)
+    if (dest / CHECKSUM_FILE).is_file():
+        return dest
+    try:
+        tmp = dest.with_name(dest.name + ".tmp")
+        shutil.rmtree(tmp, ignore_errors=True)
+        shutil.copytree(study.build, tmp)
+        shutil.rmtree(dest, ignore_errors=True)
+        tmp.replace(dest)
+        return dest
+    except OSError:
+        return None  # a missing snapshot only means comparisons fall back to the study on disk
 
 
 def _count(study: StudyInfo) -> int:

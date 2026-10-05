@@ -140,7 +140,7 @@ for mixed models in R.
 | Session log format (touches, scrolling, interactions, quality events) | ✅ | `docs/EVENT_LOG.md` (version 1) |
 | Session analysis: gestures, time on screen, touch→AOI, finger occlusion, quality checks | ✅ | `python/src/socialeyes/session/` (tested on simulated sessions) |
 | Experiment builder: guided form that writes study.yaml and CSV skeletons | ✅ | `builder/index.html` (open in a browser) |
-| Desktop app (Windows): Design tab edits study folders in place and runs the compiler's checks; Phone tab loads studies onto the phone; Data tab unloads sessions with a register; Studies tab lists studies with their status; Content tab lists the files each study still needs; packaging to come | 🟡 | `socialeyes app` (`python/src/socialeyes/desktop/`) |
+| Desktop app (Windows): Design tab edits study folders in place and runs the compiler's checks; Phone tab loads studies onto the phone; Data tab unloads sessions with a register; Studies tab lists studies with their status; Content tab lists the files each study still needs; edits that would break collected data need a new version; packaging to come | 🟡 | `socialeyes app` (`python/src/socialeyes/desktop/`) |
 | CSV format reference | ✅ | `docs/STUDY_DESIGN.md` (version 1) |
 | Android SocialEyes app: Instagram-style feed (stories row, comments sheet), sync patch, touch / scroll / viewport / quality logging, instructions, marker calibration, validation, questionnaires, image ratings, recognition test, camera check, front camera video, motion sensors, interruption detection | 🟡 | `android/` (tested on a Pixel 3) |
 | App: screen recording, Neon control | ⏳ | see [What the app doesn't do yet](#what-the-app-doesnt-do-yet) |
@@ -271,7 +271,20 @@ app](#running-the-app)). **Studies** lists every study in `studies/` as designin
 (with its number of problems), ready, or collecting data (with its number of sessions),
 and starts new ones, blank or as a copy of the example. **Content** lists every image,
 avatar, story image, video and AOI file the study's CSVs point to, found or missing
-("54 of 61 files ready"). The app
+("54 of 61 files ready").
+
+**Studies with data are protected.** Once a study has sessions, saving an edit that would
+change what participants get, or what the analysis relies on, is refused until you save it
+as a new version (one click: **Save as version N+1**). That covers the seed, post order and
+conditions, which comments a post has and their order, rating and recognition trials,
+replaced or renamed images, story images and videos, procedure step and question ids, the
+study id, and fewer participant plans. Changing text (instructions, captions, comment or
+question wording) and looks saves as usual, and so does adding plans. The comparison is
+against the exact build the sessions ran: `socialeyes load` keeps a copy of every build it
+puts on a phone in `<data folder>/builds/`, and `socialeyes unload` analyses each session
+with the build it ran. Loading (`socialeyes load`, the Phone tab) runs the same comparison,
+so a breaking edit made outside the app, such as reordered rows in a CSV, is stopped
+before it reaches the phone. The app
 needs `pywebview`, which `setup-toolchain.ps1` installs; in an older toolchain run
 `pip install pywebview`.
 
@@ -804,7 +817,7 @@ Roughly in order:
         register per study (participant, date, phone, completed, warnings; flags participant
         IDs used twice); optionally make a second copy (e.g. a network or encrypted drive);
         once Neon is integrated, also collect the matching Neon recording
-  - [ ] **Protection once data exists**: when a study has sessions, warn about or lock
+  - [x] **Protection once data exists**: when a study has sessions, warn about or lock
         changes that would break it (seed, post order, image file names, comment order) and
         bump the study version when it is edited
   - [ ] Order: Design in the app and saving to the folder → Phone → Data → Studies list →

@@ -81,3 +81,8 @@ def second_copy_dir(study_id: str) -> Optional[Path]:
 
 def analysis_dir(study_id: str) -> Path:
     return workspace() / "analysis_out" / study_id
+
+
+def build_snapshot(study_id: str, package_sha256: str) -> Path:
+    """Where the exact build a phone was loaded with is kept: <data folder>/builds/<hash, first 16>."""
+    return data_dir(study_id) / "builds" / package_sha256[:16]

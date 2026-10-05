@@ -13,7 +13,8 @@ import traceback
 from pathlib import Path
 
 from .. import __version__
-from .studyfolder import FolderError, check_folder, new_study_folder, read_study, save_study
+from .studyfolder import (FolderError, check_folder, new_study_folder, protection_check, read_study, save_study,
+                          sessions_of)
 
 REPO = Path(__file__).resolve().parents[4]  # python/src/socialeyes/desktop/app.py -> repo root
 
@@ -68,12 +69,17 @@ class Api:
 
     @_reply
     def open_folder(self, folder: str) -> dict:
-        return {"study": read_study(folder), "check": check_folder(folder)}
+        return {"study": read_study(folder), "check": check_folder(folder), "sessions": len(sessions_of(folder))}
 
     @_reply
     def save(self, folder: str, files: dict) -> dict:
+        """Saves, unless the study has sessions and the edit would break them without a new
+        version number: then nothing is written and {"needs_version": ...} says why."""
+        protect = protection_check(folder, files.get("study.yaml", ""))
+        if protect:
+            return {"needs_version": protect}
         saved = save_study(folder, files)
-        return {"saved": saved, "check": check_folder(folder)}
+        return {"saved": saved, "check": check_folder(folder), "sessions": len(sessions_of(folder))}
 
     @_reply
     def save_new(self, parent: str, study_id: str, files: dict) -> dict:

@@ -6,10 +6,18 @@ other file only when it doesn't exist yet. A researcher's CSVs are never overwri
 """
 from __future__ import annotations
 
+import json
 import os
+import re
+import shutil
+import tempfile
 from pathlib import Path, PurePosixPath
 
+import yaml
+
 from ..study.compiler import check_study
+
+ID = re.compile(r"[A-Za-z0-9_-]+")
 
 STUDY_FILE = "study.yaml"
 BACKUP_FILE = "study.yaml.bak"
@@ -88,6 +96,72 @@ def new_study_folder(parent: Path | str, study_id: str) -> Path:
     if (folder / STUDY_FILE).exists():
         raise FolderError(f"{folder} already contains a study. Open it instead, or change the study id.")
     return folder
+
+
+def sessions_of(folder: Path | str) -> list[dict]:
+    """The registered sessions of the study in ``folder`` (by the id in its study.yaml on disk)."""
+    from .. import settings
+    from ..session import register
+
+    try:
+        sid = (yaml.safe_load((Path(folder) / STUDY_FILE).read_text(encoding="utf-8")) or {}).get("id")
+    except (OSError, yaml.YAMLError):
+        return []
+    if not sid or not ID.fullmatch(str(sid)):
+        return []
+    return register.read(settings.data_dir(str(sid)) / register.REGISTER)[1]
+
+
+def protection_check(folder: Path | str, new_yaml: str) -> dict | None:
+    """Would saving ``new_yaml`` break the sessions this study already has?
+
+    None when it is safe: no sessions, a higher version number, a study that doesn't
+    compile yet (it is checked again once it does), or no breaking change. Otherwise
+    {"reasons", "sessions", "version"}: the edit needs a new version number.
+    """
+    from .. import settings
+    from ..study.compiler import CHECKSUM_FILE, StudyError, compile_study
+    from ..study.protect import breaking_changes
+
+    folder = Path(folder)
+    rows = sessions_of(folder)
+    if not rows:
+        return None
+    try:
+        new = yaml.safe_load(new_yaml) or {}
+        new_version = int(new.get("version", 1))
+    except (yaml.YAMLError, ValueError, TypeError, AttributeError):
+        return None
+    old_id = (yaml.safe_load((folder / STUDY_FILE).read_text(encoding="utf-8")) or {}).get("id")
+
+    tmp = Path(tempfile.mkdtemp(prefix="socialeyes-protect-"))
+    proposed_yaml = folder / ".socialeyes-proposed.yaml"
+    try:
+        # what the sessions ran: the snapshot kept when the study was last loaded, else the study on disk
+        baseline = None
+        for row in reversed(rows):
+            snap = settings.build_snapshot(str(old_id), row.get("package_sha256") or "-")
+            if row.get("package_sha256") and (snap / CHECKSUM_FILE).is_file():
+                baseline = snap
+                break
+        if baseline is None:
+            try:
+                baseline, _ = compile_study(folder, tmp / "baseline")
+            except StudyError:
+                return None
+        base_version = json.loads((baseline / "study.json").read_text(encoding="utf-8"))["study"]["version"]
+        if new_version > base_version:
+            return None
+        proposed_yaml.write_text(new_yaml, encoding="utf-8")
+        try:
+            proposed, _ = compile_study(proposed_yaml, tmp / "proposed")
+        except StudyError:
+            return None
+        reasons = breaking_changes(baseline, proposed)
+        return {"reasons": reasons, "sessions": len(rows), "version": base_version} if reasons else None
+    finally:
+        proposed_yaml.unlink(missing_ok=True)
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 def check_folder(folder: Path | str) -> dict:

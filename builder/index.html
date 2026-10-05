@@ -798,6 +798,8 @@ if (typeof module !== "undefined") module.exports = Core;
     compiler: null,         // the compiler's checks of the folder: {errors, warnings, at}
     busy: null,             // what the bridge is doing ("Saving…"), shown while it works
     desktopError: null,
+    sessions: 0,            // sessions already collected with this study (from its register)
+    protect: null,          // a save refused because it would break them: {reasons, sessions, version}
     // Phone tab: result of the last phone check / load, and the choices on the tab
     phone: { result: null, folder: null, serial: "", devices: [], updateApp: false, progress: null, error: null },
     // Data tab: the study's folders and register, the phone's sessions, the last unload
@@ -968,6 +970,7 @@ if (typeof module !== "undefined") module.exports = Core;
   function sectionBasics() {
     return `
       <h2>Basics</h2>
+      ${sessionsNote()}
       ${help("The study id names the folder and the data (<code>build/&lt;id&gt;</code>, <code>data/&lt;id&gt;/…</code>); keep it short and don't change it once you collect data.")}
       <div class="grid">
         ${field({ path: "id", label: "Study id", kind: "text", placeholder: "my_study", help: "Letters, digits, - and _." })}
@@ -1220,14 +1223,29 @@ if (typeof module !== "undefined") module.exports = Core;
       <div class="summary">Ids: <code>${esc(id(1))}</code>, <code>${esc(id(2))}</code> … <code>${esc(id(n))}</code></div>`;
   }
 
+  /** Shown on Basics and Save when the open study already has sessions. */
+  function sessionsNote() {
+    if (!ui.desktop || !ui.sessions || ui.protect) return "";
+    return `<p class="hint"><span class="pill">${ui.sessions} session${ui.sessions === 1 ? "" : "s"} collected</span>
+      Text changes save as usual. Changes to the design, content or procedure need a new version number; saving will tell you.</p>`;
+  }
+
   /** The Download section as it is in the desktop app: save into the study folder. */
   function sectionSave() {
     const files = C.studyFiles(ui.study, ui.content, true);
     if (!files[ui.previewFile]) ui.previewFile = "study.yaml";
     const errors = C.checks(ui.study, ui.content).filter((c) => c.level === "error");
-    const s = ui.saved;
+    const s = ui.saved, P = ui.protect;
     return `
       <h2>Save</h2>
+      ${P ? `<div class="card step open">
+        <p><b>Not saved.</b> This study already has ${P.sessions} session${P.sessions === 1 ? "" : "s"} (version ${esc(P.version)}), and these changes would break ${P.sessions === 1 ? "it" : "them"}:</p>
+        <ul class="checks">${P.reasons.map((m) => `<li class="error"><div class="msg"><span class="ic">✕</span><span>${esc(m)}</span></div></li>`).join("")}</ul>
+        <p class="hint">Save them as a new version instead: sessions keep the version they ran, so the analysis can tell them apart.
+        Give the next participants ids that haven't been used yet; the phone keeps the old version until its sessions are unloaded.</p>
+        <div class="row">${btn("save-new-version", `Save as version ${Number(P.version) + 1}`, "primary", ui.busy ? "disabled" : "")}${btn("protect-cancel", "Cancel", "", ui.busy ? "disabled" : "")}</div>
+      </div>` : ""}
+      ${sessionsNote()}
       ${errors.length ? `<p class="error-box">The design has ${errors.length === 1 ? "1 problem" : `${errors.length} problems`} (see the list on the right). You can still save and fix ${errors.length === 1 ? "it" : "them"} later.</p>` : ""}
       <div class="card">
         ${ui.folder
@@ -1473,6 +1491,7 @@ if (typeof module !== "undefined") module.exports = Core;
       load(study, C.contentFor(study), "study.yaml", r.study.folder);
       ui.hadComments = /^\s*#/m.test(r.study.yaml);
       ui.compiler = { ...r.check, at: new Date() };
+      ui.sessions = r.sessions || 0;
       return true;
     } catch (e) {
       ui.desktopError = `Couldn't open the study: ${e.message}`;
@@ -1739,6 +1758,8 @@ if (typeof module !== "undefined") module.exports = Core;
     ui.saved = null;
     ui.compiler = null;
     ui.desktopError = null;
+    ui.sessions = 0;
+    ui.protect = null;
     if (!opened) C.syncFoils(ui.study, ui.content);
     ui.section = "basics";
     render();
@@ -1771,6 +1792,12 @@ if (typeof module !== "undefined") module.exports = Core;
       let r;
       if (ui.folder && !asNew) {
         r = await bridge("save", "Saving…", ui.folder, files);
+        if (r.needs_version) {   // nothing was written: the edit would break the sessions collected so far
+          ui.protect = r.needs_version;
+          ui.section = "download";
+          render();
+          return;
+        }
       } else {
         const start = ui.folder ? ui.folder.replace(/[\\/][^\\/]+$/, "") : ui.appInfo && ui.appInfo.studies_dir;
         const parent = await bridge("pick_folder", null, start);
@@ -1782,6 +1809,8 @@ if (typeof module !== "undefined") module.exports = Core;
       ui.hadComments = false; // the saved file has none (a commented original is in study.yaml.bak)
       ui.saved = { ...r.saved, at: new Date() };
       ui.compiler = { ...r.check, at: new Date() };
+      ui.sessions = r.sessions || 0;
+      ui.protect = null;
       ui.desktopError = null;
     } catch (e) {
       ui.desktopError = `Couldn't save: ${e.message}`;
@@ -1936,6 +1965,8 @@ if (typeof module !== "undefined") module.exports = Core;
       case "phone-folder": phoneChooseFolder(); return;
       case "open-folder": openFolder(); return;
       case "save": saveStudy(false); return;
+      case "save-new-version": S.version = Number(ui.protect.version) + 1; ui.protect = null; saveStudy(false); return;
+      case "protect-cancel": ui.protect = null; break;
       case "save-new": saveStudy(true); return;
       case "check-folder": checkFolder(); return;
       default: return;
