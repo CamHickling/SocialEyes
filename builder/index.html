@@ -802,6 +802,8 @@ if (typeof module !== "undefined") module.exports = Core;
     phone: { result: null, folder: null, serial: "", devices: [], updateApp: false, progress: null, error: null },
     // Data tab: the study's folders and register, the phone's sessions, the last unload
     data: { status: null, folder: null, unload: null, error: null },
+    studies: { list: null, newId: "", error: null },
+    files: { result: null, folder: null, missingOnly: true, error: null },   // Content tab
   };
 
   const APP_TABS = [
@@ -1323,6 +1325,10 @@ if (typeof module !== "undefined") module.exports = Core;
       page.innerHTML = renderPhone();
     } else if (ui.tab === "data") {
       page.innerHTML = renderData();
+    } else if (ui.tab === "studies") {
+      page.innerHTML = renderStudies();
+    } else if (ui.tab === "content") {
+      page.innerHTML = renderFiles();
     } else if (!onDesign) {
       const [, label, text] = APP_TABS.find(([k]) => k === ui.tab);
       page.innerHTML = `<h2>${label}</h2><p class="lead">${text}</p><p class="hint">Coming in a later version of the desktop app.</p>`;
@@ -1419,6 +1425,139 @@ if (typeof module !== "undefined") module.exports = Core;
     ui.phone.progress = text;
     if (ui.tab === "phone" || ui.tab === "data") render();
   };
+
+  // ------------------------------------------------------------ Studies tab (desktop app)
+
+  const STATUS = { designing: "warning", ready: "ok", "collecting data": "info" };
+
+  function renderStudies() {
+    const S = ui.studies, L = S.list, dis = ui.busy ? "disabled" : "";
+    let html = `
+      <h2>Studies</h2>
+      <p class="lead">Every study in ${L ? `<b class="folder">${esc(L.root)}</b>` : "your studies folder"}.
+      ${L ? btn("open-path:" + L.root, "Open", "link") : ""}${btn("studies-refresh", "Refresh", "link", dis)}</p>`;
+    if (S.error) html += `<p class="error-box">${esc(S.error)}</p>`;
+    if (!L) return html + `<p class="hint">${esc(ui.busy || "Loading…")}</p>`;
+    html += L.studies.length ? `<div class="table-wrap"><table class="register"><thead><tr><th>Study</th><th>Status</th><th>Sessions</th><th></th></tr></thead><tbody>
+      ${L.studies.map((s, i) => `<tr>
+        <td><b>${esc(s.title || s.id)}</b><br><span class="hint">${esc(s.id)} · version ${esc(s.version)}</span></td>
+        <td><ul class="checks"><li class="${STATUS[s.status]}"><div class="msg"><span>${esc(s.status)}${s.status === "designing" ? `: ${s.n_errors} problem${s.n_errors === 1 ? "" : "s"}` : ""}</span></div></li></ul></td>
+        <td>${s.n_sessions}${s.last_session ? `<br><span class="hint">last ${esc(s.last_session.replace("T", " ").slice(0, 16))}</span>` : ""}</td>
+        <td>${btn(`study-open:${i}`, "Design", "link", dis)}${btn(`study-goto:${i}:content`, "Content", "link", dis)}${btn(`study-goto:${i}:phone`, "Phone", "link", dis)}${btn(`study-goto:${i}:data`, "Data", "link", dis)}</td>
+      </tr>`).join("")}</tbody></table></div>`
+      : `<p class="hint">No studies yet.</p>`;
+    html += `
+      <h3>New study</h3>
+      <div class="cards">
+        <div class="card"><h3>Blank</h3><p>Design it step by step in the Design tab; saving makes its folder.</p>${btn("studies-new-blank", "Start blank", "primary", dis)}</div>
+        <div class="card"><h3>Copy of the example</h3><p>A complete, working study (placeholder images, AOIs and CSVs) to adapt.</p>
+          <div class="row"><input type="text" id="new-study-id" placeholder="new study id" value="${esc(S.newId)}">${btn("studies-copy", "Copy", "", dis)}</div></div>
+      </div>`;
+    return html;
+  }
+
+  async function studiesRefresh() {
+    const S = ui.studies;
+    S.error = null;
+    try { S.list = await bridge("studies_list", "Checking the studies…"); }
+    catch (e) { S.error = e.message; }
+    render();
+  }
+
+  /** Open a study folder in the Design tab (asks first if the current study has unsaved changes). */
+  async function openStudyAt(folder) {
+    if (unsaved() && !confirm("The study in the Design tab has unsaved changes. Open another study anyway?")) return false;
+    try {
+      const r = await bridge("open_folder", "Opening…", folder);
+      const study = parseStudy(r.study.yaml);
+      load(study, C.contentFor(study), "study.yaml", r.study.folder);
+      ui.hadComments = /^\s*#/m.test(r.study.yaml);
+      ui.compiler = { ...r.check, at: new Date() };
+      return true;
+    } catch (e) {
+      ui.desktopError = `Couldn't open the study: ${e.message}`;
+      ui.section = "start";
+      return true;
+    }
+  }
+
+  async function studiesAct(name, args) {
+    const S = ui.studies, L = S.list;
+    if (name === "study-open") {
+      if (await openStudyAt(L.studies[Number(args[0])].folder)) ui.tab = "design";
+      render();
+    } else if (name === "study-goto") {
+      const folder = L.studies[Number(args[0])].folder, tab = args[1];
+      if (tab === "phone") { ui.phone.folder = folder; ui.phone.result = null; }
+      if (tab === "data") { ui.data.folder = folder; ui.data.unload = null; }
+      if (tab === "content") ui.files.folder = folder;
+      act(`tab:${tab}`);
+    } else if (name === "studies-new-blank") {
+      if (unsaved() && !confirm("The study in the Design tab has unsaved changes. Start a new one anyway?")) return;
+      ui.tab = "design";
+      act("new-blank");
+    } else if (name === "studies-copy") {
+      S.newId = (document.getElementById("new-study-id").value || "").trim();
+      try {
+        const folder = await bridge("studies_copy_example", "Copying…", S.newId);
+        S.newId = "";
+        if (await openStudyAt(folder)) ui.tab = "design";
+        S.list = null;
+      } catch (e) { S.error = e.message; }
+      render();
+    }
+  }
+
+  // ------------------------------------------------------------ Content tab (desktop app)
+
+  const KINDS = [["image", "Images"], ["aoi", "AOI files (critical posts)"], ["avatar", "Avatars"], ["story", "Story images"], ["video", "Reel videos"]];
+  const filesFolder = () => ui.files.folder || ui.folder;
+
+  function renderFiles() {
+    const F = ui.files, r = F.result, folder = filesFolder(), dis = ui.busy ? "disabled" : "";
+    let html = `
+      <h2>Content</h2>
+      <p class="lead">Every file the study's CSVs point to, and whether it is in the study folder yet. Add files with
+      these names, then refresh. How to make AOI files: README, "Defining areas of interest".</p>
+      <div class="card">${folder
+        ? `<p>Study: <b class="folder">${esc(folder)}</b> ${btn("files-folder", "Choose another…", "link", dis)}${btn("open-path:" + folder, "Open folder", "link")}${btn("files-refresh", "Refresh", "link", dis)}</p>`
+        : `<p>No study chosen. Open one in the Design tab, or ${btn("files-folder", "choose a study folder…", "link", dis)}</p>`}</div>`;
+    if (F.error) html += `<p class="error-box">${esc(F.error)}</p>`;
+    if (!r) return html + (ui.busy ? `<p class="hint">${esc(ui.busy)}</p>` : "");
+    const missingTables = r.tables.filter((t) => !t.found);
+    if (missingTables.length) html += `<p class="error-box">Missing ${missingTables.map((t) => `<code>${esc(t.file)}</code>`).join(", ")}: save the study from the Design tab to create ${missingTables.length === 1 ? "it" : "them"}.</p>`;
+    const pct = r.n_needed ? Math.round((100 * r.n_found) / r.n_needed) : 100;
+    html += `<div class="summary"><b>${r.n_found} of ${r.n_needed}</b> files ready (${pct}%)</div>
+      <label class="check"><input type="checkbox" id="files-missing" ${F.missingOnly ? "checked" : ""}> <span>Show only missing files</span></label>`;
+    for (const [kind, label] of KINDS) {
+      const all = r.items.filter((i) => i.kind === kind);
+      if (!all.length) continue;
+      const shown = F.missingOnly ? all.filter((i) => !i.found) : all;
+      const nFound = all.filter((i) => i.found).length;
+      html += `<h3>${label} <span class="hint">${nFound} of ${all.length}</span></h3>`;
+      html += shown.length ? `<ul class="checks">${shown.map((i) => `<li class="${i.found ? "ok" : "error"}"><div class="msg"><span class="ic">${i.found ? "✓" : "✕"}</span><span><code>${esc(i.file)}</code> ${esc(i.what)}</span></div></li>`).join("")}</ul>`
+        : `<p class="hint">All there.</p>`;
+    }
+    return html;
+  }
+
+  async function filesRefresh() {
+    const F = ui.files, folder = filesFolder();
+    F.error = null;
+    if (!folder) { F.result = null; render(); return; }
+    try { F.result = await bridge("content", "Looking at the study's files…", folder); }
+    catch (e) { F.error = e.message; F.result = null; }
+    render();
+  }
+
+  async function filesChooseFolder() {
+    try {
+      const f = await bridge("pick_folder", null, filesFolder() || (ui.appInfo && ui.appInfo.studies_dir));
+      if (!f) return;
+      ui.files.folder = f;
+    } catch (e) { ui.files.error = e.message; }
+    await filesRefresh();
+  }
 
   // ------------------------------------------------------------ Data tab (desktop app)
 
@@ -1618,15 +1757,9 @@ if (typeof module !== "undefined") module.exports = Core;
   async function openFolder() {
     try {
       const folder = await bridge("pick_folder", null, ui.folder || (ui.appInfo && ui.appInfo.studies_dir));
-      if (!folder) return;
-      const r = await bridge("open_folder", "Opening…", folder);
-      const study = parseStudy(r.study.yaml);
-      load(study, C.contentFor(study), "study.yaml", r.study.folder);
-      ui.hadComments = /^\s*#/m.test(r.study.yaml);
-      ui.compiler = { ...r.check, at: new Date() };
+      if (folder) await openStudyAt(folder);
     } catch (e) {
       ui.desktopError = `Couldn't open the study: ${e.message}`;
-      ui.section = "start";
     }
     render();
   }
@@ -1786,7 +1919,14 @@ if (typeof module !== "undefined") module.exports = Core;
         window.scrollTo(0, 0);
         if (ui.tab === "phone" && !ui.phone.result && !ui.busy) { render(); phoneCheck(); return; }
         if (ui.tab === "data" && !ui.busy) { render(); dataRefresh(); return; }
+        if (ui.tab === "studies" && !ui.busy) { render(); studiesRefresh(); return; }
+        if (ui.tab === "content" && !ui.busy) { render(); filesRefresh(); return; }
         break;
+      case "studies-refresh": studiesRefresh(); return;
+      case "study-open": case "study-goto": case "studies-new-blank": case "studies-copy": studiesAct(name, args); return;
+      case "files-refresh": filesRefresh(); return;
+      case "files-folder": filesChooseFolder(); return;
+      case "open-path": bridge("open_path", null, args.join(":")).catch((e) => { ui.desktopError = e.message; render(); }); return;
       case "data-refresh": dataRefresh(); return;
       case "data-unload": dataUnload(); return;
       case "data-pick": dataPick(args[0]); return;
@@ -1857,6 +1997,7 @@ if (typeof module !== "undefined") module.exports = Core;
 
   document.addEventListener("input", (e) => {
     const el = e.target;
+    if (el.id === "new-study-id") { ui.studies.newId = el.value; return; }
     if (!el.dataset || !el.dataset.path || el.dataset.kind === "bool" || el.tagName === "SELECT") return;
     applyInput(el);
     renderSide();
@@ -1867,6 +2008,7 @@ if (typeof module !== "undefined") module.exports = Core;
     const el = e.target;
     if (el.id === "open-file" && el.files && el.files[0]) { openFile(el.files[0]); return; }
     if (el.id === "phone-update") { ui.phone.updateApp = el.checked; return; }
+    if (el.id === "files-missing") { ui.files.missingOnly = el.checked; render(); return; }
     if (el.id === "phone-serial") { ui.phone.serial = el.value; ui.phone.result = null; phoneCheck(); return; }
     if (el.dataset && el.dataset.actionChange) { actChange(el.dataset.actionChange, el); return; }
     if (!el.dataset || !el.dataset.path) return;

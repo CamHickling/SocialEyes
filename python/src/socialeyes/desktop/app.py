@@ -85,6 +85,26 @@ class Api:
     def check(self, folder: str) -> dict:
         return check_folder(folder)
 
+    # ---------------------------------------------------------- Studies and Content tabs
+
+    @_reply
+    def studies_list(self) -> dict:
+        from .studies import list_studies
+
+        return list_studies()
+
+    @_reply
+    def studies_copy_example(self, new_id: str) -> str:
+        from .studies import copy_example
+
+        return copy_example(new_id.strip())
+
+    @_reply
+    def content(self, folder: str) -> dict:
+        from .studies import content_checklist
+
+        return content_checklist(folder)
+
     # ---------------------------------------------------------- Phone tab
 
     @_reply

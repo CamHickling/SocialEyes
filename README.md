@@ -140,7 +140,7 @@ for mixed models in R.
 | Session log format (touches, scrolling, interactions, quality events) | ✅ | `docs/EVENT_LOG.md` (version 1) |
 | Session analysis: gestures, time on screen, touch→AOI, finger occlusion, quality checks | ✅ | `python/src/socialeyes/session/` (tested on simulated sessions) |
 | Experiment builder: guided form that writes study.yaml and CSV skeletons | ✅ | `builder/index.html` (open in a browser) |
-| Desktop app (Windows): Design tab edits study folders in place and runs the compiler's checks; Phone tab loads studies onto the phone; Data tab unloads sessions with a register; Studies and Content tabs to come | 🟡 | `socialeyes app` (`python/src/socialeyes/desktop/`) |
+| Desktop app (Windows): Design tab edits study folders in place and runs the compiler's checks; Phone tab loads studies onto the phone; Data tab unloads sessions with a register; Studies tab lists studies with their status; Content tab lists the files each study still needs; packaging to come | 🟡 | `socialeyes app` (`python/src/socialeyes/desktop/`) |
 | CSV format reference | ✅ | `docs/STUDY_DESIGN.md` (version 1) |
 | Android SocialEyes app: Instagram-style feed (stories row, comments sheet), sync patch, touch / scroll / viewport / quality logging, instructions, marker calibration, validation, questionnaires, image ratings, recognition test, camera check, front camera video, motion sensors, interruption detection | 🟡 | `android/` (tested on a Pixel 3) |
 | App: screen recording, Neon control | ⏳ | see [What the app doesn't do yet](#what-the-app-doesnt-do-yet) |
@@ -267,7 +267,11 @@ overwritten. Each save (and the **Check study** button) also runs the compiler's
 checks, the same as `socialeyes validate`: missing images, AOI sizes and mistakes
 in the CSVs. They appear next to the design checks. The **Phone** tab loads the
 study onto the phone and the **Data** tab copies sessions back off it (see [Running the
-app](#running-the-app)). The Studies and Content tabs are placeholders for now (see the [Roadmap](#roadmap)). The app
+app](#running-the-app)). **Studies** lists every study in `studies/` as designing
+(with its number of problems), ready, or collecting data (with its number of sessions),
+and starts new ones, blank or as a copy of the example. **Content** lists every image,
+avatar, story image, video and AOI file the study's CSVs point to, found or missing
+("54 of 61 files ready"). The app
 needs `pywebview`, which `setup-toolchain.ps1` installs; in an older toolchain run
 `pip install pywebview`.
 
@@ -708,7 +712,8 @@ python/
     study/compiler.py    loads + cross-checks a study folder, writes plans
     session/             reads session logs: gestures, exposure, touch->AOI,
                          occlusion, quality; simulate.py writes fake sessions
-    desktop/             the desktop app (`socialeyes app`): window + study-folder open/save/check
+    desktop/             the desktop app (`socialeyes app`): window, study folders, study list,
+                         content checklist
     phone/               adb, phone readiness checks, loading studies (`socialeyes load`),
                          unloading sessions (`socialeyes unload`)
     settings.py          this computer's data / second-copy folders per study
@@ -782,12 +787,12 @@ Roughly in order:
       window (pywebview) showing the existing builder pages, calling the `socialeyes` package
       directly; packaged as one installer / `.exe` that includes adb, so no Python, Android
       Studio or toolchain is needed. Tabs:
-  - [ ] **Studies**: a list of your study folders with their status (designing, ready,
+  - [x] **Studies**: a list of your study folders with their status (designing, ready,
         collecting data, number of sessions); new study from blank or from the example
   - [x] **Design**: the experiment builder, editing the study folder in place (no zip); the
         compiler's own checks (missing images, AOI sizes, CSV mistakes) shown next to the
         design checks. The standalone `builder/index.html` keeps working in a browser
-  - [ ] **Content**: checklist of every image, avatar, video and AOI the design needs, found
+  - [x] **Content**: checklist of every image, avatar, video and AOI the design needs, found
         or missing ("14 of 38 files ready"); later, drop files onto their slot
   - [x] **Phone (experiment loader)**: pick a study → validate, compile and copy it to the
         phone in one step; install or update the app if needed; check the phone is ready
