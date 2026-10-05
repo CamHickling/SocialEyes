@@ -116,6 +116,10 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 .checks .msg { display: flex; gap: 8px; border-radius: 8px; padding: 8px 10px; font-size: 13px; }
 .checks .error .msg { background: var(--error-soft); color: var(--error); }
 .checks .warning .msg { background: var(--warn-soft); color: var(--warn); }
+.checks .info .msg { background: var(--tip-soft); color: var(--tip); } .checks .info .ic { background: var(--tip); }
+.checks .ok .msg { background: var(--ok-soft); color: var(--ok); } .checks .ok .ic { background: var(--ok); }
+.phone-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.steps { margin: 8px 0 0; padding-left: 20px; }
 @media (max-width: 1000px) {
   .layout { grid-template-columns: minmax(0, 1fr); padding: 16px; gap: 16px; }
   #nav { position: static; flex-direction: row; overflow-x: auto; }

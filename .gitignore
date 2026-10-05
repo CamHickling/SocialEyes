@@ -26,3 +26,7 @@ analysis_out/
 
 # Local secrets: the test phone's PIN for scripts/unlock-phone.ps1. Never commit.
 phone-pin.local
+# The app's release signing key and its passwords. Never commit; back them up.
+android/keystore.properties
+*.jks
+*.keystore

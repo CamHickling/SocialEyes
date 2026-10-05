@@ -134,13 +134,13 @@ for mixed models in R.
 | AprilTag generation/detection, printable phone-case marker sheet | ✅ | `python/src/socialeyes/markers.py` |
 | Sync code (m-sequence) and validation dot layouts | ✅ | `design.py` |
 | Toolchain setup script (Windows) | ✅ | `scripts/setup-toolchain.ps1` |
-| `socialeyes` command-line tool (`validate`, `compile`, `case-sheet`) | ✅ | `python/src/socialeyes/cli.py` |
+| `socialeyes` command-line tool (`validate`, `compile`, `case-sheet`, `phone-check`, `load`) | ✅ | `python/src/socialeyes/cli.py` |
 | Study compiler (CSV loading, cross-checks, plan export) | ✅ | `python/src/socialeyes/study/compiler.py` |
 | Example study (placeholder images) and tests | ✅ | `studies/example/`, `python/tests/` |
 | Session log format (touches, scrolling, interactions, quality events) | ✅ | `docs/EVENT_LOG.md` (version 1) |
 | Session analysis: gestures, time on screen, touch→AOI, finger occlusion, quality checks | ✅ | `python/src/socialeyes/session/` (tested on simulated sessions) |
 | Experiment builder: guided form that writes study.yaml and CSV skeletons | ✅ | `builder/index.html` (open in a browser) |
-| Desktop app (Windows): Design tab edits study folders in place and runs the compiler's checks; Studies, Content, Phone and Data tabs to come | 🟡 | `socialeyes app` (`python/src/socialeyes/desktop/`) |
+| Desktop app (Windows): Design tab edits study folders in place and runs the compiler's checks; Phone tab loads studies onto the phone; Studies, Content and Data tabs to come | 🟡 | `socialeyes app` (`python/src/socialeyes/desktop/`) |
 | CSV format reference | ✅ | `docs/STUDY_DESIGN.md` (version 1) |
 | Android SocialEyes app: Instagram-style feed (stories row, comments sheet), sync patch, touch / scroll / viewport / quality logging, instructions, marker calibration, validation, questionnaires, image ratings, recognition test, camera check, front camera video, motion sensors, interruption detection | 🟡 | `android/` (tested on a Pixel 3) |
 | App: screen recording, Neon control | ⏳ | see [What the app doesn't do yet](#what-the-app-doesnt-do-yet) |
@@ -265,7 +265,8 @@ previous `study.yaml` is kept as `study.yaml.bak`. CSV files and `NEXT_STEPS.txt
 are created only if they don't exist yet, so your filled-in CSVs are never
 overwritten. Each save (and the **Check study** button) also runs the compiler's
 checks, the same as `socialeyes validate`: missing images, AOI sizes and mistakes
-in the CSVs. They appear next to the design checks. The Studies, Content, Phone
+in the CSVs. They appear next to the design checks. The **Phone** tab loads the
+study onto the phone (see [Running the app](#running-the-app)). The Studies, Content
 and Data tabs are placeholders for now (see the [Roadmap](#roadmap)). The app
 needs `pywebview`, which `setup-toolchain.ps1` installs; in an older toolchain run
 `pip install pywebview`.
@@ -532,12 +533,48 @@ try the example study on an Android phone (Android 10 or newer, USB debugging on
 
 ```powershell
 . .\scripts\env.ps1
-socialeyes compile studies/example                  # writes build\example
-cd android
-.\gradlew assembleDebug                             # first build downloads Gradle and libraries
-adb install -r app\build\outputs\apk\debug\app-debug.apk
-adb push ..\build\example /sdcard/Android/data/org.socialeyes.pictogram/files/studies/
+cd android; .\gradlew assembleDebug; cd ..          # first build downloads Gradle and libraries
+socialeyes phone-check studies/example              # is the phone ready? (changes nothing)
+socialeyes load studies/example                     # check, compile and copy the study to the phone
 ```
+
+`socialeyes load` (and the desktop app's **Phone** tab, which does the same) checks the
+study and the phone, installs the SocialEyes app if it is missing, compiles the study and
+copies it to the phone, then checks every file's SHA-256 on the phone before it replaces
+the old copy. It stops (**BLOCK**) when the study has errors, there is not enough storage,
+or the phone still holds sessions of a *changed* version of the study (unload them first).
+It only warns (**WARN**, load with `--anyway`) about a battery under 50%, Do Not Disturb
+being off, or a display or font size changed from the phone's default. A newer app is
+installed only with `--update-app`; the app is never uninstalled, because that deletes
+its data. With several phones connected, pick one with `--serial` (see `adb devices`).
+If the study records the front camera, loading also gives the app camera permission.
+
+#### Release signing key
+
+Phones can only update the app if every version is signed with the same key. Debug
+builds use this computer's debug key, which is fine for development. For releases
+(the desktop app's installer), create the project key **once**, keep it out of git
+(`.gitignore` covers it) and back it up with its passwords somewhere safe. If it is
+lost, phones can't install updates without uninstalling the app, which deletes its data.
+
+```powershell
+. .\scripts\env.ps1
+keytool -genkeypair -v -keystore android\socialeyes-release.jks -alias socialeyes `
+  -keyalg RSA -keysize 4096 -validity 10000
+```
+
+Then create `android\keystore.properties`:
+
+```
+storeFile=socialeyes-release.jks
+storePassword=<the keystore password>
+keyAlias=socialeyes
+keyPassword=<the key password>
+```
+
+and build with `.\gradlew assembleRelease`. A phone that has a debug build can't be
+updated to a release build in place (different keys): unload its sessions, uninstall
+SocialEyes on the phone, then load again.
 
 Open **SocialEyes** (the app drawer, or tap **Add to home screen** on its setup screen once
 for a home-screen shortcut), pick the study and a participant, and start. Press Back to stop a
@@ -642,6 +679,7 @@ python/
     session/             reads session logs: gestures, exposure, touch->AOI,
                          occlusion, quality; simulate.py writes fake sessions
     desktop/             the desktop app (`socialeyes app`): window + study-folder open/save/check
+    phone/               adb, phone readiness checks, loading studies (`socialeyes load`)
     cli.py               the `socialeyes` command
   tests/                 pytest suite (runs against studies/example)
 android/                 the SocialEyes Android app (Kotlin, Jetpack Compose)
@@ -719,7 +757,7 @@ Roughly in order:
         design checks. The standalone `builder/index.html` keeps working in a browser
   - [ ] **Content**: checklist of every image, avatar, video and AOI the design needs, found
         or missing ("14 of 38 files ready"); later, drop files onto their slot
-  - [ ] **Phone (experiment loader)**: pick a study → validate, compile and copy it to the
+  - [x] **Phone (experiment loader)**: pick a study → validate, compile and copy it to the
         phone in one step; install or update the app if needed; check the phone is ready
         (storage, battery, Do Not Disturb, camera permission). Load only unlocks when the
         study validates

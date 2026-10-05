@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -18,9 +20,26 @@ android {
         versionName = "0.1.0"
     }
 
+    // Release signing key: kept out of git in android/keystore.properties (see README,
+    // "Release signing key"). Every release must use the same key, or phones can't update
+    // the app without uninstalling it, which deletes its data.
+    val keystoreFile = rootProject.file("keystore.properties")
+    signingConfigs {
+        if (keystoreFile.exists()) {
+            val p = Properties().apply { keystoreFile.inputStream().use { load(it) } }
+            create("release") {
+                storeFile = rootProject.file(p.getProperty("storeFile"))
+                storePassword = p.getProperty("storePassword")
+                keyAlias = p.getProperty("keyAlias")
+                keyPassword = p.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.findByName("release")
         }
     }
     compileOptions {

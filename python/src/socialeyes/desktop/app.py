@@ -7,6 +7,7 @@ on Windows it uses the Edge WebView2 runtime that comes with Windows 10/11.
 from __future__ import annotations
 
 import functools
+import json
 import sys
 import traceback
 from pathlib import Path
@@ -83,6 +84,39 @@ class Api:
     @_reply
     def check(self, folder: str) -> dict:
         return check_folder(folder)
+
+    # ---------------------------------------------------------- Phone tab
+
+    @_reply
+    def phone_check(self, folder: str | None = None, serial: str | None = None) -> dict:
+        from ..phone.loader import phone_check
+
+        return phone_check(folder or None, serial=serial or None).to_json()
+
+    @_reply
+    def phone_load(self, folder: str, update_app: bool = False, anyway: bool = False,
+                   serial: str | None = None) -> dict:
+        from ..phone.loader import load
+
+        return load(folder, serial=serial or None, update_app=update_app, anyway=anyway,
+                    progress=self._progress).to_json()
+
+    @_reply
+    def phone_devices(self) -> list:
+        from ..phone.adb import Adb, AdbError
+
+        try:
+            return [{"serial": d.serial, "state": d.state, "model": d.model} for d in Adb().devices()]
+        except AdbError:
+            return []
+
+    def _progress(self, text: str) -> None:
+        """Shows what a long phone operation is doing, while it runs."""
+        if self._window is not None:
+            try:
+                self._window.evaluate_js(f"window.socialeyesProgress && window.socialeyesProgress({json.dumps(text)})")
+            except Exception:  # the window may be closing; progress is only a nicety
+                pass
 
 
 def run(debug: bool = False) -> None:

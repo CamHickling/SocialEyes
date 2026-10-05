@@ -21,6 +21,8 @@
     compiler: null,         // the compiler's checks of the folder: {errors, warnings, at}
     busy: null,             // what the bridge is doing ("Saving…"), shown while it works
     desktopError: null,
+    // Phone tab: result of the last phone check / load, and the choices on the tab
+    phone: { result: null, folder: null, serial: "", devices: [], updateApp: false, progress: null, error: null },
   };
 
   const APP_TABS = [
@@ -538,12 +540,104 @@
     document.getElementById("app-title").textContent = "SocialEyes";
     document.getElementById("app-sub").hidden = true;
     tabs.innerHTML = APP_TABS.map(([k, label]) => `<button type="button" data-action="tab:${k}" class="${ui.tab === k ? "on" : ""}">${label}</button>`).join("");
-    if (!onDesign) {
+    if (ui.tab === "phone") {
+      page.innerHTML = renderPhone();
+    } else if (!onDesign) {
       const [, label, text] = APP_TABS.find(([k]) => k === ui.tab);
       page.innerHTML = `<h2>${label}</h2><p class="lead">${text}</p><p class="hint">Coming in a later version of the desktop app.</p>`;
     }
     return onDesign;
   }
+
+  // ------------------------------------------------------------ Phone tab (desktop app)
+
+  const CHECK_CLASS = { block: ["error", "✕"], warn: ["warning", "!"], info: ["info", "→"], ok: ["ok", "✓"] };
+
+  /** The study the Phone tab loads: one chosen on the tab, else the one open in Design. */
+  const phoneFolder = () => ui.phone.folder || ui.folder;
+
+  function renderPhone() {
+    const P = ui.phone, r = P.result, folder = phoneFolder();
+    const busy = !!ui.busy;
+    const blockedNow = r && r.checks.some((c) => c.level === "block");
+    const study = folder
+      ? `<p>Study: <b class="folder">${esc(folder)}</b> ${btn("phone-folder", "Choose another…", "link", busy ? "disabled" : "")}</p>
+         ${folder === ui.folder && unsaved() ? `<p class="hint"><span class="pill">unsaved changes</span> The phone gets the study as saved. ${btn("save", "Save it first", "link", busy ? "disabled" : "")}</p>` : ""}`
+      : `<p>No study chosen. Open one in the Design tab, or ${btn("phone-folder", "choose a study folder…", "link", busy ? "disabled" : "")}</p>`;
+    const devices = P.devices.length > 1
+      ? `<div class="row"><label for="phone-serial" class="hint">Phone</label><select id="phone-serial">${P.devices.map((d) =>
+          `<option value="${esc(d.serial)}" ${d.serial === P.serial ? "selected" : ""}>${esc(d.model || d.serial)} (${esc(d.serial)}${d.state !== "device" ? `, ${esc(d.state)}` : ""})</option>`).join("")}</select></div>` : "";
+    let body = "";
+    if (P.error) body += `<p class="error-box">${esc(P.error)}</p>`;
+    if (r && r.phone) {
+      const p = r.phone;
+      body += `<div class="phone-head"><h3>${esc(p.model || p.serial)}</h3><span class="hint">Android ${esc(p.android)} · ${esc(p.serial)}</span></div>
+        <ul class="checks">${r.checks.map((c) => `<li class="${CHECK_CLASS[c.level][0]}"><div class="msg"><span class="ic">${CHECK_CLASS[c.level][1]}</span><span>${esc(c.text)}</span></div></li>`).join("")}</ul>`;
+    }
+    if (r && r.steps && r.steps.length) {
+      body += `<ol class="steps">${r.steps.map((s) => `<li>${esc(s)}</li>`).join("")}</ol>`;
+    }
+    if (r && r.loaded) body += `<p class="ok-box">Loaded ${esc(r.study_id)} onto the phone.</p>`;
+    const canLoad = folder && r && r.phone && !blockedNow && !busy;
+    const confirm = folder && r && r.needs_confirmation;   // only warnings stand in the way
+    const loadLabel = confirm ? "Load anyway" : "Load study";
+    return `
+      <h2>Phone</h2>
+      <p class="lead">Checks the study and the phone, installs the SocialEyes app if it's missing, and copies
+      the study onto the phone, checking that every file arrived intact.</p>
+      <div class="card">${study}${devices}
+        <div class="row">${btn("phone-check", ui.busy === "Checking the phone…" ? "Checking…" : "Check phone", "", busy ? "disabled" : "")}
+        ${btn("phone-load", loadLabel, "primary", canLoad ? "" : "disabled")}</div>
+        ${r && r.update_available ? `<label class="check"><input type="checkbox" id="phone-update" ${P.updateApp ? "checked" : ""}> <span>Also update the SocialEyes app on the phone (keeps its data)</span></label>` : ""}
+        ${confirm && !r.loaded ? `<p class="hint">Only warnings remain: you can load now and sort them out before the session.</p>` : ""}
+        ${busy && P.progress ? `<p class="hint">${esc(P.progress)}</p>` : ""}
+      </div>
+      ${body}`;
+  }
+
+  async function phoneCheck() {
+    const P = ui.phone;
+    P.error = null;
+    try {
+      P.devices = (await bridge("phone_devices", null)) || [];
+      if (P.devices.length && !P.devices.some((d) => d.serial === P.serial)) P.serial = P.devices[0].serial;
+      const r = await bridge("phone_check", "Checking the phone…", phoneFolder(), P.devices.length > 1 ? P.serial : null);
+      if (r.error) { P.error = r.error; P.result = null; } else P.result = r;
+    } catch (e) { P.error = e.message; }
+    render();
+  }
+
+  async function phoneLoad() {
+    const P = ui.phone, r0 = P.result;
+    P.error = null;
+    P.progress = "Starting…";
+    try {
+      const r = await bridge("phone_load", "Loading…", phoneFolder(), P.updateApp && r0 && r0.update_available,
+        !!(r0 && r0.needs_confirmation), P.devices.length > 1 ? P.serial : null);
+      if (r.error) P.error = r.error;
+      // without a phone reading (e.g. unplugged), keep the last check on screen with what was done
+      P.result = r.phone ? r : r0 && r0.phone ? { ...r0, steps: r.steps, loaded: false } : null;
+      if (r.loaded) P.updateApp = false;
+    } catch (e) { P.error = e.message; }
+    P.progress = null;
+    render();
+  }
+
+  async function phoneChooseFolder() {
+    try {
+      const folder = await bridge("pick_folder", null, phoneFolder() || (ui.appInfo && ui.appInfo.studies_dir));
+      if (!folder) return;
+      ui.phone.folder = folder;
+      ui.phone.result = null;
+    } catch (e) { ui.phone.error = e.message; }
+    render();
+    phoneCheck();
+  }
+
+  window.socialeyesProgress = (text) => {
+    ui.phone.progress = text;
+    if (ui.tab === "phone") render();
+  };
 
   function render() {
     if (!renderApp()) return;
@@ -807,7 +901,14 @@
         return;
       }
       case "download-yaml": download("study.yaml", C.toYaml(S), "text/yaml"); return;
-      case "tab": ui.tab = args[0]; window.scrollTo(0, 0); break;
+      case "tab":
+        ui.tab = args[0];
+        window.scrollTo(0, 0);
+        if (ui.tab === "phone" && !ui.phone.result && !ui.busy) { render(); phoneCheck(); return; }
+        break;
+      case "phone-check": phoneCheck(); return;
+      case "phone-load": phoneLoad(); return;
+      case "phone-folder": phoneChooseFolder(); return;
       case "open-folder": openFolder(); return;
       case "save": saveStudy(false); return;
       case "save-new": saveStudy(true); return;
@@ -880,6 +981,8 @@
   document.addEventListener("change", (e) => {
     const el = e.target;
     if (el.id === "open-file" && el.files && el.files[0]) { openFile(el.files[0]); return; }
+    if (el.id === "phone-update") { ui.phone.updateApp = el.checked; return; }
+    if (el.id === "phone-serial") { ui.phone.serial = el.value; ui.phone.result = null; phoneCheck(); return; }
     if (el.dataset && el.dataset.actionChange) { actChange(el.dataset.actionChange, el); return; }
     if (!el.dataset || !el.dataset.path) return;
     applyInput(el, true);

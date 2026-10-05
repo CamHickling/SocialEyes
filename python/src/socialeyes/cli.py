@@ -5,6 +5,8 @@
     socialeyes case-sheet --width-mm W --height-mm H [--study STUDY_DIR] [-o case_sheet.svg]
     socialeyes session SESSION_DIR [--build BUILD_DIR] [-o OUT]
     socialeyes simulate BUILD_DIR PARTICIPANT_ID OUT_DIR [--seed N]
+    socialeyes phone-check [STUDY_DIR] [--serial S]
+    socialeyes load STUDY_DIR [--serial S] [--update-app] [--anyway]
     socialeyes app [--debug]
 """
 from __future__ import annotations
@@ -126,6 +128,53 @@ def cmd_simulate(args) -> int:
     return 0
 
 
+_MARK = {"block": "BLOCK", "warn": "WARN ", "info": "  -> ", "ok": "  ok "}
+
+
+def _print_phone(r) -> None:
+    if r.phone:
+        p = r.phone
+        print(f"Phone: {p.model or p.serial} (Android {p.android}, {p.serial})")
+    for c in r.checks:
+        print(f"  {_MARK[c.level]} {c.text}")
+
+
+def cmd_phone_check(args) -> int:
+    from .phone.loader import blocked, phone_check
+
+    r = phone_check(args.study, serial=args.serial)
+    if r.error:
+        print(f"error: {r.error}", file=sys.stderr)
+        return 1
+    _print_phone(r)
+    if blocked(r.checks):
+        print("Not ready: fix the BLOCK items first.")
+        return 1
+    print("Ready" + (" (see the warnings)." if r.needs_confirmation else "."))
+    return 0
+
+
+def cmd_load(args) -> int:
+    from .phone.loader import load
+
+    r = load(args.study, serial=args.serial, update_app=args.update_app, anyway=args.anyway,
+             progress=lambda s: print(s, flush=True))
+    if r.error:
+        print(f"error: {r.error}", file=sys.stderr)
+        return 1
+    if not r.loaded:
+        _print_phone(r)
+        if r.needs_confirmation:
+            print("Not loaded because of the warnings above; add --anyway to load regardless.")
+            return 2
+        print("Not loaded: fix the BLOCK items first.")
+        return 1
+    if r.update_available and not args.update_app:
+        print("A newer SocialEyes app is available: add --update-app to install it (keeps the phone's data).")
+    print(f"Loaded {r.study_id} onto the phone.")
+    return 0
+
+
 def cmd_app(args) -> int:
     try:
         import webview  # noqa: F401
@@ -180,6 +229,18 @@ def main(argv: list[str] | None = None) -> int:
     m.add_argument("out", help="session folder to create")
     m.add_argument("--seed", type=int, default=0)
     m.set_defaults(func=cmd_simulate)
+
+    pc = sub.add_parser("phone-check", help="is the phone ready? (optionally for loading a study)")
+    pc.add_argument("study", nargs="?", help="study folder to check loading for")
+    pc.add_argument("--serial", help="the phone to use when several are connected (see: adb devices)")
+    pc.set_defaults(func=cmd_phone_check)
+
+    ld = sub.add_parser("load", help="check, compile and copy a study onto the phone (installs the app if missing)")
+    ld.add_argument("study", help="study folder (or its study.yaml)")
+    ld.add_argument("--serial", help="the phone to use when several are connected (see: adb devices)")
+    ld.add_argument("--update-app", action="store_true", help="also install a newer SocialEyes app if there is one")
+    ld.add_argument("--anyway", action="store_true", help="load despite warnings (battery, Do Not Disturb, ...)")
+    ld.set_defaults(func=cmd_load)
 
     a = sub.add_parser("app", help="open the desktop app (design studies in a window)")
     a.add_argument("--debug", action="store_true", help="allow the browser developer tools (right-click > Inspect)")
