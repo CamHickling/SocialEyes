@@ -140,7 +140,7 @@ for mixed models in R.
 | Session log format (touches, scrolling, interactions, quality events) | ✅ | `docs/EVENT_LOG.md` (version 1) |
 | Session analysis: gestures, time on screen, touch→AOI, finger occlusion, quality checks | ✅ | `python/src/socialeyes/session/` (tested on simulated sessions) |
 | Experiment builder: guided form that writes study.yaml and CSV skeletons | ✅ | `builder/index.html` (open in a browser) |
-| Desktop app (Windows): Design tab edits study folders in place and runs the compiler's checks; Phone tab loads studies onto the phone; Data tab unloads sessions with a register; Studies tab lists studies with their status; Content tab lists the files each study still needs; edits that would break collected data need a new version; Windows installer (`packaging/build.py`; release build waits for the signing key) | 🟡 | `socialeyes app` (`python/src/socialeyes/desktop/`) |
+| Desktop app (Windows): Design tab edits study folders in place and runs the compiler's checks; Phone tab loads studies onto the phone; Data tab unloads sessions with a register; Studies tab lists studies with their status; Content tab lists the files each study still needs; edits that would break collected data need a new version; Windows installer (`packaging/build.py`, about 66 MB) | ✅ | `socialeyes app` (`python/src/socialeyes/desktop/`) |
 | CSV format reference | ✅ | `docs/STUDY_DESIGN.md` (version 1) |
 | Android SocialEyes app: Instagram-style feed (stories row, comments sheet), sync patch, touch / scroll / viewport / quality logging, instructions, marker calibration, validation, questionnaires, image ratings, recognition test, camera check, front camera video, motion sensors, interruption detection | 🟡 | `android/` (tested on a Pixel 3) |
 | App: screen recording, Neon control | ⏳ | see [What the app doesn't do yet](#what-the-app-doesnt-do-yet) |
@@ -295,7 +295,8 @@ Researchers who don't use a terminal get a normal Windows installer
 and bundles Python, the `socialeyes` package, adb, the phone app and the example study.
 The installed app keeps studies and data in `Documents\SocialEyes` (`studies\`, `data\`,
 `analysis_out\`); uninstalling removes the program only, never those folders. It needs the
-Microsoft Edge WebView2 Runtime, which comes with Windows 11 and up-to-date Windows 10.
+Microsoft Edge WebView2 Runtime, which comes with Windows 11 and up-to-date Windows 10;
+the installer checks for it and offers Microsoft's download page when it is missing.
 
 ```powershell
 . .\scripts\env.ps1
@@ -309,6 +310,10 @@ get it can't take the release app later without uninstalling it, which deletes i
 `SocialEyes.exe --selftest report.json` checks the bundled parts (builder page, adb, phone
 app, example study, window toolkit) without opening a window. `setup-toolchain.ps1`
 installs PyInstaller and a portable Inno Setup (no registry entries) into `.toolchain\`.
+The toolchain uses OpenBLAS rather than Intel MKL (`environment.yml`), which keeps about
+600 MB of MKL libraries out of the installer; in an older toolchain run
+`conda install -p .toolchain\env -c conda-forge "libblas=*=*openblas"`. The release phone
+app is shrunk with R8 (`android/app/proguard-rules.pro`), from about 74 MB to about 5 MB.
 
 ### Key ideas
 
@@ -817,7 +822,7 @@ Roughly in order:
 - [x] Commenting and replying in the comments sheet
 - [x] Stories (`stories.csv`, story viewer, story events and gaze-mappable story images)
 - [x] Reels (`reels.csv`, Reels tab with video playback, reel events, `video.csv`)
-- [ ] **Next: SocialEyes desktop app (Windows)**: one window that takes a study from design
+- [x] **SocialEyes desktop app (Windows)**: one window that takes a study from design
       to data, for researchers who don't use a terminal. Python + a small built-in browser
       window (pywebview) showing the existing builder pages, calling the `socialeyes` package
       directly; packaged as one installer / `.exe` that includes adb, so no Python, Android
@@ -842,17 +847,8 @@ Roughly in order:
   - [x] **Protection once data exists**: when a study has sessions, warn about or lock
         changes that would break it (seed, post order, image file names, comment order) and
         bump the study version when it is edited
-  - [ ] Order: Design in the app and saving to the folder → Phone → Data → Studies list →
-        Content checklist → protections
+  - [x] **Windows installer** (`packaging/build.py`) with adb and the release-signed phone app
 - [ ] **Easier for non-technical users** (extra features, mostly in the desktop app):
-  - [ ] **AOI drawing tool**: open each critical image and draw rectangles or polygons
-        over the regions (face, waist, ...), name them, and the app writes the AOI file
-        with the right image size. Optional **Segment Anything (SAM)** assist: click on a
-        region and SAM proposes its outline, which becomes an editable polygon. SAM is an
-        optional download that runs locally (no images leave the computer); without it,
-        drawing by hand still works. To decide: which SAM version (SAM 2 or a small, fast
-        variant for CPU-only laptops), how it is installed, and how masks are simplified
-        into polygons
   - [ ] **Match dropped images automatically**: drag a folder of images onto the app; it
         matches files to the slots the design needs by name (`crit01_retouched.jpg` -> the
         retouched version of post crit01), copies them into the study folder, lists what is
@@ -893,6 +889,10 @@ Roughly in order:
       fallbacks for other camera drivers (the Pixel 3 needed a hidden preview stream);
       manufacturer battery savers that stop apps (Samsung, Xiaomi) handled by the loader's
       readiness check. Tablets and foldables are out of scope at first
+- [ ] *Stretch:* **AOI drawing tool**: open each critical image and draw rectangles or
+      polygons over the regions (face, waist, ...), name them, and the app writes the AOI
+      file with the right image size, optionally with a local **Segment Anything (SAM)**
+      assist that proposes a region's outline. Until then, draw AOIs in LabelMe
 - [ ] *Stretch:* **generated content**: draft comments and account usernames automatically,
       optionally based on what each post's image shows, written into `comments.csv` /
       `accounts.csv` for the researcher to review and edit before compiling

@@ -10,6 +10,9 @@ dependencies:
   - pip
   # Python analysis stack
   - numpy>=1.26
+  # OpenBLAS instead of Intel MKL: same results for our use, and keeps ~600 MB of MKL
+  # DLLs out of the desktop app's installer (packaging/build.py)
+  - libblas=*=*openblas
   - pandas>=2.2
   - scipy>=1.13
   - matplotlib>=3.8

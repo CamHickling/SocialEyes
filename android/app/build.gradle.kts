@@ -38,7 +38,11 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8 drops unused code (mostly the unused material-icons-extended icons) and
+            // resources; proguard-rules.pro keeps names readable for crash logs
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.findByName("release")
         }
     }
