@@ -27,6 +27,7 @@ from .adb import APP_FILES, PACKAGE, REPO, Adb, AdbError
 MIN_BATTERY = 50
 STORAGE_MARGIN = 500 * 2**20          # room for session data beyond the study itself
 CAMERA_MARGIN = 2 * 2**30             # front camera video
+CAMERA_STEPS = ("profile_photo", "camera_check")   # procedure steps that use the front camera
 ZEN_MODES = {"0": "off", "1": "priority only", "2": "total silence", "3": "alarms only"}
 
 
@@ -165,7 +166,8 @@ class StudyInfo:
     build: Path                 # compiled package (a temporary folder)
     package_sha256: str
     size_bytes: int
-    needs_camera: bool
+    needs_camera: bool          # the app uses the camera: front camera video, profile_photo or camera_check
+    records_camera: bool = False  # front camera video: needs room on the phone
 
 
 def build_study(study_dir: Path | str) -> StudyInfo:
@@ -177,10 +179,13 @@ def build_study(study_dir: Path | str) -> StudyInfo:
         shutil.rmtree(tmp, ignore_errors=True)
         raise
     study = json.loads((out / "study.json").read_text(encoding="utf-8"))["study"]
+    records = bool(study.get("logging", {}).get("front_camera", {}).get("enabled"))
     return StudyInfo(
         id=study["id"], version=study["version"], build=out, package_sha256=package_hash(out),
         size_bytes=sum(p.stat().st_size for p in out.rglob("*") if p.is_file()),
-        needs_camera=bool(study.get("logging", {}).get("front_camera", {}).get("enabled")),
+        # the same rule as the app's setup screen (SetupScreen.kt, usesCamera)
+        needs_camera=records or any(s.get("type") in CAMERA_STEPS for s in study.get("procedure", [])),
+        records_camera=records,
     )
 
 
@@ -237,9 +242,9 @@ def readiness(phone: PhoneState, study: Optional[StudyInfo] = None, apk: Optiona
         else:
             add("info", f"Replaces the different version of {study.id} that is on the phone.")
         if study.needs_camera and phone.app_installed and not phone.camera_granted:
-            add("info", "The study records the front camera; loading allows the app to use the camera.")
+            add("info", "The study uses the front camera; loading allows the app to use the camera.")
 
-        need = study.size_bytes + STORAGE_MARGIN + (CAMERA_MARGIN if study.needs_camera else 0)
+        need = study.size_bytes + STORAGE_MARGIN + (CAMERA_MARGIN if study.records_camera else 0)
         if phone.free_bytes is not None and phone.free_bytes < need:
             add("block", f"Not enough storage: {_gb(phone.free_bytes)} free, {_gb(need)} needed "
                          "(the study plus room for session data).")

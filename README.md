@@ -591,7 +591,8 @@ It only warns (**WARN**, load with `--anyway`) about a battery under 50%, Do Not
 being off, or a display or font size changed from the phone's default. A newer app is
 installed only with `--update-app`; the app is never uninstalled, because that deletes
 its data. With several phones connected, pick one with `--serial` (see `adb devices`).
-If the study records the front camera, loading also gives the app camera permission.
+If the study uses the front camera (video recording, a `profile_photo` or a `camera_check`
+step), loading also gives the app camera permission, every time it is missing.
 
 #### Release signing key
 

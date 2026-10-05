@@ -75,9 +75,10 @@ def test_blockers():
     assert blocked(readiness(phone(app_installed=False, app_version_code=None), study(), None))
     assert blocked(readiness(phone(), study(), APK, study_errors=["posts.csv: row 3: unknown account"]))
     assert blocked(readiness(phone(free_bytes=100 * 2**20), study(), APK))
-    # camera studies need room for video
+    # studies that record the front camera need room for video; a profile photo doesn't
     assert not blocked(readiness(phone(free_bytes=1 * 2**30), study(), APK))
-    assert blocked(readiness(phone(free_bytes=1 * 2**30), study(needs_camera=True), APK))
+    assert not blocked(readiness(phone(free_bytes=1 * 2**30), study(needs_camera=True), APK))
+    assert blocked(readiness(phone(free_bytes=1 * 2**30), study(needs_camera=True, records_camera=True), APK))
     # a changed study can't replace one whose sessions are still on the phone ...
     changed = phone(studies={"example": "b" * 64}, sessions={"example": 2})
     c = readiness(changed, study(), APK)
@@ -111,13 +112,22 @@ def test_build_study_and_expected_hashes(example):
     s = build_study(example)
     try:
         assert s.id == "example" and len(s.package_sha256) == 64 and s.size_bytes > 0
-        assert not s.needs_camera
+        # no camera video, but a profile_photo step: the app needs the camera permission
+        assert s.needs_camera and not s.records_camera
         hashes = expected_hashes(s.build)
         assert hashes["files.sha256"] == s.package_sha256
         assert "study.json" in hashes and "plans/P001.json" in hashes
     finally:
         discard(s)
     assert not s.build.exists()
+
+
+def test_camera_permission_offered_whenever_missing():
+    granted = readiness(phone(), study(needs_camera=True), APK)
+    missing = readiness(phone(camera_granted=False), study(needs_camera=True), APK)
+    assert not any("camera" in c.text for c in granted)
+    assert any("allows the app to use the camera" in c.text for c in missing if c.level == "info")
+    assert not any("camera" in c.text for c in readiness(phone(camera_granted=False), study(), APK))
 
 
 def test_devices_and_choose(monkeypatch):
