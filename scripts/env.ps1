@@ -7,6 +7,8 @@ $Sdk = Join-Path $Tool 'android-sdk'
 
 if (Test-Path (Join-Path $EnvDir 'Library\bin\java.exe')) { $env:JAVA_HOME = Join-Path $EnvDir 'Library' }
 if (Test-Path $Sdk) { $env:ANDROID_HOME = $Sdk; $env:ANDROID_SDK_ROOT = $Sdk }
+# Only the toolchain's Python packages, never ones in the user's own Python folder.
+$env:PYTHONNOUSERSITE = '1'
 
 $paths = @(
   $EnvDir,

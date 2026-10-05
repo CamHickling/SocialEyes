@@ -21,7 +21,7 @@ ID = re.compile(r"[A-Za-z0-9_-]+")
 
 
 def studies_root() -> Path:
-    return settings.workspace() / "studies"
+    return settings.studies_dir()
 
 
 def _raw_study(folder: Path) -> dict:
@@ -67,7 +67,7 @@ def copy_example(new_id: str, root: Path | None = None) -> str:
     dest = root / new_id
     if dest.exists():
         raise FolderError(f"{dest} already exists; choose another id.")
-    example = settings.REPO / "studies" / "example"
+    example = settings.example_study()
     if not (example / STUDY_FILE).is_file():
         raise FolderError("The example study isn't available on this computer.")
     shutil.copytree(example, dest, ignore=shutil.ignore_patterns("__pycache__", "make_placeholders.py"))

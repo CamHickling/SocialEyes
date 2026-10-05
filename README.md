@@ -140,7 +140,7 @@ for mixed models in R.
 | Session log format (touches, scrolling, interactions, quality events) | ✅ | `docs/EVENT_LOG.md` (version 1) |
 | Session analysis: gestures, time on screen, touch→AOI, finger occlusion, quality checks | ✅ | `python/src/socialeyes/session/` (tested on simulated sessions) |
 | Experiment builder: guided form that writes study.yaml and CSV skeletons | ✅ | `builder/index.html` (open in a browser) |
-| Desktop app (Windows): Design tab edits study folders in place and runs the compiler's checks; Phone tab loads studies onto the phone; Data tab unloads sessions with a register; Studies tab lists studies with their status; Content tab lists the files each study still needs; edits that would break collected data need a new version; packaging to come | 🟡 | `socialeyes app` (`python/src/socialeyes/desktop/`) |
+| Desktop app (Windows): Design tab edits study folders in place and runs the compiler's checks; Phone tab loads studies onto the phone; Data tab unloads sessions with a register; Studies tab lists studies with their status; Content tab lists the files each study still needs; edits that would break collected data need a new version; Windows installer (`packaging/build.py`; release build waits for the signing key) | 🟡 | `socialeyes app` (`python/src/socialeyes/desktop/`) |
 | CSV format reference | ✅ | `docs/STUDY_DESIGN.md` (version 1) |
 | Android SocialEyes app: Instagram-style feed (stories row, comments sheet), sync patch, touch / scroll / viewport / quality logging, instructions, marker calibration, validation, questionnaires, image ratings, recognition test, camera check, front camera video, motion sensors, interruption detection | 🟡 | `android/` (tested on a Pixel 3) |
 | App: screen recording, Neon control | ⏳ | see [What the app doesn't do yet](#what-the-app-doesnt-do-yet) |
@@ -287,6 +287,28 @@ so a breaking edit made outside the app, such as reordered rows in a CSV, is sto
 before it reaches the phone. The app
 needs `pywebview`, which `setup-toolchain.ps1` installs; in an older toolchain run
 `pip install pywebview`.
+
+#### Building the installer
+
+Researchers who don't use a terminal get a normal Windows installer
+(`SocialEyes-Setup-<version>.exe`). It installs per user (no administrator rights needed)
+and bundles Python, the `socialeyes` package, adb, the phone app and the example study.
+The installed app keeps studies and data in `Documents\SocialEyes` (`studies\`, `data\`,
+`analysis_out\`); uninstalling removes the program only, never those folders. It needs the
+Microsoft Edge WebView2 Runtime, which comes with Windows 11 and up-to-date Windows 10.
+
+```powershell
+. .\scripts\env.ps1
+python packaging\build.py          # release: needs the signing key (see Release signing key)
+python packaging\build.py --dev    # test build with this computer's debug-signed phone app
+```
+
+The installer is written to `packaging\out\`. A `--dev` installer is for testing on your
+own machines only: its phone app is signed with this computer's debug key, so phones that
+get it can't take the release app later without uninstalling it, which deletes its data.
+`SocialEyes.exe --selftest report.json` checks the bundled parts (builder page, adb, phone
+app, example study, window toolkit) without opening a window. `setup-toolchain.ps1`
+installs PyInstaller and a portable Inno Setup (no registry entries) into `.toolchain\`.
 
 ### Key ideas
 

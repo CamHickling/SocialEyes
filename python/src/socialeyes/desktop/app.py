@@ -29,9 +29,10 @@ def builder_page() -> Path:
 
 
 def default_studies_dir() -> Path:
-    """Where folder dialogs start: the repo's studies/ when developing, else Documents."""
-    studies = REPO / "studies"
-    return studies if studies.is_dir() else Path.home() / "Documents"
+    """Where folder dialogs start: the workspace's studies folder (the repo's when developing)."""
+    from .. import settings
+
+    return settings.studies_dir()
 
 
 def _reply(fn):

@@ -30,3 +30,6 @@ phone-pin.local
 android/keystore.properties
 *.jks
 *.keystore
+
+# Desktop app installer builds (packaging/build.py)
+packaging/out/

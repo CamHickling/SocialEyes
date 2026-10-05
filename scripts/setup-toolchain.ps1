@@ -3,6 +3,7 @@
   Installs a project-local toolchain into .toolchain\ (nothing system-wide):
     .toolchain\env          conda env: Python analysis stack, JDK 17, R + lme4
     .toolchain\android-sdk  Android SDK (command-line tools, platform, build tools)
+    .toolchain\innosetup    Inno Setup, portable (builds the desktop app's installer)
 
 .DESCRIPTION
   Requires conda (Miniforge/Anaconda) on PATH. Safe to re-run: each step is
@@ -14,9 +15,13 @@
 #>
 param(
   [switch]$SkipAndroid,
-  [switch]$SkipConda
+  [switch]$SkipConda,
+  [switch]$SkipInno
 )
 $ErrorActionPreference = 'Stop'
+# Ignore packages in the user's own Python folder (%APPDATA%\Python): otherwise pip counts them
+# as installed and leaves them out of the toolchain, and the app breaks where they're missing.
+$env:PYTHONNOUSERSITE = '1'
 $Root = Split-Path -Parent $PSScriptRoot
 $Tool = Join-Path $Root '.toolchain'
 New-Item -ItemType Directory -Force $Tool | Out-Null
@@ -24,6 +29,7 @@ New-Item -ItemType Directory -Force $Tool | Out-Null
 # Pinned so every lab builds the same thing.
 $CmdlineToolsUrl = 'https://dl.google.com/android/repository/commandlinetools-win-11076708_latest.zip'
 $SdkPackages = @('platform-tools', 'platforms;android-35', 'build-tools;35.0.0')
+$InnoUrl = 'https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe'
 
 if (-not $SkipConda) {
   $EnvDir = Join-Path $Tool 'env'
@@ -75,6 +81,19 @@ if (-not $SkipAndroid) {
   $LocalProps = Join-Path $Root 'android\local.properties'
   if (Test-Path (Split-Path $LocalProps)) {
     "sdk.dir=$($Sdk -replace '\\','\\')" | Set-Content -Encoding ascii $LocalProps
+  }
+}
+
+if (-not $SkipInno) {
+  $Inno = Join-Path $Tool 'innosetup'
+  if (-not (Test-Path (Join-Path $Inno 'ISCC.exe'))) {
+    Write-Host "[inno] downloading Inno Setup (portable: no registry entries, no uninstaller)"
+    $Exe = Join-Path $Tool 'innosetup.exe'
+    Invoke-WebRequest -Uri $InnoUrl -OutFile $Exe -UseBasicParsing
+    Start-Process -FilePath $Exe -Wait -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER',
+      '/PORTABLE=1', '/NOICONS', "/DIR=`"$Inno`""
+    Remove-Item $Exe
+    if (-not (Test-Path (Join-Path $Inno 'ISCC.exe'))) { throw "Inno Setup was not installed" }
   }
 }
 

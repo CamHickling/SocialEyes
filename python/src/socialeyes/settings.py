@@ -34,6 +34,23 @@ def workspace() -> Path:
     return Path.home() / "Documents" / "SocialEyes"
 
 
+def studies_dir() -> Path:
+    """Where studies live (created on first use)."""
+    path = workspace() / "studies"
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass
+    return path
+
+
+def example_study() -> Path:
+    """The bundled example study (the packaged app carries a copy)."""
+    if hasattr(sys, "_MEIPASS"):
+        return Path(sys._MEIPASS) / "example"
+    return REPO / "studies" / "example"
+
+
 def load() -> dict:
     path = settings_path()
     try:

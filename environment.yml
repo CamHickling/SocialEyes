@@ -30,4 +30,5 @@ dependencies:
   - pip:
       - opencv-python-headless>=4.9
       - pywebview>=5  # the desktop app (socialeyes app)
+      - pyinstaller>=6  # packaging the desktop app (packaging/build.py)
       - -e ./python
