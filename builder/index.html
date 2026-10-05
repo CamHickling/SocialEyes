@@ -28,11 +28,19 @@
   --ok: #9fdcb0; --ok-soft: #12301d; color-scheme: dark;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
 header { display: flex; align-items: center; gap: 12px; padding: 14px 24px; border-bottom: 1px solid var(--line); background: var(--surface); }
 header .logo { width: 28px; height: 28px; border-radius: 8px; background: var(--accent); display: grid; place-items: center; color: var(--accent-ink); font-weight: 700; }
 header h1 { font-size: 17px; margin: 0; font-weight: 600; }
 header span { color: var(--muted); font-size: 13px; }
+#apptabs { display: flex; gap: 4px; margin-left: 12px; overflow-x: auto; }
+#apptabs button { border: 0; background: none; font: inherit; color: var(--text); padding: 6px 14px; border-radius: 999px; cursor: pointer; white-space: nowrap; }
+#apptabs button:hover:not(.on) { background: var(--surface-2); }
+#apptabs button.on { background: var(--accent-soft); font-weight: 600; }
+#tabpage { max-width: 720px; margin: 48px auto; padding: 0 24px; }
+.folder { word-break: break-all; }
+.pill { display: inline-block; background: var(--warn-soft); color: var(--warn); border-radius: 999px; padding: 1px 10px; font-size: 12px; font-weight: 600; }
 .layout { display: grid; grid-template-columns: 180px minmax(0, 1fr) 300px; gap: 24px; max-width: 1280px; margin: 0 auto; padding: 24px; align-items: start; }
 #nav { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 16px; }
 #nav button { display: flex; justify-content: space-between; align-items: center; text-align: left; border: 0; background: none; color: var(--text); padding: 8px 12px; border-radius: 999px; font: inherit; cursor: pointer; }
@@ -106,6 +114,9 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 .checks .error button { background: var(--error-soft); color: var(--error); } .checks .error .ic { background: var(--error); }
 .checks .warning button { background: var(--warn-soft); color: var(--warn); } .checks .warning .ic { background: var(--warn); }
 .checks .tip button { background: var(--tip-soft); color: var(--tip); } .checks .tip .ic { background: var(--tip); }
+.checks .msg { display: flex; gap: 8px; border-radius: 8px; padding: 8px 10px; font-size: 13px; }
+.checks .error .msg { background: var(--error-soft); color: var(--error); }
+.checks .warning .msg { background: var(--warn-soft); color: var(--warn); }
 @media (max-width: 1000px) {
   .layout { grid-template-columns: minmax(0, 1fr); padding: 16px; gap: 16px; }
   #nav { position: static; flex-direction: row; overflow-x: auto; }
@@ -117,7 +128,8 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 </style>
 </head>
 <body>
-<header><div class="logo">S</div><h1>SocialEyes Experiment Builder</h1><span>writes study.yaml and CSV skeletons</span></header>
+<header><div class="logo">S</div><h1 id="app-title">SocialEyes Experiment Builder</h1><span id="app-sub">writes study.yaml and CSV skeletons</span><nav id="apptabs" hidden></nav></header>
+<section id="tabpage" hidden></section>
 <div class="layout">
   <nav id="nav"></nav>
   <main id="main"></main>
@@ -767,7 +779,42 @@ if (typeof module !== "undefined") module.exports = Core;
     openStep: null,         // procedure card that is expanded
     previewFile: "study.yaml",
     loadError: null,
+    // inside the desktop app (socialeyes app) only
+    desktop: false,         // the Python bridge is available
+    appInfo: null,          // {version, studies_dir}
+    tab: "design",          // app tab: studies, design, content, phone, data
+    folder: null,           // the study folder this study is saved in
+    savedYaml: null,        // study.yaml as last saved or opened, to spot unsaved changes
+    hadComments: false,     // the opened study.yaml had comments, which saving drops
+    saved: null,            // result of the last save: {written, kept, backup, at}
+    compiler: null,         // the compiler's checks of the folder: {errors, warnings, at}
+    busy: null,             // what the bridge is doing ("Saving…"), shown while it works
+    desktopError: null,
   };
+
+  const APP_TABS = [
+    ["studies", "Studies", "A list of your study folders and their status (designing, ready, collecting data, sessions so far), and new studies from blank or from the example. For now, open or start a study in the Design tab."],
+    ["design", "Design", ""],
+    ["content", "Content", "A checklist of every image, avatar, video and AOI file the design needs, found or missing."],
+    ["phone", "Phone", "Check, compile and load a study onto the phone in one step, install or update the app, and check the phone is ready (storage, battery, Do Not Disturb, camera)."],
+    ["data", "Data", "Copy sessions off the phone, check every file arrived intact, delete them from the phone, run the quality checks and keep a register of who took part."],
+  ];
+
+  /** Call a method of the desktop app's Python bridge; returns its result or throws its message. */
+  async function bridge(name, busy, ...args) {
+    ui.busy = busy;
+    if (busy) render();
+    try {
+      const r = await window.pywebview.api[name](...args);
+      if (r && r.error) throw new Error(r.error);
+      return r ? r.ok : null;
+    } finally {
+      ui.busy = null;
+    }
+  }
+
+  const unsaved = () => ui.desktop && ui.study && ui.folder !== null && C.toYaml(ui.study) !== ui.savedYaml;
+  const clock = (d) => d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
   // ------------------------------------------------------------ guidance texts
 
@@ -883,21 +930,25 @@ if (typeof module !== "undefined") module.exports = Core;
   function sectionStart() {
     let draft = null;
     try { draft = JSON.parse(localStorage.getItem(STORE) || "null"); } catch (e) { draft = null; }
+    const open = ui.desktop
+      ? `<div class="card"><h3>Open a study folder</h3><p>Edit an existing study in place. Your CSV files are never overwritten.</p>${btn("open-folder", "Choose folder…")}</div>`
+      : `<div class="card" id="drop"><h3>Open a study.yaml</h3><p>Edit an existing study. Comments in the file are not kept; your CSV files are not touched.</p>
+          <label class="btn file">Choose file…<input type="file" id="open-file" accept=".yaml,.yml,text/yaml"></label>
+          <p class="hint">or drop the file here</p></div>`;
     return `
       <h2>Start</h2>
       <p class="lead">This builder walks you through the decisions for a SocialEyes study and writes
       <code>study.yaml</code> plus CSV files with a row for every piece of content your design needs.
-      Everything stays in this browser; nothing is uploaded.</p>
+      ${ui.desktop ? "Everything stays on this computer." : "Everything stays in this browser; nothing is uploaded."}</p>
+      ${ui.desktopError ? `<p class="error-box">${esc(ui.desktopError)}</p>` : ""}
       <div class="cards">
         <div class="card"><h3>New study</h3><p>Just the basic feed (posts, likes, comments to read) and the eye-tracking steps. Every optional feature starts off; switch on what you need.</p>${btn("new-blank", "Start blank", "primary")}</div>
         <div class="card"><h3>From the example</h3><p>The 2 x 2 x 2 retouching study from <code>studies/example</code>, to adapt.</p>${btn("new-example", "Use the example")}</div>
-        <div class="card" id="drop"><h3>Open a study.yaml</h3><p>Edit an existing study. Comments in the file are not kept; your CSV files are not touched.</p>
-          <label class="btn file">Choose file…<input type="file" id="open-file" accept=".yaml,.yml,text/yaml"></label>
-          <p class="hint">or drop the file here</p></div>
+        ${open}
         ${draft && draft.study ? `<div class="card"><h3>Continue</h3><p>Your last draft: <b>${esc(draft.study.title || draft.study.id)}</b>.</p>${btn("resume", "Continue where you left off")}</div>` : ""}
       </div>
       ${ui.loadError ? `<p class="error-box">${esc(ui.loadError)}</p>` : ""}
-      ${ui.study ? `<p class="hint">Working on <b>${esc(ui.study.title || ui.study.id)}</b>${ui.opened ? ` (opened from ${esc(ui.opened)})` : ""}. ${btn("go-basics", "Carry on →", "link")}</p>` : ""}`;
+      ${ui.study ? `<p class="hint">Working on <b>${esc(ui.study.title || ui.study.id)}</b>${ui.folder ? ` in <span class="folder">${esc(ui.folder)}</span>` : ui.opened ? ` (opened from ${esc(ui.opened)})` : ""}. ${btn("go-basics", "Carry on →", "link")}</p>` : ""}`;
   }
 
   function sectionBasics() {
@@ -995,7 +1046,7 @@ if (typeof module !== "undefined") module.exports = Core;
     return `
       <h2>Content</h2>
       <p class="lead">How much content the study has. This only decides how many rows the CSV skeletons get; it isn't stored in study.yaml.</p>
-      ${ui.opened ? `<p class="hint">You opened an existing study: its CSV files already exist. These numbers matter only if you download CSV skeletons.</p>` : ""}
+      ${ui.opened ? `<p class="hint">You opened an existing study: its CSV files already exist. ${ui.desktop ? "These numbers matter only for CSV files that don't exist yet; saving never overwrites the others." : "These numbers matter only if you download CSV skeletons."}</p>` : ""}
       <div class="grid">
         ${field({ path: "content.critical", label: "Critical posts", kind: "int", min: 0, help: c > 1 ? `A multiple of ${c} (the number of within-subject cells), so everyone sees each cell equally often.` : "Posts that carry the manipulation." })}
         ${field({ path: "content.fillers", label: "Filler posts", kind: "int", min: 0, help: "Unmanipulated posts around the critical ones. More fillers make the manipulation less obvious." })}
@@ -1155,7 +1206,34 @@ if (typeof module !== "undefined") module.exports = Core;
       <div class="summary">Ids: <code>${esc(id(1))}</code>, <code>${esc(id(2))}</code> … <code>${esc(id(n))}</code></div>`;
   }
 
+  /** The Download section as it is in the desktop app: save into the study folder. */
+  function sectionSave() {
+    const files = C.studyFiles(ui.study, ui.content, true);
+    if (!files[ui.previewFile]) ui.previewFile = "study.yaml";
+    const errors = C.checks(ui.study, ui.content).filter((c) => c.level === "error");
+    const s = ui.saved;
+    return `
+      <h2>Save</h2>
+      ${errors.length ? `<p class="error-box">The design has ${errors.length === 1 ? "1 problem" : `${errors.length} problems`} (see the list on the right). You can still save and fix ${errors.length === 1 ? "it" : "them"} later.</p>` : ""}
+      <div class="card">
+        ${ui.folder
+          ? `<p>Study folder: <b class="folder">${esc(ui.folder)}</b> ${unsaved() ? `<span class="pill">unsaved changes</span>` : ""}</p>
+             <div class="row">${btn("save", "Save to study folder", "primary", ui.busy ? "disabled" : "")}${btn("check-folder", "Check study", "", ui.busy ? "disabled" : "")}${btn("save-new", "Save as a new study…", "link", ui.busy ? "disabled" : "")}</div>`
+          : `<p>This study isn't saved yet. Choose the folder to put it in (usually <code>studies</code>); a new folder named <code>${esc(ui.study.id || "…")}</code> is made inside it.</p>
+             <div class="row">${btn("save-new", "Save to a new folder…", "primary", ui.busy ? "disabled" : "")}</div>`}
+        ${ui.busy ? `<p class="hint">${esc(ui.busy)}</p>` : ""}
+        ${s ? `<p class="hint">Saved at ${clock(s.at)}: wrote ${s.written.map((f) => `<code>${esc(f)}</code>`).join(", ")}${s.kept.length ? `; kept your existing ${s.kept.map((f) => `<code>${esc(f)}</code>`).join(", ")}` : ""}${s.backup ? `. The previous study.yaml is in <code>study.yaml.bak</code>` : ""}.</p>` : ""}
+      </div>
+      <p class="hint">Saving writes <code>study.yaml</code> and creates the CSV files and NEXT_STEPS.txt only if they don't exist yet:
+      your CSV files are never overwritten. The previous study.yaml is kept as <code>study.yaml.bak</code>.
+      ${ui.hadComments ? "<b>Your study.yaml has comments (# …); they are not kept when you save.</b>" : ""}
+      After saving, the study is checked like <code>socialeyes validate</code> does: images, AOIs and CSV contents (list on the right).</p>
+      <div class="tabs">${Object.keys(files).map((f) => `<button type="button" class="tab ${f === ui.previewFile ? "on" : ""}" data-action="preview:${esc(f)}">${esc(f)}</button>`).join("")}</div>
+      <pre class="preview">${esc(files[ui.previewFile])}</pre>`;
+  }
+
   function sectionDownload() {
+    if (ui.desktop) return sectionSave();
     const files = C.studyFiles(ui.study, ui.content, ui.withCsv);
     if (!files[ui.previewFile]) ui.previewFile = "study.yaml";
     const errors = C.checks(ui.study, ui.content).filter((c) => c.level === "error");
@@ -1189,7 +1267,8 @@ if (typeof module !== "undefined") module.exports = Core;
       <p class="design-line">${esc(C.designSummary(ui.study))}</p>
       <dl class="stats"><dt>Cells</dt><dd>${C.cells(ui.study)}</dd><dt>Groups</dt><dd>${C.groups(ui.study)}</dd><dt>Block</dt><dd>${C.blockSize(ui.study)}</dd><dt>Steps</dt><dd>${(ui.study.procedure || []).length}</dd></dl>
       <h3>Checks</h3>
-      ${list.length ? `<ul class="checks">${list.map((c) => `<li class="${c.level}"><button type="button" data-action="goto:${c.section}"><span class="ic">${icon[c.level]}</span><span>${esc(c.msg)}</span></button></li>`).join("")}</ul>` : `<p class="ok-box">All good.</p>`}`;
+      ${list.length ? `<ul class="checks">${list.map((c) => `<li class="${c.level}"><button type="button" data-action="goto:${c.section}"><span class="ic">${icon[c.level]}</span><span>${esc(c.msg)}</span></button></li>`).join("")}</ul>` : `<p class="ok-box">All good.</p>`}
+      ${ui.desktop ? folderChecks() : ""}`;
     const counts = {};
     for (const c of list) if (c.level === "error") counts[c.section] = (counts[c.section] || 0) + 1;
     document.querySelectorAll("#nav button").forEach((b) => {
@@ -1198,14 +1277,50 @@ if (typeof module !== "undefined") module.exports = Core;
     });
   }
 
+  /** The compiler's checks of the saved folder (desktop app only). */
+  function folderChecks() {
+    const head = `<h3>Study folder</h3>${ui.desktopError ? `<p class="error-box">${esc(ui.desktopError)}</p>` : ""}`;
+    if (!ui.folder) return `${head}<p class="hint">Save the study to a folder to check its images, AOIs and CSV files too.</p>`;
+    const k = ui.compiler;
+    const items = k ? [...k.errors.map((m) => ["error", "✕", m]), ...k.warnings.map((m) => ["warning", "!", m])] : [];
+    return `${head}
+      ${unsaved() ? `<p class="hint"><span class="pill">unsaved changes</span> These checks are of the saved files. ${btn("save", "Save", "link", ui.busy ? "disabled" : "")}</p>` : ""}
+      ${!k ? `<p class="hint">Not checked yet.</p>`
+        : items.length ? `<ul class="checks">${items.map(([lv, ic, m]) => `<li class="${lv}"><div class="msg"><span class="ic">${ic}</span><span>${esc(m)}</span></div></li>`).join("")}</ul>`
+        : `<p class="ok-box">Images, AOIs and CSV files all check out.</p>`}
+      <p class="hint">${k ? `Checked at ${clock(k.at)}. ` : ""}${btn("check-folder", ui.busy === "Checking…" ? "Checking…" : "Check study", "link", ui.busy ? "disabled" : "")}</p>`;
+  }
+
   // ------------------------------------------------------------ render
 
+  const sectionLabel = (k, label) => (k === "download" && ui.desktop ? "Save" : label);
+
+  /** The desktop app's tabs; every tab but Design is a placeholder until it is built. */
+  function renderApp() {
+    const tabs = document.getElementById("apptabs");
+    tabs.hidden = !ui.desktop;
+    const onDesign = !ui.desktop || ui.tab === "design";
+    document.querySelector(".layout").hidden = !onDesign;
+    const page = document.getElementById("tabpage");
+    page.hidden = onDesign;
+    if (!ui.desktop) return true;
+    document.getElementById("app-title").textContent = "SocialEyes";
+    document.getElementById("app-sub").hidden = true;
+    tabs.innerHTML = APP_TABS.map(([k, label]) => `<button type="button" data-action="tab:${k}" class="${ui.tab === k ? "on" : ""}">${label}</button>`).join("");
+    if (!onDesign) {
+      const [, label, text] = APP_TABS.find(([k]) => k === ui.tab);
+      page.innerHTML = `<h2>${label}</h2><p class="lead">${text}</p><p class="hint">Coming in a later version of the desktop app.</p>`;
+    }
+    return onDesign;
+  }
+
   function render() {
+    if (!renderApp()) return;
     const focused = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.key : null;
     let sel = null;
     try { sel = focused ? [document.activeElement.selectionStart, document.activeElement.selectionEnd] : null; } catch (e) { sel = null; }
     document.getElementById("nav").innerHTML = SECTIONS.map(([k, label]) =>
-      `<button type="button" data-section="${k}" class="${ui.section === k ? "on" : ""}" ${!ui.study && k !== "start" ? "disabled" : ""}>${label}<span class="count"></span></button>`).join("");
+      `<button type="button" data-section="${k}" class="${ui.section === k ? "on" : ""}" ${!ui.study && k !== "start" ? "disabled" : ""}>${sectionLabel(k, label)}<span class="count"></span></button>`).join("");
     const main = document.getElementById("main");
     main.innerHTML = (ui.study || ui.section === "start" ? RENDER[ui.section]() : sectionStart()) + navButtons();
     renderSide();
@@ -1220,12 +1335,16 @@ if (typeof module !== "undefined") module.exports = Core;
     if (!ui.study) return "";
     const i = SECTIONS.findIndex(([k]) => k === ui.section);
     const prev = SECTIONS[i - 1], next = SECTIONS[i + 1];
-    return `<div class="pager">${prev ? btn(`goto:${prev[0]}`, `← ${prev[1]}`) : "<span></span>"}${next ? btn(`goto:${next[0]}`, `${next[1]} →`, "primary") : ""}</div>`;
+    return `<div class="pager">${prev ? btn(`goto:${prev[0]}`, `← ${sectionLabel(...prev)}`) : "<span></span>"}${next ? btn(`goto:${next[0]}`, `${sectionLabel(...next)} →`, "primary") : ""}</div>`;
   }
 
+  /** Keeps the draft in the browser's storage, so it survives closing the page. */
   function save() {
     if (!ui.study) return;
-    try { localStorage.setItem(STORE, JSON.stringify({ study: ui.study, content: ui.content, withCsv: ui.withCsv, opened: ui.opened })); } catch (e) { /* storage unavailable */ }
+    try {
+      localStorage.setItem(STORE, JSON.stringify({ study: ui.study, content: ui.content, withCsv: ui.withCsv, opened: ui.opened,
+        folder: ui.folder, savedYaml: ui.savedYaml, hadComments: ui.hadComments }));
+    } catch (e) { /* storage unavailable */ }
   }
 
   // ------------------------------------------------------------ editing helpers
@@ -1262,15 +1381,83 @@ if (typeof module !== "undefined") module.exports = Core;
     return s;
   }
 
-  function load(study, content, opened) {
+  /** `folder`: the study folder it was opened from (desktop app), else null. */
+  function load(study, content, opened, folder = null) {
     ui.study = study;
     ui.content = content;
     ui.opened = opened;
     ui.withCsv = !opened;
     ui.openStep = null;
     ui.loadError = null;
+    ui.folder = folder;
+    ui.savedYaml = folder ? C.toYaml(study) : null;
+    ui.hadComments = false;
+    ui.saved = null;
+    ui.compiler = null;
+    ui.desktopError = null;
     if (!opened) C.syncFoils(ui.study, ui.content);
     ui.section = "basics";
+    render();
+  }
+
+  function parseStudy(text) {
+    const study = jsyaml.load(text);
+    if (!study || typeof study !== "object" || Array.isArray(study)) throw new Error("this file doesn't contain a study (expected settings like id:, procedure:)");
+    if (!Array.isArray(study.procedure)) study.procedure = [];
+    if (!Array.isArray(study.factors)) study.factors = study.factors ? [] : [];
+    return study;
+  }
+
+  // ------------------------------------------------------------ study folders (desktop app)
+
+  async function openFolder() {
+    try {
+      const folder = await bridge("pick_folder", null, ui.folder || (ui.appInfo && ui.appInfo.studies_dir));
+      if (!folder) return;
+      const r = await bridge("open_folder", "Opening…", folder);
+      const study = parseStudy(r.study.yaml);
+      load(study, C.contentFor(study), "study.yaml", r.study.folder);
+      ui.hadComments = /^\s*#/m.test(r.study.yaml);
+      ui.compiler = { ...r.check, at: new Date() };
+    } catch (e) {
+      ui.desktopError = `Couldn't open the study: ${e.message}`;
+      ui.section = "start";
+    }
+    render();
+  }
+
+  /** Save into the study's folder, or (asNew / not saved yet) into a new folder named after the study id. */
+  async function saveStudy(asNew) {
+    const files = C.studyFiles(ui.study, ui.content, true);
+    try {
+      let r;
+      if (ui.folder && !asNew) {
+        r = await bridge("save", "Saving…", ui.folder, files);
+      } else {
+        const start = ui.folder ? ui.folder.replace(/[\\/][^\\/]+$/, "") : ui.appInfo && ui.appInfo.studies_dir;
+        const parent = await bridge("pick_folder", null, start);
+        if (!parent) return;
+        r = await bridge("save_new", "Saving…", parent, ui.study.id || "", files);
+      }
+      ui.folder = r.saved.folder;
+      ui.savedYaml = files["study.yaml"];
+      ui.hadComments = false; // the saved file has none (a commented original is in study.yaml.bak)
+      ui.saved = { ...r.saved, at: new Date() };
+      ui.compiler = { ...r.check, at: new Date() };
+      ui.desktopError = null;
+    } catch (e) {
+      ui.desktopError = `Couldn't save: ${e.message}`;
+    }
+    render();
+  }
+
+  async function checkFolder() {
+    try {
+      ui.compiler = { ...(await bridge("check", "Checking…", ui.folder)), at: new Date() };
+      ui.desktopError = null;
+    } catch (e) {
+      ui.desktopError = `Couldn't check the study: ${e.message}`;
+    }
     render();
   }
 
@@ -1278,10 +1465,7 @@ if (typeof module !== "undefined") module.exports = Core;
     const reader = new FileReader();
     reader.onload = () => {
       try {
-        const study = jsyaml.load(String(reader.result));
-        if (!study || typeof study !== "object" || Array.isArray(study)) throw new Error("this file doesn't contain a study (expected settings like id:, procedure:)");
-        if (!Array.isArray(study.procedure)) study.procedure = [];
-        if (!Array.isArray(study.factors)) study.factors = study.factors ? [] : [];
+        const study = parseStudy(String(reader.result));
         load(study, C.contentFor(study), file.name);
       } catch (e) {
         ui.loadError = `Couldn't read ${file.name}: ${e.message}`;
@@ -1313,7 +1497,8 @@ if (typeof module !== "undefined") module.exports = Core;
       case "resume": {
         try {
           const d = JSON.parse(localStorage.getItem(STORE));
-          load(d.study, d.content, d.opened || null);
+          load(d.study, d.content, d.opened || null, ui.desktop ? d.folder || null : null);
+          if (ui.folder) { ui.savedYaml = d.savedYaml; ui.hadComments = !!d.hadComments; }
           ui.withCsv = d.withCsv !== false;
           render();
         } catch (e) { ui.loadError = "The saved draft couldn't be read."; render(); }
@@ -1391,6 +1576,11 @@ if (typeof module !== "undefined") module.exports = Core;
         return;
       }
       case "download-yaml": download("study.yaml", C.toYaml(S), "text/yaml"); return;
+      case "tab": ui.tab = args[0]; window.scrollTo(0, 0); break;
+      case "open-folder": openFolder(); return;
+      case "save": saveStudy(false); return;
+      case "save-new": saveStudy(true); return;
+      case "check-folder": checkFolder(); return;
       default: return;
     }
     render();
@@ -1473,7 +1663,17 @@ if (typeof module !== "undefined") module.exports = Core;
     if (f) openFile(f);
   });
 
+  // Inside the desktop app, pywebview adds window.pywebview.api (possibly after this script runs).
+  async function enterDesktop() {
+    if (ui.desktop || !(window.pywebview && window.pywebview.api)) return;
+    ui.desktop = true;
+    try { ui.appInfo = await bridge("app_info", null); } catch (e) { ui.desktopError = e.message; }
+    render();
+  }
+  window.addEventListener("pywebviewready", enterDesktop);
+
   render();
+  enterDesktop();
 })();
 </script>
 </body>

@@ -5,6 +5,7 @@
     socialeyes case-sheet --width-mm W --height-mm H [--study STUDY_DIR] [-o case_sheet.svg]
     socialeyes session SESSION_DIR [--build BUILD_DIR] [-o OUT]
     socialeyes simulate BUILD_DIR PARTICIPANT_ID OUT_DIR [--seed N]
+    socialeyes app [--debug]
 """
 from __future__ import annotations
 
@@ -125,6 +126,22 @@ def cmd_simulate(args) -> int:
     return 0
 
 
+def cmd_app(args) -> int:
+    try:
+        import webview  # noqa: F401
+    except ImportError:
+        print('error: the desktop app needs pywebview: pip install -e "./python[desktop]"', file=sys.stderr)
+        return 1
+    from .desktop.app import run
+
+    try:
+        run(debug=args.debug)
+    except FileNotFoundError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="socialeyes", description="SocialEyes study tools")
     p.add_argument("--version", action="version", version=f"socialeyes {__version__}")
@@ -163,6 +180,10 @@ def main(argv: list[str] | None = None) -> int:
     m.add_argument("out", help="session folder to create")
     m.add_argument("--seed", type=int, default=0)
     m.set_defaults(func=cmd_simulate)
+
+    a = sub.add_parser("app", help="open the desktop app (design studies in a window)")
+    a.add_argument("--debug", action="store_true", help="allow the browser developer tools (right-click > Inspect)")
+    a.set_defaults(func=cmd_app)
 
     args = p.parse_args(argv)
     return args.func(args)

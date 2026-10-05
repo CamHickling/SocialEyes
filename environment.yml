@@ -29,4 +29,5 @@ dependencies:
   - r-ordinal
   - pip:
       - opencv-python-headless>=4.9
+      - pywebview>=5  # the desktop app (socialeyes app)
       - -e ./python

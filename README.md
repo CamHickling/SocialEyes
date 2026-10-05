@@ -140,6 +140,7 @@ for mixed models in R.
 | Session log format (touches, scrolling, interactions, quality events) | ✅ | `docs/EVENT_LOG.md` (version 1) |
 | Session analysis: gestures, time on screen, touch→AOI, finger occlusion, quality checks | ✅ | `python/src/socialeyes/session/` (tested on simulated sessions) |
 | Experiment builder: guided form that writes study.yaml and CSV skeletons | ✅ | `builder/index.html` (open in a browser) |
+| Desktop app (Windows): Design tab edits study folders in place and runs the compiler's checks; Studies, Content, Phone and Data tabs to come | 🟡 | `socialeyes app` (`python/src/socialeyes/desktop/`) |
 | CSV format reference | ✅ | `docs/STUDY_DESIGN.md` (version 1) |
 | Android SocialEyes app: Instagram-style feed (stories row, comments sheet), sync patch, touch / scroll / viewport / quality logging, instructions, marker calibration, validation, questionnaires, image ratings, recognition test, camera check, front camera video, motion sensors, interruption detection | 🟡 | `android/` (tested on a Pixel 3) |
 | App: screen recording, Neon control | ⏳ | see [What the app doesn't do yet](#what-the-app-doesnt-do-yet) |
@@ -248,6 +249,26 @@ mappings, procedure rules and recording conflicts. It downloads a zip with
 listing what is still to add (images, avatars, AOIs, texts). It can also open an
 existing `study.yaml` to edit it; comments in the file are not kept, and the CSV
 files are only written if you ask for them.
+
+### Desktop app (Windows)
+
+The same builder also runs as a desktop app that works on study folders directly:
+
+```powershell
+. .\scripts\env.ps1
+socialeyes app
+```
+
+Its **Design** tab opens a study folder (or starts a new one and saves it to
+`studies/<study id>`), and **Save to study folder** writes `study.yaml` there. The
+previous `study.yaml` is kept as `study.yaml.bak`. CSV files and `NEXT_STEPS.txt`
+are created only if they don't exist yet, so your filled-in CSVs are never
+overwritten. Each save (and the **Check study** button) also runs the compiler's
+checks, the same as `socialeyes validate`: missing images, AOI sizes and mistakes
+in the CSVs. They appear next to the design checks. The Studies, Content, Phone
+and Data tabs are placeholders for now (see the [Roadmap](#roadmap)). The app
+needs `pywebview`, which `setup-toolchain.ps1` installs; in an older toolchain run
+`pip install pywebview`.
 
 ### Key ideas
 
@@ -620,6 +641,7 @@ python/
     study/compiler.py    loads + cross-checks a study folder, writes plans
     session/             reads session logs: gestures, exposure, touch->AOI,
                          occlusion, quality; simulate.py writes fake sessions
+    desktop/             the desktop app (`socialeyes app`): window + study-folder open/save/check
     cli.py               the `socialeyes` command
   tests/                 pytest suite (runs against studies/example)
 android/                 the SocialEyes Android app (Kotlin, Jetpack Compose)
@@ -692,7 +714,7 @@ Roughly in order:
       Studio or toolchain is needed. Tabs:
   - [ ] **Studies**: a list of your study folders with their status (designing, ready,
         collecting data, number of sessions); new study from blank or from the example
-  - [ ] **Design**: the experiment builder, editing the study folder in place (no zip); the
+  - [x] **Design**: the experiment builder, editing the study folder in place (no zip); the
         compiler's own checks (missing images, AOI sizes, CSV mistakes) shown next to the
         design checks. The standalone `builder/index.html` keeps working in a browser
   - [ ] **Content**: checklist of every image, avatar, video and AOI the design needs, found

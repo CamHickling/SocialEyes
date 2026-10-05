@@ -20,6 +20,7 @@ dependencies = [
 
 [project.optional-dependencies]
 test = ["pytest>=8"]
+desktop = ["pywebview>=5"]
 
 [project.scripts]
 socialeyes = "socialeyes.cli:main"
