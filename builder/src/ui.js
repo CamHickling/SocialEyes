@@ -23,6 +23,8 @@
     desktopError: null,
     // Phone tab: result of the last phone check / load, and the choices on the tab
     phone: { result: null, folder: null, serial: "", devices: [], updateApp: false, progress: null, error: null },
+    // Data tab: the study's folders and register, the phone's sessions, the last unload
+    data: { status: null, folder: null, unload: null, error: null },
   };
 
   const APP_TABS = [
@@ -542,6 +544,8 @@
     tabs.innerHTML = APP_TABS.map(([k, label]) => `<button type="button" data-action="tab:${k}" class="${ui.tab === k ? "on" : ""}">${label}</button>`).join("");
     if (ui.tab === "phone") {
       page.innerHTML = renderPhone();
+    } else if (ui.tab === "data") {
+      page.innerHTML = renderData();
     } else if (!onDesign) {
       const [, label, text] = APP_TABS.find(([k]) => k === ui.tab);
       page.innerHTML = `<h2>${label}</h2><p class="lead">${text}</p><p class="hint">Coming in a later version of the desktop app.</p>`;
@@ -636,8 +640,107 @@
 
   window.socialeyesProgress = (text) => {
     ui.phone.progress = text;
-    if (ui.tab === "phone") render();
+    if (ui.tab === "phone" || ui.tab === "data") render();
   };
+
+  // ------------------------------------------------------------ Data tab (desktop app)
+
+  const dataFolder = () => ui.data.folder || ui.folder;
+
+  function renderData() {
+    const D = ui.data, st = D.status, folder = dataFolder(), busy = !!ui.busy;
+    const dis = busy ? "disabled" : "";
+    const study = folder
+      ? `<p>Study: <b class="folder">${esc(folder)}</b> ${btn("data-folder", "Choose another…", "link", dis)}</p>`
+      : `<p>No study chosen. Open one in the Design tab, or ${btn("data-folder", "choose a study folder…", "link", dis)}</p>`;
+    let html = `
+      <h2>Data</h2>
+      <p class="lead">Copies the study's sessions off the phone, checks every file against the phone, makes the
+      second copy if you set one, runs the quality checks and records each session in <code>sessions.csv</code>.
+      Only then is the session deleted from the phone.</p>
+      <div class="card">${study}</div>`;
+    if (D.error) html += `<p class="error-box">${esc(D.error)}</p>`;
+    if (!st) return html + (folder && busy ? `<p class="hint">${esc(ui.busy)}</p>` : "");
+    const ph = st.phone || {};
+    html += `
+      <div class="card">
+        <h3>Folders on this computer</h3>
+        <p>Sessions: <b class="folder">${esc(st.data_dir)}</b> ${btn("data-open:data", "Open", "link", dis)}${btn("data-pick:data", "Change…", "link", dis)}</p>
+        <p>Second copy: ${st.second_copy_dir ? `<b class="folder">${esc(st.second_copy_dir)}</b> ${btn("data-pick:second", "Change…", "link", dis)}${btn("data-clear:second", "Stop making a second copy", "link danger", dis)}`
+          : `none ${btn("data-pick:second", "Choose a folder…", "link", dis)}`}</p>
+        <p class="hint">For example an encrypted or university drive. These folders are set for this computer only, not in the study.</p>
+      </div>
+      <div class="card">
+        <h3>Phone</h3>
+        ${ph.error ? `<p class="hint">${esc(ph.error)}</p>`
+          : `<p>${esc(ph.name)}: <b>${ph.sessions}</b> session${ph.sessions === 1 ? "" : "s"} of ${esc(st.study_id)} on the phone.</p>`}
+        <div class="row">${btn("data-refresh", "Refresh", "", dis)}${btn("data-unload", "Unload from phone", "primary", busy || ph.error || !ph.sessions ? "disabled" : "")}</div>
+        ${busy && ui.phone.progress ? `<p class="hint">${esc(ui.phone.progress)}</p>` : ""}
+      </div>`;
+    const u = D.unload;
+    if (u && u.error) html += `<p class="error-box">${esc(u.error)}</p>`;
+    if (u && u.sessions && u.sessions.length) {
+      html += `<h3>Last unload</h3><ul class="checks">${u.sessions.map((s) => {
+        const [cls, ic, msg] = s.error ? ["error", "✕", `not unloaded: ${s.error}`]
+          : s.deleted ? [s.warnings.length ? "warning" : "ok", s.warnings.length ? "!" : "✓",
+            `copied and checked${s.second_copy ? ", second copy checked" : ""}, deleted from the phone${s.warnings.length ? `. ${s.warnings.length} warning(s): ${s.warnings.join("; ")}` : ""}`]
+          : ["info", "→", `copied and checked; ${s.kept_reason}`];
+        return `<li class="${cls}"><div class="msg"><span class="ic">${ic}</span><span><b>${esc(s.participant_id)}</b> ${esc(s.session_uid)}: ${esc(msg)}</span></div></li>`;
+      }).join("")}</ul>`;
+    }
+    const rows = st.register || [];
+    html += `<h3>Sessions (${rows.length})</h3>`;
+    html += rows.length ? `<div class="table-wrap"><table class="register"><thead><tr><th>Participant</th><th>Started</th><th>Completed</th><th>Warnings</th><th>Phone</th><th>Notes</th></tr></thead><tbody>
+      ${rows.map((r) => `<tr><td>${esc(r.participant_id)}${r.duplicate_id ? ` <span class="pill">ID used twice</span>` : ""}${r.on_phone ? ` <span class="pill">still on phone</span>` : ""}</td>
+        <td>${esc((r.started || "").replace("T", " ").slice(0, 16))}</td><td>${r.completed === "yes" ? "yes" : `<b>${esc(r.completed || "?")}</b> ${esc(r.end_reason || "")}`}</td>
+        <td title="${esc(r.warnings)}">${esc(r.n_warnings || "0")}</td><td>${esc(r.phone)}</td><td>${esc(r.notes)}</td></tr>`).join("")}
+      </tbody></table></div><p class="hint">From <code>sessions.csv</code> in the sessions folder; hover a warning count to read the warnings. Add notes in Excel: the app keeps them.</p>`
+      : `<p class="hint">No sessions unloaded yet.</p>`;
+    return html;
+  }
+
+  async function dataRefresh() {
+    const D = ui.data, folder = dataFolder();
+    D.error = null;
+    if (!folder) { D.status = null; render(); return; }
+    try { D.status = await bridge("data_status", "Looking at the phone…", folder, ui.phone.serial || null); }
+    catch (e) { D.error = e.message; D.status = null; }
+    render();
+  }
+
+  async function dataUnload() {
+    const D = ui.data;
+    D.error = null;
+    ui.phone.progress = "Starting…";
+    try { D.unload = await bridge("data_unload", "Unloading…", dataFolder(), ui.phone.serial || null); }
+    catch (e) { D.error = e.message; }
+    ui.phone.progress = null;
+    await dataRefresh();
+  }
+
+  async function dataPick(which) {
+    try {
+      const start = which === "data" ? ui.data.status && ui.data.status.data_dir : ui.data.status && ui.data.status.second_copy_dir;
+      const path = await bridge("pick_folder", null, start || null);
+      if (!path) return;
+      await bridge("data_set_folder", null, dataFolder(), which, path);
+    } catch (e) { ui.data.error = e.message; }
+    await dataRefresh();
+  }
+
+  async function dataAct(name, arg) {
+    try {
+      if (name === "data-clear") await bridge("data_set_folder", null, dataFolder(), arg, null);
+      if (name === "data-open") { await bridge("open_path", null, ui.data.status.data_dir); return; }
+      if (name === "data-folder") {
+        const f = await bridge("pick_folder", null, dataFolder() || (ui.appInfo && ui.appInfo.studies_dir));
+        if (!f) return;
+        ui.data.folder = f;
+        ui.data.unload = null;
+      }
+    } catch (e) { ui.data.error = e.message; render(); return; }
+    await dataRefresh();
+  }
 
   function render() {
     if (!renderApp()) return;
@@ -905,7 +1008,12 @@
         ui.tab = args[0];
         window.scrollTo(0, 0);
         if (ui.tab === "phone" && !ui.phone.result && !ui.busy) { render(); phoneCheck(); return; }
+        if (ui.tab === "data" && !ui.busy) { render(); dataRefresh(); return; }
         break;
+      case "data-refresh": dataRefresh(); return;
+      case "data-unload": dataUnload(); return;
+      case "data-pick": dataPick(args[0]); return;
+      case "data-clear": case "data-open": case "data-folder": dataAct(name, args[0]); return;
       case "phone-check": phoneCheck(); return;
       case "phone-load": phoneLoad(); return;
       case "phone-folder": phoneChooseFolder(); return;

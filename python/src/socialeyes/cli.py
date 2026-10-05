@@ -7,6 +7,8 @@
     socialeyes simulate BUILD_DIR PARTICIPANT_ID OUT_DIR [--seed N]
     socialeyes phone-check [STUDY_DIR] [--serial S]
     socialeyes load STUDY_DIR [--serial S] [--update-app] [--anyway]
+    socialeyes unload STUDY_DIR [--serial S]
+    socialeyes folders STUDY_DIR [--data DIR] [--second-copy DIR|none]
     socialeyes app [--debug]
 """
 from __future__ import annotations
@@ -175,6 +177,51 @@ def cmd_load(args) -> int:
     return 0
 
 
+def cmd_unload(args) -> int:
+    from .phone.unload import unload
+
+    r = unload(args.study, serial=args.serial, progress=lambda s: print(s, flush=True))
+    if r.error:
+        print(f"error: {r.error}", file=sys.stderr)
+        return 1
+    if not r.sessions:
+        print(f"No sessions of {r.study_id} on the phone.")
+        return 0
+    failed = 0
+    for s in r.sessions:
+        if s.error:
+            failed += 1
+            print(f"  {s.participant_id} {s.session_uid}: NOT unloaded: {s.error}")
+            continue
+        state = "deleted from the phone" if s.deleted else f"left on the phone: {s.kept_reason}"
+        extra = ", second copy checked" if s.second_copy else ""
+        done = "" if s.completed is None else (" completed" if s.completed else " NOT completed")
+        print(f"  {s.participant_id} {s.session_uid}:{done}, copied and checked{extra}, {state}")
+        for w in s.warnings:
+            print(f"      warning: {w}")
+    print(f"Data folder: {r.data_dir} (register: sessions.csv)")
+    return 1 if failed else 0
+
+
+def cmd_folders(args) -> int:
+    from . import settings
+    from .phone.unload import study_id_of
+
+    sid = study_id_of(args.study)
+    changes = {}
+    if args.data:
+        changes["data_dir"] = str(Path(args.data).resolve())
+    if args.second_copy:
+        changes["second_copy_dir"] = None if args.second_copy.lower() == "none" else str(Path(args.second_copy).resolve())
+    if changes:
+        settings.set_study(sid, **changes)
+    second = settings.second_copy_dir(sid)
+    print(f"{sid}: data folder {settings.data_dir(sid)}")
+    print(f"{sid}: second copy {second if second else '(none)'}")
+    print(f"(saved in {settings.settings_path()})")
+    return 0
+
+
 def cmd_app(args) -> int:
     try:
         import webview  # noqa: F401
@@ -241,6 +288,17 @@ def main(argv: list[str] | None = None) -> int:
     ld.add_argument("--update-app", action="store_true", help="also install a newer SocialEyes app if there is one")
     ld.add_argument("--anyway", action="store_true", help="load despite warnings (battery, Do Not Disturb, ...)")
     ld.set_defaults(func=cmd_load)
+
+    ul = sub.add_parser("unload", help="copy the study's sessions off the phone, check them, then delete them there")
+    ul.add_argument("study", help="study folder (or its study.yaml)")
+    ul.add_argument("--serial", help="the phone to use when several are connected (see: adb devices)")
+    ul.set_defaults(func=cmd_unload)
+
+    fo = sub.add_parser("folders", help="show or set where this computer keeps a study's data and second copy")
+    fo.add_argument("study", help="study folder (or its study.yaml)")
+    fo.add_argument("--data", help="folder for the study's sessions (default: data/<study id>)")
+    fo.add_argument("--second-copy", help="folder for a checked second copy of every session, or 'none'")
+    fo.set_defaults(func=cmd_folders)
 
     a = sub.add_parser("app", help="open the desktop app (design studies in a window)")
     a.add_argument("--debug", action="store_true", help="allow the browser developer tools (right-click > Inspect)")

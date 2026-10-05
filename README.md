@@ -134,13 +134,13 @@ for mixed models in R.
 | AprilTag generation/detection, printable phone-case marker sheet | ✅ | `python/src/socialeyes/markers.py` |
 | Sync code (m-sequence) and validation dot layouts | ✅ | `design.py` |
 | Toolchain setup script (Windows) | ✅ | `scripts/setup-toolchain.ps1` |
-| `socialeyes` command-line tool (`validate`, `compile`, `case-sheet`, `phone-check`, `load`) | ✅ | `python/src/socialeyes/cli.py` |
+| `socialeyes` command-line tool (`validate`, `compile`, `case-sheet`, `phone-check`, `load`, `unload`, `folders`) | ✅ | `python/src/socialeyes/cli.py` |
 | Study compiler (CSV loading, cross-checks, plan export) | ✅ | `python/src/socialeyes/study/compiler.py` |
 | Example study (placeholder images) and tests | ✅ | `studies/example/`, `python/tests/` |
 | Session log format (touches, scrolling, interactions, quality events) | ✅ | `docs/EVENT_LOG.md` (version 1) |
 | Session analysis: gestures, time on screen, touch→AOI, finger occlusion, quality checks | ✅ | `python/src/socialeyes/session/` (tested on simulated sessions) |
 | Experiment builder: guided form that writes study.yaml and CSV skeletons | ✅ | `builder/index.html` (open in a browser) |
-| Desktop app (Windows): Design tab edits study folders in place and runs the compiler's checks; Phone tab loads studies onto the phone; Studies, Content and Data tabs to come | 🟡 | `socialeyes app` (`python/src/socialeyes/desktop/`) |
+| Desktop app (Windows): Design tab edits study folders in place and runs the compiler's checks; Phone tab loads studies onto the phone; Data tab unloads sessions with a register; Studies and Content tabs to come | 🟡 | `socialeyes app` (`python/src/socialeyes/desktop/`) |
 | CSV format reference | ✅ | `docs/STUDY_DESIGN.md` (version 1) |
 | Android SocialEyes app: Instagram-style feed (stories row, comments sheet), sync patch, touch / scroll / viewport / quality logging, instructions, marker calibration, validation, questionnaires, image ratings, recognition test, camera check, front camera video, motion sensors, interruption detection | 🟡 | `android/` (tested on a Pixel 3) |
 | App: screen recording, Neon control | ⏳ | see [What the app doesn't do yet](#what-the-app-doesnt-do-yet) |
@@ -266,8 +266,8 @@ are created only if they don't exist yet, so your filled-in CSVs are never
 overwritten. Each save (and the **Check study** button) also runs the compiler's
 checks, the same as `socialeyes validate`: missing images, AOI sizes and mistakes
 in the CSVs. They appear next to the design checks. The **Phone** tab loads the
-study onto the phone (see [Running the app](#running-the-app)). The Studies, Content
-and Data tabs are placeholders for now (see the [Roadmap](#roadmap)). The app
+study onto the phone and the **Data** tab copies sessions back off it (see [Running the
+app](#running-the-app)). The Studies and Content tabs are placeholders for now (see the [Roadmap](#roadmap)). The app
 needs `pywebview`, which `setup-toolchain.ps1` installs; in an older toolchain run
 `pip install pywebview`.
 
@@ -582,11 +582,41 @@ session. The first time the app goes full screen, Android shows a "Viewing full 
 notice; tap **Got it** during a test run so participants never see it.
 
 To unlock a test phone from the computer, put its PIN in `phone-pin.local` in the project
-root (git-ignored; never commit it) and run `.\scripts\unlock-phone.ps1`. Sessions are saved on the phone; copy them back and analyse them with:
+root (git-ignored; never commit it) and run `.\scripts\unlock-phone.ps1`.
+
+Sessions are saved on the phone. Copy them off with `socialeyes unload` (or the desktop
+app's **Data** tab, which does the same):
 
 ```powershell
-adb pull /sdcard/Android/data/org.socialeyes.pictogram/files/data ..\data
-socialeyes session ..\data\example\P001\<session folder> --build ..\build\example
+socialeyes unload studies/example
+```
+
+For every session of the study on the phone it reads each file's SHA-256 on the phone,
+copies the session into the study's data folder and checks every file, makes the second
+copy if one is set (and checks it), runs the session analysis (`analysis_out/<study>/…`)
+and records the session in `sessions.csv` in the data folder. **Only then** is the session
+deleted from the phone; if anything fails, it stays there. A session that hasn't ended
+while SocialEyes is open on the phone may still be recording, so it is copied but left on
+the phone until you close the app and unload again.
+
+The data folder is `data/<study id>` unless you choose another one, for example an
+encrypted or university drive. That choice, and the optional second copy, belong to
+this computer, not the study:
+
+```powershell
+socialeyes folders studies/example --data E:\secure\example --second-copy \\server\lab\example
+socialeyes folders studies/example --second-copy none      # stop making a second copy
+```
+
+`sessions.csv` has one row per session: participant, start time, phone, app version,
+completed or not, duration, group, the study build it ran (`package_sha256`), quality
+warnings, a flag when a participant ID was used twice, and a `notes` column. Notes and any
+columns you add in Excel are kept when the app updates the file (close it in Excel first).
+
+To analyse a single session by hand:
+
+```powershell
+socialeyes session data\example\P001\<session folder> --build build\example
 ```
 
 ### What the app doesn't do yet
@@ -679,7 +709,9 @@ python/
     session/             reads session logs: gestures, exposure, touch->AOI,
                          occlusion, quality; simulate.py writes fake sessions
     desktop/             the desktop app (`socialeyes app`): window + study-folder open/save/check
-    phone/               adb, phone readiness checks, loading studies (`socialeyes load`)
+    phone/               adb, phone readiness checks, loading studies (`socialeyes load`),
+                         unloading sessions (`socialeyes unload`)
+    settings.py          this computer's data / second-copy folders per study
     cli.py               the `socialeyes` command
   tests/                 pytest suite (runs against studies/example)
 android/                 the SocialEyes Android app (Kotlin, Jetpack Compose)
@@ -761,7 +793,7 @@ Roughly in order:
         phone in one step; install or update the app if needed; check the phone is ready
         (storage, battery, Do Not Disturb, camera permission). Load only unlocks when the
         study validates
-  - [ ] **Data (data unloader)**: copy every new session off the phone, check each file
+  - [x] **Data (data unloader)**: copy every new session off the phone, check each file
         arrived intact (checksums), then delete it from the phone so participant data never
         stays on the device; run the quality checks and show a summary; keep a session
         register per study (participant, date, phone, completed, warnings; flags participant

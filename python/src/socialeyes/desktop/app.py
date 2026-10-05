@@ -39,7 +39,7 @@ def _reply(fn):
     def wrapper(*args, **kwargs):
         try:
             return {"ok": fn(*args, **kwargs)}
-        except (FolderError, OSError) as e:
+        except (ValueError, OSError) as e:  # FolderError, bad study folders, files: plain messages
             return {"error": str(e)}
         except Exception as e:  # a bug: show it rather than leave the page waiting
             traceback.print_exc()
@@ -109,6 +109,59 @@ class Api:
             return [{"serial": d.serial, "state": d.state, "model": d.model} for d in Adb().devices()]
         except AdbError:
             return []
+
+    # ---------------------------------------------------------- Data tab
+
+    @_reply
+    def data_status(self, folder: str, serial: str | None = None) -> dict:
+        """The study's folders, its register, and how many of its sessions are on the phone."""
+        from .. import settings
+        from ..phone.adb import Adb, AdbError
+        from ..phone.unload import phone_sessions, study_id_of
+        from ..session import register
+
+        sid = study_id_of(folder)
+        data = settings.data_dir(sid)
+        second = settings.second_copy_dir(sid)
+        _, rows = register.read(data / register.REGISTER)
+        phone: dict = {}
+        try:
+            adb = Adb(serial or None)
+            device = adb.choose()
+            phone = {"name": device.model or device.serial, "sessions": len(phone_sessions(adb, sid))}
+        except AdbError as e:
+            phone = {"error": str(e)}
+        return {"study_id": sid, "data_dir": str(data), "second_copy_dir": str(second) if second else None,
+                "register": rows, "phone": phone}
+
+    @_reply
+    def data_set_folder(self, folder: str, which: str, path: str | None) -> bool:
+        from .. import settings
+        from ..phone.unload import study_id_of
+
+        key = {"data": "data_dir", "second": "second_copy_dir"}[which]
+        settings.set_study(study_id_of(folder), **{key: path or None})
+        return True
+
+    @_reply
+    def data_unload(self, folder: str, serial: str | None = None) -> dict:
+        from ..phone.unload import unload
+
+        return unload(folder, serial=serial or None, progress=self._progress).to_json()
+
+    @_reply
+    def open_path(self, path: str) -> bool:
+        """Shows a folder in Explorer."""
+        import os
+        import subprocess
+
+        if not Path(path).exists():
+            raise FolderError(f"{path} doesn't exist yet")
+        if os.name == "nt":
+            os.startfile(path)  # noqa: S606 - a folder the app itself chose
+        else:
+            subprocess.Popen(["open" if sys.platform == "darwin" else "xdg-open", path])
+        return True
 
     def _progress(self, text: str) -> None:
         """Shows what a long phone operation is doing, while it runs."""
