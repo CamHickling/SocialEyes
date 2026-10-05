@@ -4,7 +4,8 @@ from collections import Counter
 import pytest
 
 from conftest import EXAMPLE, edit_file
-from socialeyes.study.compiler import StudyError, build_plans, check_study, compile_study, load_study
+from socialeyes.study.compiler import (StudyError, build_plans, check_study, compile_study, load_study,
+                                       package_hash)
 
 
 def errors_of(path):
@@ -90,6 +91,21 @@ def test_compile_writes_package(example, tmp_path):
     assert sorted(p.name for p in (out / "tags").iterdir()) == [f"tag36h11_{i}.png" for i in range(4)]
     aoi = json.loads((out / "aois" / "crit01_original.json").read_text())
     assert [a["name"] for a in aoi["aois"]] == ["face", "waist", "legs"]
+
+
+def test_package_checksums_identify_the_build(example, tmp_path):
+    a, _ = compile_study(example, tmp_path / "a")
+    b, _ = compile_study(example, tmp_path / "b")
+    sums = (a / "files.sha256").read_text(encoding="utf-8").splitlines()
+    files = {line.split("  ", 1)[1] for line in sums}
+    assert {"study.json", "plans/P001.json", "aois/crit01_original.json"} <= files
+    assert files == {p.relative_to(a).as_posix() for p in a.rglob("*") if p.is_file()} - {"files.sha256"}
+    assert len(package_hash(a)) == 64
+    assert package_hash(a) == package_hash(b)  # same study, same build
+    edit_file(example / "study.yaml", "title: ", "title: Changed ")
+    c, _ = compile_study(example, tmp_path / "c")
+    assert package_hash(c) != package_hash(a)
+    assert package_hash(tmp_path) is None  # not a build
 
 
 def test_compile_refuses_to_overwrite(example, tmp_path):

@@ -124,6 +124,8 @@ class Session(
                 put("study_id", pkg.study.id)
                 put("study_version", pkg.study.version)
                 put("participant_id", participantId)
+                put("group_key", plan.groupKey)
+                pkg.packageSha256()?.let { put("package_sha256", it) }
                 put("session_uid", uid)
                 put("app_version", BuildConfig.VERSION_NAME)
                 put("started_wall", now.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME))

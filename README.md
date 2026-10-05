@@ -28,11 +28,11 @@
 <br>
 
 > [!WARNING]
-> **Work in progress (v0.1).** The study format (v1), the study compiler and
-> command-line tool, the experiment builder and the phone app work. Neon control
-> in the app and the gaze analysis pipeline are **not built yet**. Each part
-> below is marked ✅ working, 🟡 partial or ⏳ planned, so you know what you can
-> rely on today. Feedback from other labs is very welcome.
+> **Work in progress (v0.1).** The study format (v1), the session log format (v1),
+> the study compiler and command-line tool, the experiment builder and the phone
+> app work. Neon control in the app and the gaze analysis pipeline are **not built
+> yet**. Each part below is marked ✅ working, 🟡 partial or ⏳ planned, so you know
+> what you can rely on today. Feedback from other labs is very welcome.
 
 ## <img src="docs/assets/socialeyes-mark.svg" height="28" align="top"> What is SocialEyes?
 
@@ -137,7 +137,7 @@ for mixed models in R.
 | `socialeyes` command-line tool (`validate`, `compile`, `case-sheet`) | ✅ | `python/src/socialeyes/cli.py` |
 | Study compiler (CSV loading, cross-checks, plan export) | ✅ | `python/src/socialeyes/study/compiler.py` |
 | Example study (placeholder images) and tests | ✅ | `studies/example/`, `python/tests/` |
-| Session log format (touches, scrolling, interactions, quality events) | 🟡 | `docs/EVENT_LOG.md` (draft; the app must implement it) |
+| Session log format (touches, scrolling, interactions, quality events) | ✅ | `docs/EVENT_LOG.md` (version 1) |
 | Session analysis: gestures, time on screen, touch→AOI, finger occlusion, quality checks | ✅ | `python/src/socialeyes/session/` (tested on simulated sessions) |
 | Experiment builder: guided form that writes study.yaml and CSV skeletons | ✅ | `builder/index.html` (open in a browser) |
 | CSV format reference | ✅ | `docs/STUDY_DESIGN.md` (version 1) |
@@ -669,7 +669,7 @@ Roughly in order:
 - [x] **Study compiler** + `socialeyes` CLI (`validate`, `compile`, `case-sheet`)
 - [x] A complete **example study** with placeholder images
 - [x] Finalise the CSV formats: version 1 (`docs/STUDY_DESIGN.md`)
-- [x] Session **log format** and touch / scrolling / quality analysis
+- [x] Session **log format** (version 1, `docs/EVENT_LOG.md`) and touch / scrolling / quality analysis
       (tested on simulated sessions)
 - [ ] The **Android app**: feed rendering, procedure steps, event logging
       (per `docs/EVENT_LOG.md`), sync patch, Neon real-time API control

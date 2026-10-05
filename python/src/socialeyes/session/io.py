@@ -40,6 +40,16 @@ class Session:
         return self.meta["participant_id"]
 
     @property
+    def group_key(self) -> Optional[str]:
+        """The participant's between-subjects group (None in sessions recorded before the app wrote it)."""
+        return self.meta.get("group_key")
+
+    @property
+    def package_sha256(self) -> Optional[str]:
+        """Hash of the compiled study package the session ran (see compiler.package_hash)."""
+        return self.meta.get("package_sha256")
+
+    @property
     def device(self) -> dict:
         return self.meta["device"]
 

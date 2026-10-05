@@ -25,6 +25,7 @@ writes the package the phone app loads::
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import re
 import shutil
@@ -878,7 +879,34 @@ def compile_study(study_dir: Path | str, out_dir: Path | str | None = None, clea
 
     for tag_id in b.study.markers.screen_tag_ids:
         write_tag_png(tag_id, out / "tags" / f"tag36h11_{tag_id}.png")
+    write_checksums(out)
     return out, rep
+
+
+CHECKSUM_FILE = "files.sha256"
+
+
+def write_checksums(build_dir: Path) -> str:
+    """Write files.sha256 (sha256sum format, one line per file of the package) and return the package hash.
+
+    The package hash is the SHA-256 of files.sha256 itself, so it changes when any
+    file does. The app copies it into session.json as ``package_sha256``.
+    """
+    build_dir = Path(build_dir)
+    lines = []
+    for path in sorted(build_dir.rglob("*"), key=lambda p: p.relative_to(build_dir).as_posix()):
+        rel = path.relative_to(build_dir).as_posix()
+        if path.is_file() and rel != CHECKSUM_FILE:
+            lines.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {rel}\n")
+    data = "".join(lines).encode("utf-8")
+    (build_dir / CHECKSUM_FILE).write_bytes(data)
+    return hashlib.sha256(data).hexdigest()
+
+
+def package_hash(build_dir: Path | str) -> Optional[str]:
+    """The package hash of a compiled study (None for builds made before files.sha256 existed)."""
+    path = Path(build_dir) / CHECKSUM_FILE
+    return hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else None
 
 
 def _study_manifest(b: StudyBundle) -> dict:

@@ -8,9 +8,16 @@ from .io import Session
 THERMAL_LEVELS = ("none", "light", "moderate", "severe", "critical", "emergency", "shutdown")
 
 
-def session_quality(s: Session) -> dict:
-    """Numbers and warnings to decide whether a session is usable."""
+def session_quality(s: Session, build_sha256: str | None = None) -> dict:
+    """Numbers and warnings to decide whether a session is usable.
+
+    ``build_sha256`` is the package hash of the compiled study the session is
+    analysed against; a session that ran a different build is flagged.
+    """
     warnings: list[str] = []
+    if build_sha256 and s.package_sha256 and build_sha256 != s.package_sha256:
+        warnings.append("the session ran a different build of the study than the one it is analysed with "
+                        "(package_sha256 differs): plans, images or AOIs may not match")
     end = s.meta.get("end") or {}
     completed = end.get("reason") == "completed"
     if not end:
@@ -71,6 +78,14 @@ def session_quality(s: Session) -> dict:
     if thermal_max and THERMAL_LEVELS.index(thermal_max) >= THERMAL_LEVELS.index("moderate"):
         warnings.append(f"the phone got hot (thermal status {thermal_max!r}); Android may have slowed it down")
 
+    camera_checks = []
+    for _, e in s.events_of("camera_check").iterrows():
+        face_s = e.get("face_s")
+        camera_checks.append({"step_id": e["step_id"], "result": e["result"],
+                              "face_s": None if face_s is None or face_s != face_s else float(face_s)})
+        if e["result"] != "ok":
+            warnings.append(f"camera check {e['step_id']!r} failed: no face was held in view, "
+                            "the front camera video may not show the face")
     camera = camera_quality(s)
     if camera:
         warnings += camera.pop("warnings")
@@ -82,6 +97,8 @@ def session_quality(s: Session) -> dict:
     return {
         "participant_id": s.participant_id,
         "session_uid": s.meta.get("session_uid"),
+        "group_key": s.group_key,
+        "package_sha256": s.package_sha256,
         "completed": completed,
         "end_reason": end.get("reason"),
         "duration_s": round((s.end_ns - s.start_ns) / 1e9, 3),
@@ -101,6 +118,7 @@ def session_quality(s: Session) -> dict:
         "neon_disconnects": disconnects,
         "orientation_changes": n_rotations,
         "thermal_max": thermal_max,
+        "camera_checks": camera_checks,
         "camera": camera,
         "sensors": sensors,
         "event_types": dict(sorted(ev["type"].value_counts().to_dict().items())) if len(types) else {},

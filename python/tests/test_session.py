@@ -14,7 +14,7 @@ from socialeyes.session.simulate import simulate_session
 from socialeyes.session.touch import _distance_to_polygon, occlusion, touch_targets
 from socialeyes.session.viewport import Layout
 from socialeyes.study.aoi import AOI, AOISet
-from socialeyes.study.compiler import check_study, compile_study
+from socialeyes.study.compiler import check_study, compile_study, package_hash
 
 MS = 1_000_000
 
@@ -230,6 +230,17 @@ def test_quality_flags_problems(tmp_path):
     assert any("asleep" in w for w in q["warnings"])
 
 
+def test_quality_reports_camera_checks(tmp_path):
+    events = [{"t_ns": 1, "type": "camera_check", "step_id": "cam1", "result": "ok", "face_s": 3.4},
+              {"t_ns": 2, "type": "camera_check", "step_id": "cam2", "result": "failed", "face_s": None}]
+    write_session(tmp_path, minimal_meta(), events, [])
+    q = session_quality(load_session(tmp_path))
+    assert q["camera_checks"] == [{"step_id": "cam1", "result": "ok", "face_s": 3.4},
+                                  {"step_id": "cam2", "result": "failed", "face_s": None}]
+    assert [w for w in q["warnings"] if "camera check" in w] == [
+        "camera check 'cam2' failed: no face was held in view, the front camera video may not show the face"]
+
+
 # ---------------------------------------------------------------- simulated end to end
 
 
@@ -247,6 +258,8 @@ def test_simulated_session_round_trip(simulated):
     q = r["quality"]
     assert q["completed"] and q["warnings"] == []
     plan = json.loads((build / "plans" / "P003.json").read_text())
+    assert q["group_key"] == plan["group_key"] != ""
+    assert q["package_sha256"] == package_hash(build)
     feed = {e["post_id"]: e for e in plan["feed"]}
 
     # every post was scrolled past, and each exposure row knows its condition
@@ -276,6 +289,12 @@ def test_simulation_is_reproducible(simulated, tmp_path):
     simulate_session(build, "P003", tmp_path / "again", seed=3)
     for name in ("events.jsonl", "viewport.csv", "touch.csv"):
         assert (tmp_path / "again" / name).read_bytes() == (session / name).read_bytes()
+
+
+def test_session_from_another_build_is_flagged(simulated):
+    _, session = simulated
+    q = session_quality(load_session(session), build_sha256="0" * 64)
+    assert any("different build" in w for w in q["warnings"])
 
 
 def test_session_cli(simulated, tmp_path, capsys):

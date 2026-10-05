@@ -8,6 +8,7 @@ from typing import Optional
 import pandas as pd
 
 from ..study.aoi import aoiset_from_json
+from ..study.compiler import package_hash
 from .gestures import GestureParams, strokes
 from .io import load_session
 from .quality import session_quality
@@ -34,6 +35,7 @@ def analyze_session(session_dir: Path | str, build_dir: Path | str | None = None
     layout = Layout(s.viewport)
     plan_posts: dict[str, dict] = {}
     aois, sizes = {}, {}
+    build_sha256 = None
     if build_dir is not None:
         build = Path(build_dir)
         manifest = json.loads((build / "study.json").read_text(encoding="utf-8"))
@@ -43,6 +45,7 @@ def analyze_session(session_dir: Path | str, build_dir: Path | str | None = None
         plan_path = build / "plans" / f"{s.participant_id}.json"
         plan = json.loads(plan_path.read_text(encoding="utf-8"))
         plan_posts = {e["post_id"]: e for e in plan["feed"]}
+        build_sha256 = package_hash(build)
         for image_id, img in manifest["images"].items():
             sizes[image_id] = (img["width"], img["height"])
             if img["aoi"]:
@@ -51,7 +54,7 @@ def analyze_session(session_dir: Path | str, build_dir: Path | str | None = None
     _, feed_end = s.feed_window()
     targets = touch_targets(s.touch, layout, {p: e["image_id"] for p, e in plan_posts.items()}, aois, sizes)
     results = {
-        "quality": session_quality(s),
+        "quality": session_quality(s, build_sha256),
         "strokes": strokes(s.touch, s.px_per_dp, params),
         "exposure": layout.exposure(feed_end, s.feed_area),
         "touch_targets": targets.drop(columns="image_screen_w"),

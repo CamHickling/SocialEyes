@@ -9,6 +9,7 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.intOrNull
 import java.io.File
+import java.security.MessageDigest
 
 /**
  * The package written by `socialeyes compile` (docs/STUDY_DESIGN.md, "What compile writes"):
@@ -193,6 +194,15 @@ class StudyPackage(val dir: File, val manifest: StudyManifest) {
     val steps: List<Step> = manifest.study.procedure.map(::Step)
 
     fun file(relative: String): File = File(dir, relative)
+
+    /**
+     * SHA-256 of the package's files.sha256 (written by the compiler), which identifies
+     * this exact build. Null for packages compiled before the compiler wrote it.
+     */
+    fun packageSha256(): String? {
+        val sums = File(dir, "files.sha256").takeIf { it.isFile } ?: return null
+        return MessageDigest.getInstance("SHA-256").digest(sums.readBytes()).joinToString("") { "%02x".format(it) }
+    }
 
     fun participantIds(): List<String> =
         File(dir, "plans").listFiles { f -> f.isFile && f.name.endsWith(".json") }

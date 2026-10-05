@@ -17,6 +17,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+from ..study.compiler import package_hash
 from .io import FORMAT_VERSION, write_session
 
 SCREEN_W, SCREEN_H, DPI = 1080, 2400, 420
@@ -30,8 +31,10 @@ HEADER_H, LABEL_H, ACTIONS_H, CAPTION_H, COMMENT_H = (round(v * DP) for v in (56
 
 
 class _Sim:
-    def __init__(self, manifest: dict, plan: dict, seed: int, sensors: Optional[bool]):
+    def __init__(self, manifest: dict, plan: dict, seed: int, sensors: Optional[bool],
+                 package_sha256: Optional[str] = None):
         self.m, self.plan = manifest, plan
+        self.package_sha256 = package_sha256
         self.study = manifest["study"]
         self.rng = random.Random(f"{seed}:{plan['participant_id']}")
         self.t0 = 3_600_000_000_000 + self.rng.randrange(10**12)  # elapsed ns at session start
@@ -370,6 +373,8 @@ class _Sim:
             "study_id": self.plan["study_id"],
             "study_version": self.plan["study_version"],
             "participant_id": self.plan["participant_id"],
+            "group_key": self.plan.get("group_key", ""),
+            **({"package_sha256": self.package_sha256} if self.package_sha256 else {}),
             "session_uid": f"{self.plan['participant_id']}-sim",
             "app_version": "simulated",
             "started_wall": "2026-10-02T10:00:00.000+00:00",
@@ -410,7 +415,8 @@ def simulate_session(build_dir: Path | str, participant_id: str, out_dir: Path |
     build = Path(build_dir)
     manifest = json.loads((build / "study.json").read_text(encoding="utf-8"))
     plan = json.loads((build / "plans" / f"{participant_id}.json").read_text(encoding="utf-8"))
-    meta, events, viewport, touch, sensor_rows, camera = _Sim(manifest, plan, seed, sensors).run()
+    meta, events, viewport, touch, sensor_rows, camera = _Sim(manifest, plan, seed, sensors,
+                                                              package_hash(build)).run()
     out = Path(out_dir)
     write_session(out, meta, events, viewport, touch, sensor_rows, camera)
     if camera:

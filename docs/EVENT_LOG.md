@@ -1,12 +1,18 @@
 # Session log format
 
 > [!NOTE]
-> **Draft (format version 1).** This is the contract between the Pictogram app
+> **Format version 1.** This is the contract between the Pictogram app
 > (which writes these files) and the Python analysis (`socialeyes.session`,
 > which reads them). The app (`android/`) writes session.json, events.jsonl,
-> viewport.csv, touch.csv, video.csv, sensors.csv and the front camera files;
-> screen recording is not built yet. `socialeyes.session.simulate` writes realistic fake
-> sessions in this format.
+> viewport.csv, touch.csv, video.csv, sensors.csv and the front camera files.
+> Parts marked **(planned)** are reserved names for features that are not built yet
+> (screen recording, Neon control); the app does not write them today.
+> `socialeyes.session.simulate` writes realistic fake sessions in this format.
+
+**Changes to the format.** Version 1 only grows: new event types, new optional
+fields and new CSV columns at the end of a row. Readers ignore what they don't know,
+so older readers keep working. Renaming or removing anything, or changing what a
+field means, makes it format version 2.
 
 One folder per session:
 
@@ -17,7 +23,7 @@ data/<study id>/<participant id>/<session uid>/
   viewport.csv     where each post (and its parts) is on screen, per drawn frame
   touch.csv        raw touch points                    (logging.touches)
   sensors.csv      accelerometer / gyroscope / rotation (logging.sensors)
-  screen.mp4       screen recording                    (logging.screen_recording)
+  screen.mp4       screen recording                    (logging.screen_recording; planned)
   camera/front_000.mp4, front_001.mp4, ...   front camera video   (logging.front_camera)
   camera_frames.csv   one timestamp per front camera frame      (logging.front_camera)
 ```
@@ -63,6 +69,8 @@ the analysis map a screen point to exact image pixels.
   "study_id": "example",
   "study_version": 1,
   "participant_id": "P001",
+  "group_key": "comments=appearance",
+  "package_sha256": "3f9c…e1a4",
   "session_uid": "P001-20261002T101500",
   "app_version": "0.1.0",
   "started_wall": "2026-10-02T10:15:00.123+02:00",
@@ -73,13 +81,25 @@ the analysis map a screen point to exact image pixels.
     "density_dpi": 420, "xdpi": 428.6, "ydpi": 427.3, "refresh_hz": 60.0, "font_scale": 1.0
   },
   "feed_area": [0, 210, 1080, 2400],
-  "logging": {"touches": true, "sensors": false, "sensor_hz": 50,
+  "sync_patch": [1000, 2320, 1080, 2400],
+  "logging": {"touches": true, "sensors": true, "sensor_hz": 50,
               "screen_recording": false, "screen_recording_fps": 30,
               "front_camera": {"enabled": false}},
+  "sensors": {"hz": 50, "accel": "LSM6DSR Accelerometer", "gyro": "LSM6DSR Gyroscope",
+              "rotation": "Game Rotation Vector"},
   "camera": {"lens": "front", "width": 1024, "height": 768, "fps": 30, "timestamp_source": "realtime", "orientation": 270},
   "end": {"reason": "completed", "clock": {"elapsed_ns": 0, "uptime_ns": 0, "wall_ms": 0}}
 }
 ```
+
+`group_key` is the participant's between-subjects group, copied from their plan
+(`""` when the study has no between-subjects factors). `package_sha256` identifies
+the exact compiled study the session ran: the SHA-256 of the package's
+`files.sha256`, which the compiler writes with one checksum per file. If the study is
+recompiled after a change, sessions from before and after can be told apart, and
+`socialeyes session --build` warns when the session ran a different build than the
+one it is analysed with. Both fields are absent in sessions recorded before the app
+wrote them.
 
 `logging` is a copy of the study's `logging:` section. `camera` (only when
 recording the front camera) gives the resolution
@@ -155,7 +175,7 @@ the type. Unknown types must be ignored by readers, so the app can add new ones.
 | type | fields |
 |---|---|
 | `sync_patch` | `level` (0/1): every change of the sync patch |
-| `neon` | `status` (`connected`, `disconnected`, `recording_start`, `recording_stop`), optional `recording_id` |
+| `neon` | **(planned)** `status` (`connected`, `disconnected`, `recording_start`, `recording_stop`), optional `recording_id` |
 
 **Session quality**
 
@@ -168,7 +188,7 @@ the type. Unknown types must be ignored by readers, so the app can add new ones.
 | `brightness` | `value` (0-1); at start and on every change |
 | `jank` | `frames_dropped`, `longest_frame_ms`: at most once per second, only when frames were dropped |
 | `battery` | `level` (0-1), `temp_c`: once per minute |
-| `screen_recording` | `status` (`started`, `stopped`), `file` |
+| `screen_recording` | **(planned)** `status` (`started`, `stopped`), `file` |
 | `thermal` | `status` (`none`, `light`, `moderate`, `severe`, `critical`, `emergency`, `shutdown`; Android's `PowerManager` thermal status): at start and on every change |
 | `camera` | `status` (`started`, `segment`, `stopped`, `error`), `file` (on `started`/`segment`), `message` (on `error`) |
 | `camera_check` | `step_id`, `result` (`ok` or `failed`), `face_s` (seconds until a face was held in view) |
@@ -309,7 +329,7 @@ was covered.
 
 | file | contents |
 |---|---|
-| `quality.json` | duration, completed?, time in background, interruptions (count and seconds per kind), Do Not Disturb at start, dropped frames, phone slept?, Neon disconnects, thermal status, front camera checks, motion sensor rate and gaps |
+| `quality.json` | duration, completed?, time in background, interruptions (count and seconds per kind), Do Not Disturb at start, dropped frames, phone slept?, Neon disconnects, thermal status, camera framing checks (`camera_checks`: result and seconds to a face, with a warning when one failed), front camera segments, dropped frames and coverage, motion sensor rate and gaps, the session's `group_key` and `package_sha256` (with a warning when it differs from the `--build` package) |
 | `strokes.csv` | one row per finger stroke: duration, distance, speed, `gesture` = `tap`, `double_tap`, `long_press`, `scroll`, `fling`, `pinch` |
 | `exposure.csv` | per post and element: seconds on screen (any part / fully / area-weighted), first time seen, times scrolled into view |
 | `touch_targets.csv` | every touch sample mapped to post, element, image pixel and AOI |
