@@ -433,6 +433,10 @@ def _push_verified(adb: Adb, study: StudyInfo, progress: Callable[[str], None]) 
         raise AdbError(f"{len(bad)} file(s) didn't arrive intact (e.g. {bad[0]}); nothing was replaced. "
                        "Check the cable and try again.")
     adb.shell(f"rm -rf {final} && mv {staging} {final} && rmdir {APP_FILES}/incoming 2>/dev/null; true", check=True)
+    # Folders adb creates are drwxrws--- (shell, ext_data_rw); from Android 13 or so the app is
+    # not in that group and can't open them, so make the study readable. Folders the app made
+    # itself aren't ours to chmod (and don't need it), hence the ignored errors.
+    adb.shell(f"chmod a+rx {APP_FILES} {APP_FILES}/studies 2>/dev/null; chmod -R a+rX {final}", check=True)
 
 
 def expected_hashes(build: Path) -> dict:
