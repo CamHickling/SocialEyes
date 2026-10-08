@@ -146,3 +146,21 @@ def test_devices_and_choose(monkeypatch):
     with pytest.raises(AdbError, match="More than one"):
         Adb(exe=Path("adb")).choose()
     assert Adb(serial="B", exe=Path("adb")).choose().serial == "B"
+
+
+def test_same_phone_on_usb_and_wifi_counts_once(monkeypatch):
+    listing = ("List of devices attached\n"
+               "128.189.50.150:37063 device product:rtwo_ge model:motorola_edge_40_pro device:rtwo\n"
+               "ZY22HW42W8 device product:rtwo_ge model:motorola_edge_40_pro device:rtwo\n")
+
+    def run(self, *args, **kwargs):
+        return "ZY22HW42W8\n" if args[0] == "shell" else listing
+    monkeypatch.setattr(Adb, "run", run)
+    assert [d.serial for d in Adb(exe=Path("adb")).devices()] == ["ZY22HW42W8"]  # USB preferred
+    listing = "List of devices attached\n128.189.50.150:37063 device model:motorola_edge_40_pro\n"
+    wifi = Adb(exe=Path("adb")).choose()
+    assert (wifi.serial, wifi.id) == ("128.189.50.150:37063", "ZY22HW42W8")
+    listing = ("List of devices attached\n128.189.50.150:37063 device model:motorola_edge_40_pro\n"
+               "ZY22HW42W8 device model:motorola_edge_40_pro\n")
+    assert Adb(serial="128.189.50.150:37063", exe=Path("adb")).choose().serial == "128.189.50.150:37063"
+    assert Adb(serial="128.189.50.150:37063", exe=Path("adb")).choose().id == "ZY22HW42W8"

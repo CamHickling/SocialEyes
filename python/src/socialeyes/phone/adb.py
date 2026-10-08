@@ -38,10 +38,20 @@ class Device:
     serial: str
     state: str          # device, unauthorized, offline, ...
     model: str = ""
+    hw_serial: str = ""  # the phone's own serial; differs from `serial` over Wi-Fi (ip:port)
 
     @property
     def ready(self) -> bool:
         return self.state == "device"
+
+    @property
+    def wireless(self) -> bool:
+        return ":" in self.serial or "._adb-tls-connect." in self.serial
+
+    @property
+    def id(self) -> str:
+        """A name for the phone that stays the same however it is connected."""
+        return self.hw_serial or self.serial
 
 
 class Adb:
@@ -65,7 +75,7 @@ class Adb:
         """Runs `command` in the phone's shell; returns its output (stdout and stderr)."""
         return self.run("shell", command, timeout=timeout, check=check).replace("\r\n", "\n")
 
-    def devices(self) -> list[Device]:
+    def devices(self, one_per_phone: bool = True) -> list[Device]:
         out = Adb(exe=self.exe).run("devices", "-l", timeout=20)
         found = []
         for line in out.splitlines()[1:]:
@@ -74,19 +84,37 @@ class Adb:
                 continue
             model = next((p.split(":", 1)[1].replace("_", " ") for p in parts[2:] if p.startswith("model:")), "")
             found.append(Device(parts[0], parts[1], model))
-        return found
+        return self._one_per_phone(found) if one_per_phone else found
+
+    def _one_per_phone(self, found: list[Device]) -> list[Device]:
+        """A phone on USB and Wi-Fi at once is listed twice; keep one entry per phone (USB first)."""
+        if not any(d.wireless for d in found):
+            return found
+        out, seen = [], set()
+        for d in sorted(found, key=lambda d: d.wireless):
+            if d.ready and d.wireless:
+                hw = Adb(d.serial, exe=self.exe).shell("getprop ro.serialno", timeout=20).strip()
+                d = Device(d.serial, d.state, d.model, hw)
+            elif d.ready:
+                d = Device(d.serial, d.state, d.model, d.serial)
+            if d.hw_serial:
+                if d.hw_serial in seen:
+                    continue
+                seen.add(d.hw_serial)
+            out.append(d)
+        return out
 
     def choose(self) -> Device:
         """Selects the phone to use (the given serial, or the only one connected)."""
-        devices = self.devices()
+        devices = self.devices(one_per_phone=not self.serial)
         if self.serial:
             match = [d for d in devices if d.serial == self.serial]
             if not match:
                 raise AdbError(f"phone {self.serial} is not connected")
             device = match[0]
         elif not devices:
-            raise AdbError("No phone found. Connect it by USB and turn on USB debugging "
-                           "(Settings > Developer options).")
+            raise AdbError("No phone found. Connect it by USB and turn on USB debugging, or connect over "
+                           "Wi-Fi with wireless debugging (Settings > Developer options).")
         elif len(devices) > 1:
             names = ", ".join(f"{d.serial} ({d.model or d.state})" for d in devices)
             raise AdbError(f"More than one phone is connected ({names}); choose one.")
@@ -98,4 +126,7 @@ class Adb:
         if not device.ready:
             raise AdbError(f"The phone is connected but {device.state}; unplug it and plug it in again.")
         self.serial = device.serial
+        if device.wireless and not device.hw_serial:
+            device = Device(device.serial, device.state, device.model,
+                            self.shell("getprop ro.serialno", timeout=20).strip())
         return device

@@ -148,7 +148,7 @@ def unload(study_dir: Path | str, serial: Optional[str] = None,
         r.data_dir, r.second_copy_dir = str(data), (str(second) if second else None)
         adb = Adb(serial)
         device = adb.choose()
-        r.phone = f"{device.model or device.serial} ({device.serial})"
+        r.phone = f"{device.model or device.id} ({device.id})"
         progress("Looking for sessions on the phone…")
         found = phone_sessions(adb, sid)
         if not found:
@@ -161,7 +161,7 @@ def unload(study_dir: Path | str, serial: Optional[str] = None,
             build = None  # analyse without it: quality only, no image/AOI mapping
         for n, (pid, uid) in enumerate(found, 1):
             progress(f"Session {n} of {len(found)}: {pid} ({uid})…")
-            s = _unload_one(adb, sid, pid, uid, data, second, build, app_running, device.serial)
+            s = _unload_one(adb, sid, pid, uid, data, second, build, app_running, device.id)
             r.sessions.append(s)
         _tidy_phone(adb, sid)
         return r
