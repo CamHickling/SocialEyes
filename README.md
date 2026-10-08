@@ -30,8 +30,8 @@
 > [!WARNING]
 > **Work in progress (v0.1).** The study format (v1), the session log format (v1),
 > the study compiler and command-line tool, the experiment builder and the phone
-> app work. Neon control in the app and the gaze analysis pipeline are **not built
-> yet**. Each part below is marked ✅ working, 🟡 partial or ⏳ planned, so you know
+> app work, and the app starts and stops the Neon recording. The gaze analysis pipeline
+> is **not built yet**. Each part below is marked ✅ working, 🟡 partial or ⏳ planned, so you know
 > what you can rely on today. Feedback from other labs is very welcome.
 
 ## <img src="docs/assets/socialeyes-mark.svg" height="28" align="top"> What is SocialEyes?
@@ -143,8 +143,9 @@ for mixed models in R.
 | Desktop app (Windows): Design tab edits study folders in place and runs the compiler's checks; Phone tab loads studies onto the phone; Data tab unloads sessions with a register; Studies tab lists studies with their status; Content tab lists the files each study still needs; edits that would break collected data need a new version; Windows installer (`packaging/build.py`, about 66 MB) | ✅ | `socialeyes app` (`python/src/socialeyes/desktop/`) |
 | CSV format reference | ✅ | `docs/STUDY_DESIGN.md` (version 1) |
 | Android SocialEyes app: Instagram-style feed (stories row, comments sheet), sync patch, touch / scroll / viewport / quality logging, instructions, marker calibration, validation, questionnaires, image ratings, recognition test, camera check, front camera video, motion sensors, interruption detection | 🟡 | `android/` (tested on a Pixel 3) |
-| App: screen recording, Neon control | ⏳ | see [What the app doesn't do yet](#what-the-app-doesnt-do-yet) |
-| Neon integration (auto start/stop, clock sync) | ⏳ | |
+| App: Neon control: starts the recording before the session (`neon.auto_record`), pairs it with the session (`neon.recording_id` in session.json), marks each step in it, watches the glasses, stops and saves it at the end; `neon.required` | ✅ | `android/.../neon/` (Neon Companion on the same phone) |
+| App: screen recording | ⏳ | see [What the app doesn't do yet](#what-the-app-doesnt-do-yet) |
+| Neon: collect each session's recording in the Data tab | ⏳ | |
 | Gaze-to-screen mapping and AOI analysis | ⏳ | |
 | R analysis templates | ⏳ | |
 | macOS/Linux setup script | ⏳ | the conda environment already works cross-platform |
@@ -673,7 +674,6 @@ rest of the session works.
 | Missing | What happens now |
 |---|---|
 | `logging.screen_recording` | not recorded |
-| Neon control (start/stop recording, `neon` events, `neon.required`) | sessions run without the glasses being controlled; start the Neon recording by hand |
 | Silent notifications | only notifications that make a sound are logged as interruptions; turn on Do Not Disturb for sessions (the setup screen reminds you when it is off) |
 | Testing on more phones | tested on a Pixel 3 (Android 12): a full session runs and `socialeyes session` reads it; other screen sizes and Android versions are untested |
 
@@ -812,7 +812,7 @@ Roughly in order:
 - [ ] The **Android app**: feed rendering, procedure steps, event logging
       (per `docs/EVENT_LOG.md`), sync patch, Neon real-time API control
       (in progress: the feed, logging, sync patch, calibration, validation, questionnaires,
-      ratings and recognition are built)
+      ratings, recognition and Neon control are built)
 - [ ] **Analysis pipeline**: tag detection → screen homography → scroll-aware
       mapping of gaze to post and image pixels → AOI fixation metrics
 - [ ] **R templates** for the standard mixed models

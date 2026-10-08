@@ -435,4 +435,51 @@ def test_on_screen_tags_reach_the_app(example, tmp_path):
     edit_file(example / "study.yaml", "procedure:", "markers:\n  on_screen:\n    steps: [feed]\n\nprocedure:")
     out, _ = compile_study(example, tmp_path / "build")
     study = json.loads((out / "study.json").read_text(encoding="utf-8"))["study"]
-    assert study["markers"]["on_screen"] == {"steps": ["feed"], "size_mm": 9.0}
+    assert study["markers"]["on_screen"] == {"steps": ["feed"], "size_mm": 12.0}
+
+
+# ---------------------------------------------------------------- Neon control
+
+
+def with_neon(src, dst, events, neon_meta):
+    """A copy of a simulated session whose neon events (and session.json `neon`) are replaced."""
+    import shutil
+    shutil.copytree(src, dst)
+    lines = [json.loads(x) for x in (dst / "events.jsonl").read_text(encoding="utf-8").splitlines() if x]
+    t0 = lines[0]["t_ns"]
+    lines = [e for e in lines if e["type"] != "neon"] + [{**e, "t_ns": t0 + e["t_ns"]} for e in events]
+    (dst / "events.jsonl").write_text("".join(json.dumps(e) + "\n" for e in sorted(lines, key=lambda e: e["t_ns"])), encoding="utf-8")
+    meta = json.loads((dst / "session.json").read_text(encoding="utf-8"))
+    meta.pop("neon", None)
+    if neon_meta:
+        meta["neon"] = neon_meta
+    (dst / "session.json").write_text(json.dumps(meta), encoding="utf-8")
+    return load_session(dst)
+
+
+def test_quality_reports_neon_recording(simulated, tmp_path):
+    _, src = simulated
+    s = with_neon(src, tmp_path / "a", [
+        {"t_ns": 0, "type": "neon", "status": "connected"},
+        {"t_ns": 0, "type": "neon", "status": "recording_start", "recording_id": "rec-1"},
+        {"t_ns": 1_000_000_000, "type": "neon", "status": "disconnected", "reason": "glasses", "recording_id": "rec-1"},
+        {"t_ns": 1_500_000_000, "type": "neon", "status": "connected", "recording_id": "rec-1"},
+        {"t_ns": 2_000_000_000, "type": "neon", "status": "recording_stop", "recording_id": "rec-1"},
+    ], {"recording_id": "rec-1"})
+    q = session_quality(s)
+    assert q["neon_disconnects"] == 1 and q["neon_recording_id"] == "rec-1"
+    assert not any("didn't start" in w or "may not have saved" in w for w in q["warnings"])
+
+    s = with_neon(src, tmp_path / "b", [
+        {"t_ns": 0, "type": "neon", "status": "disconnected", "reason": "not_started", "error": "glasses not connected"},
+    ], None)
+    q = session_quality(s)
+    assert q["neon_disconnects"] == 0 and q["neon_recording_id"] is None
+    assert any("didn't start" in w for w in q["warnings"])
+
+    s = with_neon(src, tmp_path / "c", [
+        {"t_ns": 0, "type": "neon", "status": "recording_start", "recording_id": "rec-2"},
+        {"t_ns": 2_000_000_000, "type": "neon", "status": "recording_stop", "recording_id": "rec-2",
+         "error": "Companion didn't answer"},
+    ], {"recording_id": "rec-2"})
+    assert any("may not have saved: Companion didn't answer" in w for w in session_quality(s)["warnings"])

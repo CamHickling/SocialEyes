@@ -6,7 +6,7 @@
 > which reads them). The app (`android/`) writes session.json, events.jsonl,
 > viewport.csv, touch.csv, video.csv, sensors.csv and the front camera files.
 > Parts marked **(planned)** are reserved names for features that are not built yet
-> (screen recording, Neon control); the app does not write them today.
+> (screen recording); the app does not write them today.
 > `socialeyes.session.simulate` writes realistic fake sessions in this format.
 
 **Changes to the format.** Version 1 only grows: new event types, new optional
@@ -110,6 +110,11 @@ camera's timestamp source (see Front camera) and the sensor orientation in degre
 `sync_patch` is the sync patch's screen rectangle `[left, top, right, bottom]`
 (absent when the patch is disabled).
 
+`neon` (only when the app started a Neon recording, `neon.auto_record`) pairs the
+session with that recording: `recording_id` (the Neon recording's folder name and
+Pupil Cloud id), and when Companion reports them `device_name`, `device_id`,
+`module_serial` (the glasses' sensor module) and `frame_name`.
+
 `feed_area` is the screen rectangle the feed scrolls in (below the status and
 app bars), used to decide how much of a post is visible. `end.reason` is
 `completed` or `aborted` (the researcher stopped the session).
@@ -175,7 +180,7 @@ the type. Unknown types must be ignored by readers, so the app can add new ones.
 | type | fields |
 |---|---|
 | `sync_patch` | `level` (0/1): every change of the sync patch |
-| `neon` | **(planned)** `status` (`connected`, `disconnected`, `recording_start`, `recording_stop`), optional `recording_id` |
+| `neon` | `status`, `recording_id`, and per status: `connected` (Companion and the glasses answer; at the start also `module_serial`), `recording_start`, `recording_stop` (`error` when Companion couldn't confirm the save), `disconnected` with `reason`: `companion` (Companion stopped answering), `glasses` (unplugged), `recording_stopped` (stopped outside the app) or `not_started` (the researcher went on without eye tracking; `error` says why it couldn't start). Companion is checked every `neon.sync_interval_s`; a `connected` follows when the problem clears. The app also adds named events to the Neon recording itself: `socialeyes.session_start <session_uid>`, `step_start <step id>` and `socialeyes.session_end <reason>` |
 
 **Session quality**
 
@@ -329,7 +334,7 @@ was covered.
 
 | file | contents |
 |---|---|
-| `quality.json` | duration, completed?, time in background, interruptions (count and seconds per kind), Do Not Disturb at start, dropped frames, phone slept?, Neon disconnects, thermal status, camera framing checks (`camera_checks`: result and seconds to a face, with a warning when one failed), front camera segments, dropped frames and coverage, motion sensor rate and gaps, the session's `group_key` and `package_sha256` (with a warning when it differs from the `--build` package) |
+| `quality.json` | duration, completed?, time in background, interruptions (count and seconds per kind), Do Not Disturb at start, dropped frames, phone slept?, Neon recording id, Neon disconnects (and warnings when the recording didn't start or may not have saved), thermal status, camera framing checks (`camera_checks`: result and seconds to a face, with a warning when one failed), front camera segments, dropped frames and coverage, motion sensor rate and gaps, the session's `group_key` and `package_sha256` (with a warning when it differs from the `--build` package) |
 | `strokes.csv` | one row per finger stroke: duration, distance, speed, `gesture` = `tap`, `double_tap`, `long_press`, `scroll`, `fling`, `pinch` |
 | `exposure.csv` | per post and element: seconds on screen (any part / fully / area-weighted), first time seen, times scrolled into view |
 | `touch_targets.csv` | every touch sample mapped to post, element, image pixel and AOI |

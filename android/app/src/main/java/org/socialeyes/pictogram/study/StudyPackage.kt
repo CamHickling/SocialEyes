@@ -110,11 +110,15 @@ data class Markers(
 @Serializable
 data class OnScreenTagsConfig(
     val steps: List<String> = emptyList(),
-    @SerialName("size_mm") val sizeMm: Double = 9.0,
+    @SerialName("size_mm") val sizeMm: Double = 12.0,
 )
 
 @Serializable
-data class Neon(val required: Boolean = false)
+data class Neon(
+    val required: Boolean = false,
+    @SerialName("auto_record") val autoRecord: Boolean = true,
+    @SerialName("sync_interval_s") val syncIntervalS: Double = 2.0,
+)
 
 @Serializable
 data class LabelDef(val text: String, val style: String = "banner")

@@ -11,15 +11,25 @@ import androidx.compose.runtime.setValue
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.socialeyes.pictogram.log.DeviceMonitor
 import org.socialeyes.pictogram.log.InterruptionMonitor
+import org.socialeyes.pictogram.neon.NeonLink
 import org.socialeyes.pictogram.study.StudyPackage
+import org.socialeyes.pictogram.ui.NeonStartScreen
 import org.socialeyes.pictogram.ui.SessionScreen
 import org.socialeyes.pictogram.ui.SetupScreen
 import java.io.File
 
+/** A session waiting for its Neon recording to start; `error` says why it couldn't. */
+private data class NeonPending(val pkg: StudyPackage, val participantId: String, val error: String? = null)
+
 class MainActivity : ComponentActivity() {
     private var session by mutableStateOf<Session?>(null)
+    private var neonPending by mutableStateOf<NeonPending?>(null)
     private var setupError by mutableStateOf<String?>(null)
     private var monitor: DeviceMonitor? = null
     private var interruptions: InterruptionMonitor? = null
@@ -30,7 +40,20 @@ class MainActivity : ComponentActivity() {
         val studiesDir = File(getExternalFilesDir(null), "studies").apply { mkdirs() }
         setContent {
             val s = session
-            if (s == null) {
+            val pending = neonPending
+            if (s == null && pending != null) {
+                NeonStartScreen(
+                    participantId = pending.participantId,
+                    error = pending.error,
+                    required = pending.pkg.study.neon.required,
+                    onRetry = { startSession(pending.pkg, pending.participantId) },
+                    onContinueWithout = {
+                        neonPending = null
+                        launchSession(pending.pkg, pending.participantId, null, notStarted = pending.error)
+                    },
+                    onBack = { neonPending = null },
+                )
+            } else if (s == null) {
                 SetupScreen(
                     studiesDir = studiesDir,
                     hasData = { study, pid -> Session.hasData(this, study, pid) },
@@ -43,12 +66,36 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** neon.auto_record: start the Neon recording first, so the whole session is in it. */
     private fun startSession(pkg: StudyPackage, participantId: String) {
+        if (!pkg.study.neon.autoRecord) {
+            launchSession(pkg, participantId, null)
+            return
+        }
+        neonPending = NeonPending(pkg, participantId)
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) { runCatching { NeonLink.start() } }
+            result.fold(
+                onSuccess = { neon ->
+                    neonPending = null
+                    launchSession(pkg, participantId, neon)
+                },
+                onFailure = { e -> neonPending = NeonPending(pkg, participantId, e.message ?: e.toString()) },
+            )
+        }
+    }
+
+    /** `notStarted`: why the researcher chose to go on without the Neon recording. */
+    private fun launchSession(pkg: StudyPackage, participantId: String, neon: NeonLink?, notStarted: String? = null) {
         val s = try {
-            Session.create(this, pkg, participantId)
+            Session.create(this, pkg, participantId, neon)
         } catch (e: Exception) {
+            neon?.stop("setup_failed")
             setupError = "Could not start the session: ${e.message}"
             return
+        }
+        if (notStarted != null) {
+            s.log.event("neon", fields = arrayOf("status" to "disconnected", "reason" to "not_started", "error" to notStarted))
         }
         setupError = null
         hideSystemBars(true)

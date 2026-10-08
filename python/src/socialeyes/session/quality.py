@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pandas as pd
 
 from .io import Session
 
@@ -65,9 +66,16 @@ def session_quality(s: Session, build_sha256: str | None = None) -> dict:
             warnings.append(f"the phone was asleep for {slept_s:.1f} s during the session")
 
     neon = s.events_of("neon")
-    disconnects = int((neon["status"] == "disconnected").sum()) if len(neon) else 0
+    reason = neon["reason"] if "reason" in neon else pd.Series("", index=neon.index, dtype=object)
+    not_started = bool((reason == "not_started").any()) if len(neon) else False
+    disconnects = int(((neon["status"] == "disconnected") & (reason != "not_started")).sum()) if len(neon) else 0
+    if not_started:
+        warnings.append("the Neon recording didn't start; the session ran without eye tracking")
     if disconnects:
         warnings.append(f"Neon disconnected {disconnects} time(s)")
+    stops = neon[neon["status"] == "recording_stop"] if len(neon) else neon
+    if len(stops) and "error" in stops and stops["error"].notna().any():
+        warnings.append(f"the Neon recording may not have saved: {stops['error'].dropna().iloc[0]}")
     rotations = s.events_of("orientation")
     n_rotations = int((rotations["rotation"] != 0).sum()) if len(rotations) else 0
     if n_rotations:
@@ -116,6 +124,7 @@ def session_quality(s: Session, build_sha256: str | None = None) -> dict:
         "longest_frame_ms": longest_frame_ms,
         "slept_s": slept_s,
         "neon_disconnects": disconnects,
+        "neon_recording_id": (s.meta.get("neon") or {}).get("recording_id"),
         "orientation_changes": n_rotations,
         "thermal_max": thermal_max,
         "camera_checks": camera_checks,

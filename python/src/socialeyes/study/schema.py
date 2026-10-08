@@ -62,8 +62,9 @@ class OnScreenTags(_Strict):
 
     steps: list[str] = []
     """Procedure step ids that show them. Empty = off."""
-    size_mm: float = Field(9.0, ge=4, le=20)
-    """Black-border edge length on the screen. At ~40 cm the Neon scene camera needs about 9 mm."""
+    size_mm: float = Field(12.0, ge=4, le=20)
+    """Black-border edge length on the screen. 9 mm was at the Neon scene camera's detection limit
+    with the phone held low (CAM-210), so 12 mm by default."""
 
 
 class Markers(_Strict):

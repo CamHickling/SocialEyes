@@ -4,7 +4,7 @@
 # Posts are copied from studies/example; its AOIs show what we need to tell apart.
 id: accuracy_check
 title: Neon gaze accuracy check (CAM-210)
-version: 2
+version: 3
 seed: 20251001                 # change it and every plan changes; never change it mid-study
 
 platform:
@@ -60,7 +60,7 @@ logging:                       # besides gaze; see docs/EVENT_LOG.md
 markers:
   on_screen:                   # screen tags above and below these steps, so nothing has
     steps: [val1, feed, val2]  # to be fixed around the phone (hold it normally)
-    size_mm: 9
+    size_mm: 12
 
 procedure:
   - {id: welcome, type: instructions, title: Accuracy check,

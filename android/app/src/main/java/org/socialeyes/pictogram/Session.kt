@@ -21,6 +21,7 @@ import org.socialeyes.pictogram.log.FrontCameraRecorder
 import org.socialeyes.pictogram.log.MotionSensors
 import org.socialeyes.pictogram.log.SessionLog
 import org.socialeyes.pictogram.log.TouchRecorder
+import org.socialeyes.pictogram.neon.NeonLink
 import org.socialeyes.pictogram.study.Plan
 import org.socialeyes.pictogram.study.Step
 import org.socialeyes.pictogram.study.StudyPackage
@@ -33,6 +34,8 @@ import java.time.format.DateTimeFormatter
 class Session(
     val pkg: StudyPackage, val plan: Plan, val log: SessionLog,
     val camera: FrontCameraRecorder? = null, val sensors: MotionSensors? = null,
+    /** The Neon recording this session started (neon.auto_record), if any. */
+    val neon: NeonLink? = null,
 ) {
     val steps: List<Step> = pkg.steps
     val startNs: Long = Clocks.elapsedNs()
@@ -54,11 +57,12 @@ class Session(
         startStep()
     }
 
-    /** Stops the recorders that write their own files, before the log ends. */
-    private fun stopRecorders() {
+    /** Stops the recorders that write their own files (and the Neon recording), before the log ends. */
+    private fun stopRecorders(reason: String) {
         profilePhoto = null
         camera?.release() // closes the open video file
         sensors?.stop()
+        neon?.stop(reason)
     }
 
     /** Leaves the current step. `reason`: `continue`, `done_button` or `time_limit`. */
@@ -70,7 +74,7 @@ class Session(
     }
 
     fun abort() {
-        stopRecorders()
+        stopRecorders("aborted")
         log.finish("aborted")
     }
 
@@ -88,15 +92,16 @@ class Session(
     private fun startStep() {
         val step = currentStep
         if (step == null) {
-            stopRecorders()
+            stopRecorders("completed")
             log.finish("completed") // procedure without an end step
             return
         }
         log.event("step_start", fields = arrayOf("step_id" to step.id, "step_type" to step.type))
+        neon?.mark("step_start ${step.id}")
         // front camera: record during the study's chosen steps only
         camera?.let { if (it.config.records(step.id) && step.type != "end") it.start() else if (it.recording) it.stop(wait = false) }
         if (step.type == "end") {
-            stopRecorders()
+            stopRecorders("completed")
             log.finish("completed")
         }
     }
@@ -109,7 +114,7 @@ class Session(
         fun hasData(activity: Activity, studyId: String, participantId: String) =
             File(dataRoot(activity), "$studyId/$participantId").list()?.isNotEmpty() == true
 
-        fun create(activity: Activity, pkg: StudyPackage, participantId: String): Session {
+        fun create(activity: Activity, pkg: StudyPackage, participantId: String, neon: NeonLink? = null): Session {
             val plan = pkg.loadPlan(participantId)
             val now = OffsetDateTime.now()
             val uid = participantId + "-" + now.format(DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss"))
@@ -139,7 +144,8 @@ class Session(
                 val hz = (logging["sensor_hz"] as? JsonPrimitive)?.contentOrNull?.toDoubleOrNull()?.toInt() ?: 50
                 MotionSensors(activity, log, hz)
             } else null
-            return Session(pkg, plan, log, camera, sensors)
+            neon?.attach(log, uid, pkg.study.neon.syncIntervalS)
+            return Session(pkg, plan, log, camera, sensors, neon)
         }
 
         /**
