@@ -79,9 +79,29 @@ def frames_between(cap, scene_t, t0, t1, step=1):
             yield int(i), cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
 
+GAMMA = (np.linspace(0, 1, 256) ** 3 * 255).astype(np.uint8)  # darkens an overexposed screen
+
+
 def detect(detector, gray, K, dist) -> dict[int, np.ndarray]:
-    """Undistorted corners of each tag found, in pupil_apriltags' order (TR, TL, BL, BR for an upright tag)."""
-    return {d.tag_id: undistort(np.asarray(d.corners), K, dist) for d in detector.detect(gray)}
+    """Undistorted corners of each tag found, in pupil_apriltags' order (TR, TL, BL, BR for an upright tag).
+    A second pass on a darkened copy recovers small on-screen tags washed out by the screen's glare."""
+    best = {d.tag_id: d for d in detector.detect(gray)}
+    if len(best) < 4:
+        for d in detector.detect(cv2.LUT(gray, GAMMA)):
+            if d.tag_id not in best or d.decision_margin > best[d.tag_id].decision_margin:
+                best[d.tag_id] = d
+    return {i: undistort(np.asarray(d.corners), K, dist) for i, d in best.items()}
+
+
+def fit(src: list, dst: list, max_err_px: float = 15.0):
+    """Scene->screen homography from matching tag corners, or None if it doesn't fit them well
+    (e.g. a thumb half over a tag). The error is checked in screen pixels."""
+    src, dst = np.vstack(src), np.vstack(dst)
+    H, _ = cv2.findHomography(src, dst, cv2.RANSAC, 3.0)
+    if H is None:
+        return None
+    err = np.linalg.norm(cv2.perspectiveTransform(src.reshape(-1, 1, 2), H).reshape(-1, 2) - dst, axis=1)
+    return H if err.max() <= max_err_px else None
 
 
 def square(cx, cy, half) -> np.ndarray:
@@ -185,7 +205,7 @@ def main(rec: Path, session: Path, sheet: Path | None = None) -> None:
             tags = detect(detector, gray, K, dist)
             src = [tags[i] for i in known if i in tags]
             if len(src) >= 2:
-                H, _ = cv2.findHomography(np.vstack(src), np.vstack([known[i] for i in known if i in tags]), cv2.RANSAC, 3.0)
+                H = fit(src, [known[i] for i in known if i in tags])
                 if H is not None:
                     homos.append((scene_t[fi], H))
         if not homos or not sel.any():
