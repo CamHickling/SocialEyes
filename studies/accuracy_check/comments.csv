@@ -1,0 +1,36 @@
+post_id,variant,order,account_id,text,like_count
+crit01,neutral,1,acc1,Love this!,3
+crit01,neutral,2,acc4,Where was this taken?,1
+crit01,appearance,1,acc1,You look amazing!!,12
+crit01,appearance,2,acc4,Goals. How are you so toned?,7
+crit02,neutral,1,acc2,Love this!,3
+crit02,neutral,2,acc5,Where was this taken?,1
+crit02,appearance,1,acc2,You look amazing!!,12
+crit02,appearance,2,acc5,Goals. How are you so toned?,7
+crit03,neutral,1,acc3,Love this!,3
+crit03,neutral,2,acc6,Where was this taken?,1
+crit03,appearance,1,acc3,You look amazing!!,12
+crit03,appearance,2,acc6,Goals. How are you so toned?,7
+crit04,neutral,1,acc4,Love this!,3
+crit04,neutral,2,acc1,Where was this taken?,1
+crit04,appearance,1,acc4,You look amazing!!,12
+crit04,appearance,2,acc1,Goals. How are you so toned?,7
+crit05,neutral,1,acc5,Love this!,3
+crit05,neutral,2,acc2,Where was this taken?,1
+crit05,appearance,1,acc5,You look amazing!!,12
+crit05,appearance,2,acc2,Goals. How are you so toned?,7
+crit06,neutral,1,acc6,Love this!,3
+crit06,neutral,2,acc3,Where was this taken?,1
+crit06,appearance,1,acc6,You look amazing!!,12
+crit06,appearance,2,acc3,Goals. How are you so toned?,7
+crit07,neutral,1,acc1,Love this!,3
+crit07,neutral,2,acc4,Where was this taken?,1
+crit07,appearance,1,acc1,You look amazing!!,12
+crit07,appearance,2,acc4,Goals. How are you so toned?,7
+crit08,neutral,1,acc2,Love this!,3
+crit08,neutral,2,acc5,Where was this taken?,1
+crit08,appearance,1,acc2,You look amazing!!,12
+crit08,appearance,2,acc5,Goals. How are you so toned?,7
+fill02,,1,acc4,Adding this to my list,2
+fill05,,1,acc1,Take me back!,4
+fill11,,1,acc3,Stunning colours,6

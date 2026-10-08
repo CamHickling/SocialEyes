@@ -1,0 +1,74 @@
+# Gaze accuracy check for the Neon glasses (Linear CAM-210).
+# 13-point validation before and after a short feed (2 min max), with screen-tag
+# calibration each time, so we get error across the screen and drift over a session.
+# Posts are copied from studies/example; its AOIs show what we need to tell apart.
+id: accuracy_check
+title: Neon gaze accuracy check (CAM-210)
+version: 1
+seed: 20251001                 # change it and every plan changes; never change it mid-study
+
+platform:
+  name: Pictogram              # never use a real platform's name or logo
+  theme: light
+  participant_handle: you      # name the participant's own comments appear under
+
+labels:
+  edited:
+    text: "This image has been digitally altered"
+    style: banner
+
+factors:
+  - name: edit
+    design: within
+    levels: [original, retouched]
+    sets:
+      image_version: "{level}"           # picks the image whose version is original/retouched
+  - name: label
+    design: within
+    levels: [none, edited]
+    sets:
+      label: {none: null, edited: edited}
+  - name: comments
+    design: between
+    levels: [neutral, appearance]
+    # applies_to: all would also switch the comments of filler posts; every
+    # filler would then need a neutral and an appearance comment set.
+    applies_to: critical
+    sets:
+      comment_variant: "{level}"
+
+feed:
+  order: shuffle
+  lead_in_fillers: 2
+  max_run_same_cell: 2
+  min_fillers_between_critical: 1
+  done_button_after_s: 30
+  time_limit_s: 120
+  allow_likes: true
+  allow_comment_typing: true   # participants can comment and reply (text and draft edits are logged)
+
+logging:                       # besides gaze; see docs/EVENT_LOG.md
+  touches: true                # raw touch points
+  sensors: false               # accelerometer / gyroscope
+  screen_recording: false      # pilots only: Android asks permission every session
+  front_camera:                # face video for expression analysis; add a camera_check
+    enabled: false             # step before the recorded steps
+    resolution: 720p
+    fps: 30
+    steps: [feed]
+
+procedure:
+  - {id: welcome, type: instructions, title: Accuracy check,
+     text: "Sit back and hold the phone the way you normally would. Keep your head still and look at each dot as precisely as you can before tapping it."}
+  - {id: cal1, type: marker_calibration, duration_s: 4}
+  - {id: val1, type: validation, points: 13, target_dp: 20}
+  - {id: feed, type: feed}
+  - {id: cal2, type: marker_calibration, duration_s: 4}
+  - {id: val2, type: validation, points: 13, target_dp: 20,
+     instructions: "Once more: look at each dot and tap it."}
+  - {id: end, type: end}
+
+participants:
+  n_plans: 8
+  id_prefix: T
+  id_digits: 2
