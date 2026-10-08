@@ -55,6 +55,17 @@ class Display(_Strict):
     sync_patch: SyncPatch = SyncPatch()
 
 
+class OnScreenTags(_Strict):
+    """Screen tags kept on screen during whole steps (e.g. the feed), for when nothing can be
+    fixed around the phone. Two tags in a band above the step and two below it; the step's own
+    content gets the space in between. Their positions are logged in a `marker_layout` event."""
+
+    steps: list[str] = []
+    """Procedure step ids that show them. Empty = off."""
+    size_mm: float = Field(9.0, ge=4, le=20)
+    """Black-border edge length on the screen. At ~40 cm the Neon scene camera needs about 9 mm."""
+
+
 class Markers(_Strict):
     family: Literal["tag36h11"] = "tag36h11"
     screen_tag_ids: list[int] = [0, 1, 2, 3]
@@ -62,6 +73,7 @@ class Markers(_Strict):
     case_tag_ids: list[int] = [10, 11, 12, 13, 14, 15]
     """Tags printed on the phone case. Must differ from screen_tag_ids."""
     case_tag_size_mm: float = Field(15.0, gt=3, lt=60)
+    on_screen: OnScreenTags = OnScreenTags()
 
     @model_validator(mode="after")
     def _disjoint(self):
@@ -399,6 +411,9 @@ class Study(_Strict):
             unknown = [s for s in cam.steps if s not in ids]
             if unknown:
                 raise ValueError(f"logging.front_camera.steps: unknown procedure step id(s) {unknown}")
+        unknown = [s for s in self.markers.on_screen.steps if s not in ids]
+        if unknown:
+            raise ValueError(f"markers.on_screen.steps: unknown procedure step id(s) {unknown}")
         return self
 
     @property

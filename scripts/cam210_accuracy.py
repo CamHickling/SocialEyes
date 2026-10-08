@@ -123,7 +123,10 @@ def main(rec: Path, session: Path, sheet: Path | None = None) -> None:
             by_step.setdefault(e["step_id"], {})["start"] = e["t_ns"]
         elif e["type"] == "step_end":
             by_step.setdefault(e["step_id"], {})["end"] = e["t_ns"]
-    layouts = [e for e in events if e["type"] == "marker_layout"]
+    layouts = [e for e in events if e["type"] == "marker_layout" and not e.get("on_screen")]
+    # markers.on_screen: tags kept on screen during a step map gaze straight onto the screen
+    on_screen = {e["step_id"]: {int(k): black_square(v) for k, v in e["tags"].items()}
+                 for e in events if e["type"] == "marker_layout" and e.get("on_screen")}
     case_screen: dict[int, list[np.ndarray]] = {}
     for lay in layouts:
         st = by_step[lay["step_id"]]
@@ -148,6 +151,9 @@ def main(rec: Path, session: Path, sheet: Path | None = None) -> None:
     elif sheet:
         case_pos = nominal_case_positions(sheet, meta)
         print(f"screen tags unreadable: case tags placed from {sheet.name} (screen assumed centred in the cut-out)")
+    elif on_screen:
+        case_pos = {}
+        print(f"no case tags: using on-screen tags during {', '.join(on_screen)}")
     else:
         sys.exit("no frame showed the screen tags; pass the case sheet's .json to use its nominal layout")
 
@@ -174,29 +180,30 @@ def main(rec: Path, session: Path, sheet: Path | None = None) -> None:
         t0 = max(t1 - WINDOW_NS, to_unix(t["shown"]))
         sel = (gaze_t >= t0) & (gaze_t <= t1)
         homos = []
+        known = on_screen.get(step, case_pos)
         for fi, gray in frames_between(cap, scene_t, t0, t1):
             tags = detect(detector, gray, K, dist)
-            src = [tags[i] for i in case_pos if i in tags]
+            src = [tags[i] for i in known if i in tags]
             if len(src) >= 2:
-                H, _ = cv2.findHomography(np.vstack(src), np.vstack([case_pos[i] for i in case_pos if i in tags]), cv2.RANSAC, 3.0)
+                H, _ = cv2.findHomography(np.vstack(src), np.vstack([known[i] for i in known if i in tags]), cv2.RANSAC, 3.0)
                 if H is not None:
                     homos.append((scene_t[fi], H))
         if not homos or not sel.any():
             rows.append({"step": step, "index": idx, "x": t["x"], "y": t["y"], "ok": False})
             continue
         ft = np.array([h[0] for h in homos])
-        on_screen, angles = [], []
+        mapped, angles = [], []
         target = np.array([[t["x"], t["y"]]])
         for g, gt in zip(gaze_u[sel], gaze_t[sel]):
             H = homos[int(np.argmin(np.abs(ft - gt)))][1]
             s = cv2.perspectiveTransform(g.reshape(1, 1, 2), H).reshape(2)
             tgt_scene = cv2.perspectiveTransform(target.reshape(1, 1, 2), np.linalg.inv(H)).reshape(2)
-            on_screen.append(s)
+            mapped.append(s)
             angles.append(np.degrees(np.arccos(np.clip(ray(g) @ ray(tgt_scene), -1, 1))))
-        on_screen = np.array(on_screen)
-        med = np.median(on_screen, axis=0)
+        mapped = np.array(mapped)
+        med = np.median(mapped, axis=0)
         err_px = float(np.linalg.norm(med - target[0]))
-        prec_px = float(np.sqrt(np.mean(np.sum((on_screen - med) ** 2, axis=1))))
+        prec_px = float(np.sqrt(np.mean(np.sum((mapped - med) ** 2, axis=1))))
         # visual angle of the median gaze point vs. the dot, through the middle frame's homography
         Hm = homos[len(homos) // 2][1]
         med_scene = cv2.perspectiveTransform(med.reshape(1, 1, 2), np.linalg.inv(Hm)).reshape(2)

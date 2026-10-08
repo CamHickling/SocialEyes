@@ -51,8 +51,8 @@ fun SessionScreen(session: Session, onExit: () -> Unit) {
         Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
             val step = session.currentStep
             key(session.stepIndex) {
-                when (step?.type) {
-                    null -> MessageScreen("", "Thank you!", button = null) {}
+              if (step != null) OnScreenTags(session, step) {
+                when (step.type) {
                     "instructions" -> MessageScreen(
                         title = step.str("title").orEmpty(),
                         text = step.str("text").orEmpty(),
@@ -70,7 +70,9 @@ fun SessionScreen(session: Session, onExit: () -> Unit) {
                     "end" -> MessageScreen("", step.str("text").orEmpty(), button = null) {}
                     else -> PlaceholderStep(step) { session.next() }
                 }
+              }
             }
+            if (step == null) MessageScreen("", "Thank you!", button = null) {}
 
             val sync = pkg.study.display.syncPatch
             if (sync.enabled) {

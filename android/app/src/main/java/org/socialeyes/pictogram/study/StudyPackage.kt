@@ -102,7 +102,16 @@ data class SyncPatchConfig(
 )
 
 @Serializable
-data class Markers(@SerialName("screen_tag_ids") val screenTagIds: List<Int> = listOf(0, 1, 2, 3))
+data class Markers(
+    @SerialName("screen_tag_ids") val screenTagIds: List<Int> = listOf(0, 1, 2, 3),
+    @SerialName("on_screen") val onScreen: OnScreenTagsConfig = OnScreenTagsConfig(),
+)
+
+@Serializable
+data class OnScreenTagsConfig(
+    val steps: List<String> = emptyList(),
+    @SerialName("size_mm") val sizeMm: Double = 9.0,
+)
 
 @Serializable
 data class Neon(val required: Boolean = false)

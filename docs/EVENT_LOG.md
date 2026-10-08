@@ -134,7 +134,7 @@ the type. Unknown types must be ignored by readers, so the app can add new ones.
 | `validation_tap` | `step_id`, `index`, `x_px`, `y_px`, `on_target` | every tap while a dot is shown; only an `on_target` tap (within 1.5 dot diameters) moves to the next dot |
 | `done_button_shown` | | the feed's "I'm done" button appears |
 | `feed_start` | | the feed is shown, after the feed step's `instructions` (only when it has instructions) |
-| `marker_layout` | `step_id`, `tags` (`{"<tag id>": [left, top, right, bottom]}`) | end of a marker_calibration step: where each screen tag was |
+| `marker_layout` | `step_id`, `tags` (`{"<tag id>": [left, top, right, bottom]}`), `on_screen` (true, only for `markers.on_screen` tags) | end of a marker_calibration step, or once at the start of a step that keeps tags on screen (`markers.on_screen`): where each screen tag was. Each rectangle is the whole tag image; its black border is inset by 1/6 of the width on every side |
 
 **Feed interactions**
 

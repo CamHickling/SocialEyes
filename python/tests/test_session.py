@@ -420,3 +420,19 @@ def test_thermal_warning(tmp_path):
     write_session(tmp_path, minimal_meta(end={"reason": "completed"}), events, [])
     q = session_quality(load_session(tmp_path))
     assert q["thermal_max"] == "severe" and any("got hot" in w for w in q["warnings"])
+
+
+# ---------------------------------------------------------------- on-screen tags
+
+
+def test_on_screen_tag_steps_must_exist(example):
+    edit_file(example / "study.yaml", "procedure:", "markers:\n  on_screen:\n    steps: [feed, nope]\n\nprocedure:")
+    b, rep = check_study(example)
+    assert b is None and any("markers.on_screen.steps: unknown procedure step id(s) ['nope']" in e for e in rep.errors)
+
+
+def test_on_screen_tags_reach_the_app(example, tmp_path):
+    edit_file(example / "study.yaml", "procedure:", "markers:\n  on_screen:\n    steps: [feed]\n\nprocedure:")
+    out, _ = compile_study(example, tmp_path / "build")
+    study = json.loads((out / "study.json").read_text(encoding="utf-8"))["study"]
+    assert study["markers"]["on_screen"] == {"steps": ["feed"], "size_mm": 9.0}
