@@ -27,6 +27,7 @@ data/<study id>/<participant id>/<session uid>/
   camera/front_000.mp4, front_001.mp4, ...   front camera video   (logging.front_camera)
   camera_frames.csv   one timestamp per front camera frame      (logging.front_camera)
   neon_calibration.bin   the glasses' calibration (neon.auto_record)
+  display_calibration_<step id>.json   the laptop's measurements in a display_calibration step
 ```
 
 The app writes all files **while the session runs** and flushes at least once
@@ -151,6 +152,8 @@ the type. Unknown types must be ignored by readers, so the app can add new ones.
 | `feed_start` | | the feed is shown, after the feed step's `instructions` (only when it has instructions) |
 | `marker_layout` | `step_id`, `tags` (`{"<tag id>": [left, top, right, bottom]}`), `on_screen` (true, only for `markers.on_screen` tags) | end of a marker_calibration step, or once at the start of a step that keeps tags on screen (`markers.on_screen`): where each screen tag was. Each rectangle is the whole tag image; its black border is inset by 1/6 of the width on every side. In a `tag_ladder` step, one per arrangement, with `ladder`: `hold`, `phase`, `screen` (the step's rectangle) and `tags` (`{"<tag id>": {kind, value_mm, size_mm}}`; kind `size`, `left_inset`, `right_inset`, `top_gap` or `bottom_gap`) |
 | `tag_ladder_hold` | `step_id`, `hold`, `status` (`start` / `end`), `instruction` (start only) | a `tag_ladder` hold begins (the participant tapped Start) or ends |
+| `display_setting` | `brightness` (0-1, the app's window brightness; null: unchanged), `camera` (Neon scene camera controls set, e.g. `{"ae_mode": "manual", "man_exp": "2000"}`), `source` (`study`: display.brightness at the start; `display_calibration`: a setting the laptop tried; `display_calibration_result`: the one it chose), `step_id` | the screen brightness or scene camera changed |
+| `display_calibration` | `step_id`, `status` (`done`, `failed`: no setting read the tags, the previous one was put back; `skipped`), and per status: `brightness`, `camera`, `tags_read`, `blown_out` (done); `restored` (failed/skipped); `reason` (`researcher` or `no_neon`, skipped) | the display calibration step ends. The laptop's measurements of every setting are in `display_calibration_<step id>.json` |
 
 **Feed interactions**
 
@@ -191,7 +194,7 @@ the type. Unknown types must be ignored by readers, so the app can add new ones.
 | type | fields |
 |---|---|
 | `sync_patch` | `level` (0/1): every change of the sync patch |
-| `neon` | `status`, `recording_id`, and per status: `connected` (Companion and the glasses answer; at the start also `module_serial`), `recording_start`, `recording_stop` (`error` when Companion couldn't confirm the save), `disconnected` with `reason`: `companion` (Companion stopped answering), `glasses` (unplugged), `gaze_stream` / `scene_stream` (Companion reports that stream down), `recording_stopped` (stopped outside the app) or `not_started` (the researcher went on without eye tracking; `error` says why it couldn't start). Companion is checked every `neon.sync_interval_s`; a `connected` follows when the problem clears. `scene_camera_restored` with `ok` follows `recording_stop` when the app put back scene camera settings it changed. The app also adds named events to the Neon recording itself: `socialeyes.session_start <session_uid>`, `step_start <step id>` and `socialeyes.session_end <reason>` |
+| `neon` | `status`, `recording_id`, and per status: `connected` (Companion and the glasses answer; at the start also `module_serial`), `recording_start`, `recording_stop` (`error` when Companion couldn't confirm the save), `disconnected` with `reason`: `companion` (Companion stopped answering), `glasses` (unplugged), `gaze_stream` / `scene_stream` (Companion reports that stream down), `recording_stopped` (stopped outside the app) or `not_started` (the researcher went on without eye tracking; `error` says why it couldn't start). Companion is checked every `neon.sync_interval_s`; a `connected` follows when the problem clears. `scene_camera_set` (`camera`, `source`) when the app changes the scene camera during the session (a display_calibration step); `scene_camera_restored` with `ok` follows `recording_stop` when the app put back the scene camera as it was before the session. The app also adds named events to the Neon recording itself: `socialeyes.session_start <session_uid>`, `step_start <step id>` and `socialeyes.session_end <reason>` |
 
 **Session quality**
 

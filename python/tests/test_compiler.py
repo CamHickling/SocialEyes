@@ -310,3 +310,30 @@ def test_neon_session_settings(example, tmp_path):
     edit_file(y, "{participant}", "{participant_id}")
     edit_file(y, "neon:\n", "neon:\n  auto_record: false\n")
     assert "need neon.auto_record" in errors_of(example)
+
+
+def test_display_calibration_step(example, tmp_path):
+    y = example / "study.yaml"
+    edit_file(y, "  - {id: feed, type: feed}", "  - {id: dcal, type: display_calibration, wait_s: 10}\n  - {id: feed, type: feed}")
+    out, rep = compile_study(example, tmp_path / "build")
+    assert rep.errors == []
+    steps = json.loads((out / "study.json").read_text(encoding="utf-8"))["study"]["procedure"]
+    dcal = next(s for s in steps if s["id"] == "dcal")
+    assert dcal["port"] == 8091 and dcal["wait_s"] == 10
+    edit_file(y, "logging:", "neon:\n  auto_record: false\nlogging:")
+    assert "display_calibration sets the Neon scene camera" in errors_of(example)
+    edit_file(y, "  auto_record: false\n", "")
+    edit_file(y, "logging:", "display_brightness_typo: 1\nlogging:")
+    assert errors_of(example)  # unknown keys still fail
+
+
+def test_display_brightness(example, tmp_path):
+    y = example / "study.yaml"
+    text = y.read_text(encoding="utf-8")
+    assert "\ndisplay:" not in text
+    edit_file(y, "logging:", "display:\n  brightness: 0.45\nlogging:")
+    out, rep = compile_study(example, tmp_path / "build")
+    assert rep.errors == []
+    assert json.loads((out / "study.json").read_text(encoding="utf-8"))["study"]["display"]["brightness"] == 0.45
+    edit_file(y, "brightness: 0.45", "brightness: 1.5")
+    assert "brightness" in errors_of(example)

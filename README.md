@@ -437,6 +437,15 @@ dots, 5/9/13 points, used to measure gaze accuracy), `questionnaire` (items of
 kind `vas`, `likert`, `choice`, `text`, `number`), `feed` (exactly one),
 `image_rating`, `recognition` (old/new test with `foils` and/or the
 `alternate_version` of a seen image as lures) and `end` (must be last).
+`display_calibration` tunes the recording to the room: a laptop running
+`socialeyes calibrate-display <phone ip>` (same Wi-Fi as the phone, or the
+phone's hotspot) watches Companion's scene video while the phone shows the
+on-screen tags around a post image, tries screen brightness x scene camera
+exposure (about 30 s), and keeps the setting that reads the tags best without
+blowing out the screen, nearest the phone's own brightness. The app keeps it for
+the rest of the session and puts the scene camera back at the end; the
+researcher can skip the step. `--check` only tests both connections.
+`display.brightness` sets a fixed screen brightness for the whole session instead.
 `tag_ladder` is a setup test, not for participants: it shows tags in several
 sizes and distances from the screen edges while the phone is held in different
 ways, so a Neon recording shows which tag size these glasses and this phone need

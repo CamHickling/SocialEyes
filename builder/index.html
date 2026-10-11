@@ -176,6 +176,7 @@ const Core = (() => {
     instructions: { title: "", text: "", button: "Continue", min_time_s: 0 },
     marker_calibration: { duration_s: 4 },
     tag_ladder: { hold_s: 20, flip_every_s: 5 },
+    display_calibration: { wait_s: 60, port: 8091 },
     camera_check: { min_face_s: 3, instructions: "Hold the phone as you normally would and look at the screen." },
     profile_photo: { text: "Take a photo for your profile picture. It is only used during this session and is deleted afterwards.", allow_skip: true },
     validation: { points: 9, target_dp: 28, instructions: "Look at each dot and tap it." },
@@ -852,6 +853,7 @@ if (typeof module !== "undefined") module.exports = Core;
     instructions: ["Instructions", "A screen of text with a Continue button."],
     marker_calibration: ["Marker calibration", "Shows AprilTags on screen and a sync flash so the scene camera can map gaze onto the screen. Do one before and one after the feed."],
     tag_ladder: ["Tag size check", "Setup test, not for participants: tags in several sizes and edge distances while the phone is held in different ways, to choose the on-screen tag size for these glasses and phone (sizes, insets and holds are set in study.yaml)."],
+    display_calibration: ["Display calibration", "Finds the screen brightness and Neon scene camera exposure at which the on-screen tags read best without blowing out the screen. A laptop runs socialeyes calibrate-display during it (about 30 s); the researcher can skip it. Put it before the first marker calibration."],
     validation: ["Validation", "Dots to look at and tap: measures eye-tracking accuracy on the phone."],
     camera_check: ["Camera check", "Researcher-run framing check for the front camera. Shows a guide and whether a face is detected, never the video."],
     profile_photo: ["Profile photo", "Optional selfie as the participant's profile picture; kept in memory only and deleted when the session ends."],
@@ -1127,6 +1129,7 @@ if (typeof module !== "undefined") module.exports = Core;
       case "instructions": return `<div class="grid">${f("title", "Title", "text")}${f("button", "Button text", "text")}${f("min_time_s", "Minimum time (s)", "float", { min: 0 })}</div>${f("text", "Text", "textarea", { rows: 4 })}`;
       case "marker_calibration": return `<div class="grid">${f("duration_s", "Duration (s)", "float", { min: 1, max: 30 })}</div>`;
       case "tag_ladder": return `<div class="grid">${f("hold_s", "Seconds per way of holding", "float", { min: 5, max: 120 })}${f("flip_every_s", "Reverse the order every (s)", "float", { min: 1, max: 60 })}</div>`;
+      case "display_calibration": return `<div class="grid">${f("wait_s", "Offer Skip after (s)", "float", { min: 5, max: 600 })}${f("port", "Port", "int", { min: 1024, max: 65535 })}</div>${f("text", "Text", "textarea", { rows: 2 })}`;
       case "camera_check": return `<div class="grid">${f("min_face_s", "Face in view for (s)", "float", { min: 0.5, max: 30 })}${f("instructions", "Instructions", "text", { wide: true })}</div>`;
       case "profile_photo": return `${f("text", "Text", "textarea")}${f("allow_skip", "Participants can skip it", "bool")}`;
       case "validation": return `<div class="grid">${f("points", "Dots", "select", { num: true, options: [[5, "5"], [9, "9"], [13, "13"]] })}${f("target_dp", "Dot size (dp)", "int", { min: 12, max: 80 })}${f("instructions", "Instructions", "text", { wide: true })}</div>`;
@@ -1735,7 +1738,7 @@ if (typeof module !== "undefined") module.exports = Core;
     return base + k;
   }
 
-  const STEP_ID_BASE = { instructions: "info", marker_calibration: "cal", tag_ladder: "ladder", validation: "val", camera_check: "camcheck", profile_photo: "photo",
+  const STEP_ID_BASE = { instructions: "info", marker_calibration: "cal", tag_ladder: "ladder", display_calibration: "dcal", validation: "val", camera_check: "camcheck", profile_photo: "photo",
     questionnaire: "q", feed: "feed", image_rating: "ratings", recognition: "recog", end: "end" };
 
   function newStep(type) {

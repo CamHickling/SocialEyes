@@ -90,7 +90,11 @@ data class Platform(
 )
 
 @Serializable
-data class Display(@SerialName("sync_patch") val syncPatch: SyncPatchConfig = SyncPatchConfig())
+data class Display(
+    @SerialName("sync_patch") val syncPatch: SyncPatchConfig = SyncPatchConfig(),
+    /** Window brightness 0-1 for the whole session; null: the phone's own setting. */
+    val brightness: Double? = null,
+)
 
 @Serializable
 data class SyncPatchConfig(
@@ -255,7 +259,7 @@ class StudyPackage(val dir: File, val manifest: StudyManifest) {
         val logging = study.logging
         if (logging.flag("screen_recording", false)) add("logging.screen_recording (not recorded yet)")
         val supportedSteps = setOf(
-            "instructions", "marker_calibration", "tag_ladder", "validation", "questionnaire", "feed", "image_rating", "recognition",
+            "instructions", "marker_calibration", "tag_ladder", "display_calibration", "validation", "questionnaire", "feed", "image_rating", "recognition",
             "profile_photo", "camera_check", "end",
         )
         steps.filter { it.type !in supportedSteps }.forEach {

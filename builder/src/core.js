@@ -28,6 +28,7 @@ const Core = (() => {
     instructions: { title: "", text: "", button: "Continue", min_time_s: 0 },
     marker_calibration: { duration_s: 4 },
     tag_ladder: { hold_s: 20, flip_every_s: 5 },
+    display_calibration: { wait_s: 60, port: 8091 },
     camera_check: { min_face_s: 3, instructions: "Hold the phone as you normally would and look at the screen." },
     profile_photo: { text: "Take a photo for your profile picture. It is only used during this session and is deleted afterwards.", allow_skip: true },
     validation: { points: 9, target_dp: 28, instructions: "Look at each dot and tap it." },

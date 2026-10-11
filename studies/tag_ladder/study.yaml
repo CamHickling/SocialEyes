@@ -2,7 +2,9 @@
 # Which on-screen AprilTag size, side inset and top/bottom clearance the scene camera can
 # read, for three ways of holding the phone (20 s each), two holds that move only the head or
 # only the phone (for the motion-sensor test), then a 1-minute feed with the on-screen tags.
+# First a display calibration (screen brightness x scene camera exposure, with a laptop), or skip it.
 # Analyse with (checklist: docs/PHONE_TRACKING_TESTS.md):
+#   socialeyes calibrate-display <phone ip>          (on the laptop, during the dcal step)
 #   python -m socialeyes.gaze.ladder <neon recording folder> <session folder>
 #   python scripts/imu_tracking_test.py <neon recording folder> <session folder> analysis_out/tag_ladder/<session>
 #   python scripts/content_tracking_test.py <neon recording folder> <session folder> data/tag_ladder/builds/<hash> analysis_out/tag_ladder/<session>
@@ -67,9 +69,8 @@ neon:
   template:                    # filled in Companion's recording template, if it has these fields
     Participant: "{participant_id}"
     Study: "{study_id}"
-  # Recording B of the run sheet (docs/PHONE_TRACKING_TESTS.md, test X1): a darker scene camera.
-  # Set exposure_us to about a third of the man_exp the eye tracker check showed for recording A.
-  # scene_exposure: {mode: manual, exposure_us: 3000}
+  # Run it twice (docs/PHONE_TRACKING_TESTS.md, test X1): recording A skips the display
+  # calibration (Companion's defaults); recording B runs it with the laptop.
 
 markers:
   on_screen:                   # screen tags above and below these steps, so nothing has
@@ -79,6 +80,9 @@ markers:
 procedure:
   - {id: welcome, type: instructions, title: Tag size check,
      text: "The screen will show patterns of black squares. Each time, hold the phone as asked and keep looking at the screen until it changes. It takes about three minutes."}
+  - id: dcal
+    type: display_calibration  # laptop: socialeyes calibrate-display <phone ip>
+    wait_s: 10                 # Skip shows after 10 s (recording A)
   - id: ladder
     type: tag_ladder
     hold_s: 20                 # per way of holding the phone (5 holds: under 2 minutes)

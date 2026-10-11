@@ -5,6 +5,7 @@
     socialeyes case-sheet --width-mm W --height-mm H [--study STUDY_DIR] [-o case_sheet.svg]
     socialeyes session SESSION_DIR [--build BUILD_DIR] [-o OUT]
     socialeyes gaze NEON_DIR SESSION_DIR [-o OUT] [--max-bridge-ms MS]
+    socialeyes calibrate-display PHONE_IP [--check] [--brightness ...] [--exposures ...] [-o OUT]
     socialeyes simulate BUILD_DIR PARTICIPANT_ID OUT_DIR [--seed N]
     socialeyes phone-check [STUDY_DIR] [--serial S]
     socialeyes load STUDY_DIR [--serial S] [--update-app] [--anyway]
@@ -141,6 +142,70 @@ def cmd_gaze(args) -> int:
     print(summary(tracking, gaze).to_string(index=False))
     print(f"Wrote {out / 'screen_tracking.csv'} and {out / 'gaze_screen.csv'}")
     return 0
+
+
+def cmd_calibrate_display(args) -> int:
+    import time
+    import urllib.error
+
+    from .gaze import display_calibration as dc
+
+    app = dc.AppLink(args.phone, args.app_port)
+    print(f"Waiting for the app's display calibration step at {args.phone}:{args.app_port} "
+          f"(start the session on the phone)...", flush=True)
+    deadline = time.monotonic() + args.wait_s
+    while True:
+        try:
+            state = app.state()
+            break
+        except (urllib.error.URLError, OSError, TimeoutError):
+            if time.monotonic() > deadline:
+                print("error: the app didn't answer. Is the session at its display calibration step, and are the "
+                      "phone and this laptop on the same network?", file=sys.stderr)
+                return 1
+            time.sleep(2)
+    print(f"Connected: session {state.get('session_uid')}, step {state.get('step_id')}; "
+          f"phone brightness {state.get('system_brightness')}, scene camera {state.get('camera')}")
+    try:
+        scene = dc.NeonScene(args.phone, args.neon_port)
+    except Exception as e:  # the real-time API raises its own errors for an unreachable Companion
+        print(f"error: can't reach Neon Companion's real-time API at {args.phone}:{args.neon_port}: {e}", file=sys.stderr)
+        return 1
+    try:
+        K = dist = None
+        if not (state.get("calibration") or {}).get("K"):
+            K, dist = scene.calibration()
+        layout = dc.Layout.from_state(state, K, dist)
+        if args.check:
+            t = app.apply(None, {})  # changes nothing; answers with the phone's time
+            frames = scene.frames_after(t, 5, timeout_s=10)
+            m, _ = dc.measure(frames, layout, dc.TagDetector(), state.get("brightness") or 1.0, {})
+            print(f"Check: {len(frames)} scene frames; tags read {m.tags_read:.0%}, blown out "
+                  f"{'-' if m.blown_out is None else f'{m.blown_out:.0%}'}. Nothing was changed.")
+            return 0 if frames else 1
+        levels = [float(x) for x in args.brightness.split(",")]
+        exposures = [x if x == "auto" else int(x) for x in args.exposures.split(",")]
+        plan = dc.settings(state, levels, exposures, args.min_brightness)
+        target = args.target_brightness if args.target_brightness is not None else state.get("system_brightness")
+        print(f"Trying {len(plan)} settings (about {len(plan) * 0.8 + 6:.0f} s); "
+              f"the participant should keep looking at the screen.")
+        best, measures = dc.calibrate(app, scene, layout, plan, frames=args.frames, target_brightness=target)
+        result = dc.summary(best, measures)
+        if best is None:
+            print("No setting let the scene camera read the tags. Is the phone in view of the glasses? "
+                  "The app keeps its previous settings.")
+            app.done(None, None, result)
+        else:
+            print(f"Best: {best.label} (tags read {best.tags_read:.0%}, blown out "
+                  f"{'-' if best.blown_out is None else f'{best.blown_out:.0%}'}); sent to the app.")
+            app.done(best.brightness, best.camera, result)
+        out = Path(args.out) if args.out else Path("analysis_out") / "display_calibration" / f"{state.get('session_uid', 'session')}.json"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps({"state": state, **result}, indent=1), encoding="utf-8")
+        print(f"Wrote {out}")
+        return 0 if best else 1
+    finally:
+        scene.close()
 
 
 def _study_id(session_dir) -> str | None:
@@ -305,6 +370,23 @@ def main(argv: list[str] | None = None) -> int:
     g.add_argument("--max-bridge-ms", type=float, default=300.0,
                    help="longest stretch without readable tags bridged by optical flow (default 300)")
     g.set_defaults(func=cmd_gaze)
+
+    d = sub.add_parser("calibrate-display", help="during a display_calibration step: find the screen brightness and "
+                                                 "Neon scene exposure at which the tags read best")
+    d.add_argument("phone", help="the phone's IP address (Companion's, as shown in the Neon Companion app)")
+    d.add_argument("--app-port", type=int, default=8091, help="the step's port (default 8091)")
+    d.add_argument("--neon-port", type=int, default=8080, help="Companion's real-time API port (default 8080)")
+    d.add_argument("--check", action="store_true", help="only check both connections and read a few frames")
+    d.add_argument("--brightness", default="1.0,0.75,0.55,0.4,0.3", help="screen brightness levels to try (0-1)")
+    d.add_argument("--exposures", default="auto,1000,2000,4000,8000,16000",
+                   help="scene camera exposures to try: auto and/or microseconds")
+    d.add_argument("--min-brightness", type=float, default=0.25, help="never go dimmer than this (default 0.25)")
+    d.add_argument("--target-brightness", type=float,
+                   help="prefer brightness near this (default: the phone's own brightness setting)")
+    d.add_argument("--frames", type=int, default=8, help="scene frames scored per setting (default 8)")
+    d.add_argument("--wait-s", type=float, default=120.0, help="how long to wait for the app (default 120)")
+    d.add_argument("-o", "--out", help="results file (default: analysis_out/display_calibration/<session>.json)")
+    d.set_defaults(func=cmd_calibrate_display)
 
     m = sub.add_parser("simulate", help="write a fake session for a compiled plan (testing without the app)")
     m.add_argument("build", help="compiled study folder")

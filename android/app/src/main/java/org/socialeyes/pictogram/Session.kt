@@ -19,6 +19,7 @@ import org.socialeyes.pictogram.log.Clocks
 import org.socialeyes.pictogram.log.FrontCameraConfig
 import org.socialeyes.pictogram.log.FrontCameraRecorder
 import org.socialeyes.pictogram.log.MotionSensors
+import org.socialeyes.pictogram.log.ScreenRect
 import org.socialeyes.pictogram.log.SessionLog
 import org.socialeyes.pictogram.log.TouchRecorder
 import org.socialeyes.pictogram.neon.NeonLink
@@ -52,8 +53,16 @@ class Session(
     /** Current sync code bit (0/1), driven by the sync patch; -1 before the first frame. */
     var syncLevel by mutableIntStateOf(-1)
 
+    /** Window brightness 0-1 (display.brightness, or what a display_calibration step chose);
+     *  null: the phone's own setting. SessionScreen applies it to the window. */
+    var brightness by mutableStateOf(pkg.study.display.brightness?.toFloat())
+
+    /** Where the on-screen tags are (screen px, whole tag images), once laid out (OnScreenTags). */
+    var screenTagRects by mutableStateOf<Map<Int, ScreenRect>>(emptyMap())
+
     fun begin() {
         sensors?.start()
+        brightness?.let { log.event("display_setting", fields = arrayOf("brightness" to it, "source" to "study")) }
         startStep()
     }
 

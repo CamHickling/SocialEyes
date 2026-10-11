@@ -73,10 +73,18 @@ object NeonSetup {
         return change to problems
     }
 
-    /** The camera values to put back after the session: the current value of every control the
-     *  session changes (Companion settings outlast the session, and the glasses are shared). */
-    fun restoreValues(change: Map<String, String>, before: Map<String, CameraControl>): Map<String, String> =
-        change.keys.mapNotNull { k -> before[k]?.let { k to it.current } }.toMap()
+    /** The camera values that put Companion back as it was before the session (its settings outlast
+     *  the session, and the glasses are shared): the auto exposure mode and brightness, and the
+     *  manual exposure time and gain only if it was in manual mode (in auto they're the camera's own). */
+    fun restoreValues(before: Map<String, CameraControl>): Map<String, String> = buildMap {
+        val mode = before["ae_mode"]?.current
+        mode?.let { put("ae_mode", it) }
+        before["brightness"]?.let { put("brightness", it.current) }
+        if (mode == "manual") {
+            before["man_exp"]?.let { put("man_exp", it.current) }
+            before["gain"]?.let { put("gain", it.current) }
+        }
+    }
 
     /** Template answers from the study's title -> value map (titles match case-insensitively);
      *  returns answers by item id, the titles filled, and the study titles the template lacks. */

@@ -1,6 +1,8 @@
 package org.socialeyes.pictogram.ui
 
+import android.app.Activity
 import android.os.Build
+import android.view.WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
 import android.view.RoundedCorner
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -16,6 +18,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -29,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -43,6 +47,13 @@ import kotlin.math.roundToInt
 @Composable
 fun SessionScreen(session: Session, onExit: () -> Unit) {
     val pkg = session.pkg
+    // session.brightness: the window's brightness (the phone's own setting is left alone)
+    val window = (LocalContext.current as? Activity)?.window
+    val brightness = session.brightness
+    DisposableEffect(window, brightness) {
+        window?.let { w -> w.attributes = w.attributes.also { it.screenBrightness = brightness ?: BRIGHTNESS_OVERRIDE_NONE } }
+        onDispose { window?.let { w -> w.attributes = w.attributes.also { it.screenBrightness = BRIGHTNESS_OVERRIDE_NONE } } }
+    }
     StudyTheme(dark = pkg.study.platform.theme == "dark") {
         var confirmAbort by remember { mutableStateOf(false) }
         BackHandler { if (session.log.finished) onExit() else confirmAbort = true }
@@ -62,6 +73,7 @@ fun SessionScreen(session: Session, onExit: () -> Unit) {
                     "feed" -> FeedScreen(session, step) { reason -> session.next(reason) }
                     "marker_calibration" -> MarkerCalibrationStep(session, step) { session.next() }
                     "tag_ladder" -> TagLadderStep(session, step) { session.next() }
+                    "display_calibration" -> DisplayCalibrationStep(session, step) { session.next() }
                     "validation" -> ValidationStep(session, step) { session.next() }
                     "profile_photo" -> ProfilePhotoStep(session, step) { session.next() }
                     "camera_check" -> CameraCheckStep(session, step) { session.next() }

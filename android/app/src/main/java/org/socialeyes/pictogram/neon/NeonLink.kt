@@ -38,10 +38,27 @@ class NeonLink private constructor(
     private val preflight: Preflight,
     private val checklist: List<Pair<String, Boolean>>,
     private val calibration: ByteArray?,
-    private val restoreCamera: Map<String, String>,
+    /** True once the app changed Companion's scene camera (put back in [stop]). */
+    @Volatile private var cameraChanged: Boolean,
     private val startedNs: Long,
 ) {
     private val status get() = preflight.status
+
+    /** The glasses' scene camera calibration, if Companion gave it. */
+    val sceneCalibration: SceneCalibration? by lazy { calibration?.let { runCatching { SceneCalibration.parse(it) }.getOrNull() } }
+
+    /** Companion's scene camera controls now (null if it doesn't answer). Blocks. */
+    fun cameraState(): Map<String, CameraControl>? = runCatching { client.cameraState() }.getOrNull()
+
+    /** Changes the scene camera during the session (e.g. a display_calibration step); logged, and
+     *  put back as it was before the session when the session ends. Blocks; throws IOException. */
+    fun setCamera(values: Map<String, String>, source: String) {
+        if (values.isEmpty()) return
+        cameraChanged = true
+        client.setCamera(values)
+        log?.event("neon", fields = arrayOf("status" to "scene_camera_set", "source" to source,
+            "camera" to values, "recording_id" to recordingId))
+    }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var log: SessionLog? = null
     private var monitor: Job? = null
@@ -108,8 +125,9 @@ class NeonLink private constructor(
                 }.fold({ OK }, { it.message ?: it.toString() })
             }
             // Companion keeps camera settings and the glasses are shared: put them back
-            if (restoreCamera.isNotEmpty()) {
-                restored = withTimeoutOrNull(3000) { runCatching { client.setCamera(restoreCamera) }.isSuccess } == true
+            val before = preflight.camera
+            if (cameraChanged && before != null) {
+                restored = withTimeoutOrNull(3000) { runCatching { client.setCamera(NeonSetup.restoreValues(before)) }.isSuccess } == true
             }
             when (result) {
                 null -> "Companion didn't answer"
@@ -167,15 +185,14 @@ class NeonLink private constructor(
             }
             if (!status.glassesConnected) throw NeonNotReady("The Neon glasses aren't connected. Plug them into this phone and wait for Companion to show them.")
             if (status.recording) throw NeonNotReady("Neon Companion is already recording. Stop that recording in Companion first, so this session gets its own.")
-            var restore = emptyMap<String, String>()
             if (preflight.exposureChange.isNotEmpty()) {
                 try {
                     client.setCamera(preflight.exposureChange)
                 } catch (e: IOException) {
                     throw NeonNotReady("Couldn't set the scene camera exposure: ${e.message}")
                 }
-                restore = NeonSetup.restoreValues(preflight.exposureChange, preflight.camera.orEmpty())
             }
+            val restore = preflight.camera?.takeIf { preflight.exposureChange.isNotEmpty() }?.let(NeonSetup::restoreValues).orEmpty()
             val warnings = preflight.warnings.toMutableList()
             if (preflight.templateAnswers.isNotEmpty()) {
                 runCatching { client.fillTemplate(preflight.templateAnswers) }
@@ -190,7 +207,8 @@ class NeonLink private constructor(
                 if (restore.isNotEmpty()) runCatching { client.setCamera(restore) }
                 throw NeonNotReady("Neon Companion couldn't start a recording: ${e.message}")
             }
-            return NeonLink(client, id, preflight.copy(status = status, warnings = warnings), checklist, calibration, restore, t)
+            return NeonLink(client, id, preflight.copy(status = status, warnings = warnings), checklist, calibration,
+                preflight.exposureChange.isNotEmpty(), t)
         }
 
         private const val OK = "ok"

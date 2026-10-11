@@ -56,7 +56,10 @@ class NeonSetupTest {
         val (change, problems) = NeonSetup.exposureChange(wanted, camera)
         assertTrue(problems.isEmpty())
         assertEquals(mapOf("ae_mode" to "manual", "man_exp" to "2000"), change)
-        assertEquals(mapOf("ae_mode" to "auto", "man_exp" to "8000"), NeonSetup.restoreValues(change, camera))
+        assertEquals(mapOf("ae_mode" to "auto", "brightness" to "0"), NeonSetup.restoreValues(camera))
+        val manual = camera + ("ae_mode" to CameraControl("ae_mode", "manual", allowed = listOf("auto", "manual")))
+        assertEquals(mapOf("ae_mode" to "manual", "brightness" to "0", "man_exp" to "8000", "gain" to "1"),
+            NeonSetup.restoreValues(manual))
     }
 
     @Test

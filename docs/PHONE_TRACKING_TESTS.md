@@ -30,27 +30,35 @@ have. Shared scripts: `scripts/tracking_pnp_test.py`, `scripts/content_tracking_
 
 ## Next glasses session: run sheet
 
-One session of about 15 minutes covers everything that needs the glasses right now.
+One session of about 20 minutes covers everything that needs the glasses right now. Phone and
+laptop on the same Wi-Fi (or the laptop on the phone's hotspot).
 
-- [ ] Install the latest Pictogram build and compile `studies/tag_ladder` (now with phone motion
-      sensors at 100 Hz and five holds).
-- [ ] **Recording A** — the scene camera on Companion's default (auto). Run the tag_ladder study
-      once (≈ 3 min). On the app's eye tracker check screen, note the scene camera's current
-      `man_exp` (µs) and the allowed range. This is also the first real test of the check screen
-      (camera, template and calibration calls).
-- [ ] **Recording B** — set a darker exposure in `studies/tag_ladder/study.yaml` (uncomment
-      `scene_exposure`, `exposure_us` ≈ a third of A's value), recompile, and run it again.
-      The app sets it at the start and puts Companion back afterwards; check that Companion's
-      setting is back to auto when it's done.
+- [ ] On the laptop: `. .\scripts\env.ps1`, then `socialeyes load studies/tag_ladder --update-app`
+      (installs this build of Pictogram and the study; phone plugged in by USB).
+- [ ] Glasses on, Companion open. Start a tag_ladder session: the **eye tracker check** screen
+      should show the glasses, battery, storage, streams and scene camera settings (the first
+      real test of the camera, template and calibration calls). Tick the checklist, Start.
+- [ ] **Recording A (Companion's defaults)** — at the display calibration step, wait 10 s and
+      tap *Skip calibration*. Run the rest of the study (≈ 3 min).
+- [ ] **Recording B (calibrated)** — start a second session. At the display calibration step,
+      on the laptop: `socialeyes calibrate-display <phone ip>` (the phone shows the address).
+      `--check` first if you like: it only tests both connections. Keep looking at the screen for
+      ~30 s; the laptop prints each setting's score and the one it chose. Run the rest.
+- [ ] After each session, check in Companion that the scene camera is back on auto.
 - [ ] Copy both Neon recordings and both session folders off the phone (never delete anyone
       else's recordings or `Documents/TouchTracking`).
-- [ ] Run the analyses: X1, L1–L3, S2–S4, C2 (commands below).
+- [ ] Run the analyses: X1, L1–L3, S2–S4, C2 (commands below), comparing A with B.
+
+If the calibration can't connect: the phone and laptop must reach each other (try the phone's
+hotspot), and port 8091 must be free on the phone. If it reads no tags at any setting, the phone
+isn't in the scene camera's view: hold it as in the feed.
 
 ---
 
 ## X. Setup: scene camera exposure (affects every option)
 
-**X1 — Is the phone screen blown out in the scene video?** *Needs the glasses (recordings A/B).*
+**X1 — Is the phone screen blown out in the scene video, and does the display calibration fix it?**
+*Needs the glasses (recordings A/B: defaults vs `display_calibration`).*
 
 Found in C1: the scene camera exposes for the room, so the bright phone screen is mostly
 saturated. In CAM-210 run 3, **half of the known screen content was pure white in the video**
@@ -61,7 +69,7 @@ Run: `content_tracking_test.py` (its step 0 prints the share of content the vide
 
 | Result | Meaning | Action |
 |---|---|---|
-| B resolves ≥ 80% of content and its tag detection is at least A's | Exposure was hurting us | Make B's setting the standard `neon.scene_exposure` in every study (the app sets it) |
+| B resolves ≥ 80% of content and its tag detection is at least A's | Exposure/brightness was hurting us | Put a `display_calibration` step in every study (or, if the chosen setting is the same every time, fix it with `neon.scene_exposure` + `display.brightness`) |
 | B resolves more content but detects fewer tags (room/face too dark doesn't matter; tags do) | Trade-off | Keep the setting that gives better tag detection; content (option 1) gets less weight |
 | No difference | The screen's own brightness is the problem | Try lower phone brightness in the app during sessions (one-line change), retest |
 

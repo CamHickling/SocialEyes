@@ -42,13 +42,13 @@ private const val EDGE_INSET_MM = 2f
  * above it and two below (TL, TR, BR, BL, as `markers.screen_tag_ids`), so gaze can be put
  * on the screen without anything around the phone. The step gets the space in between.
  * The tags' rectangles (whole 12-cell images, like marker_calibration's) are logged once in
- * a `marker_layout` event with `on_screen: true`.
+ * a `marker_layout` event with `on_screen: true`. A display_calibration step always gets them.
  */
 @Composable
 fun OnScreenTags(session: Session, step: Step, content: @Composable () -> Unit) {
     val pkg = session.pkg
     val cfg = pkg.study.markers.onScreen
-    if (step.id !in cfg.steps) {
+    if (step.id !in cfg.steps && step.type != "display_calibration") {
         content()
         return
     }
@@ -66,6 +66,7 @@ fun OnScreenTags(session: Session, step: Step, content: @Composable () -> Unit) 
 
     LaunchedEffect(Unit) {
         while (rects.size < ids.size) delay(50)
+        session.screenTagRects = rects.toMap()
         session.log.event(
             "marker_layout",
             fields = arrayOf(

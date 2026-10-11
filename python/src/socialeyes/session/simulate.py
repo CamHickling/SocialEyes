@@ -289,6 +289,9 @@ class _Sim:
                     self.wait(rng.uniform(2, 5))
                     self.tap(540, 2250)
                     self.wait(step.get("hold_s", 20.0))
+            elif kind == "display_calibration":
+                self.wait(rng.uniform(15, 30))
+                self.emit("display_calibration", step_id=step["id"], status="skipped")
             elif kind == "camera_check":
                 face_s = step.get("min_face_s", 3.0) + rng.uniform(0.5, 3.0)
                 self.wait(face_s)

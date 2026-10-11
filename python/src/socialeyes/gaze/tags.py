@@ -23,12 +23,17 @@ class TagDetector:
         """Corners of each tag found, in pupil_apriltags' order (TR, TL, BL, BR for an upright tag),
         in the frame's own (distorted) pixels. The darkened pass runs when fewer than `want` tags
         were found."""
+        return {i: c for i, (c, _) in self.detect_margins(gray, want).items()}
+
+    def detect_margins(self, gray: np.ndarray, want: int | None = None, second_pass: bool = True) -> dict[int, tuple]:
+        """As detect, with each tag's decision margin (how clearly its bits read; higher is safer).
+        second_pass=False skips the darkened pass, to judge the picture as recorded."""
         best = {d.tag_id: d for d in self._det.detect(gray)}
-        if want is None or len(best) < want:
+        if second_pass and (want is None or len(best) < want):
             for d in self._det.detect(cv2.LUT(gray, _GAMMA)):
                 if d.tag_id not in best or d.decision_margin > best[d.tag_id].decision_margin:
                     best[d.tag_id] = d
-        return {int(i): np.asarray(d.corners, np.float64) for i, d in best.items()}
+        return {int(i): (np.asarray(d.corners, np.float64), float(d.decision_margin)) for i, d in best.items()}
 
 
 def tag_corners(rect, quiet_cells: float = 2, cells: float = 8) -> np.ndarray:

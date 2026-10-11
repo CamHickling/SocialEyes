@@ -53,6 +53,10 @@ class Display(_Strict):
     viewing_distance_cm: float = Field(35.0, gt=5, lt=200)
     """Nominal distance, used only when it cannot be estimated from the markers."""
     sync_patch: SyncPatch = SyncPatch()
+    brightness: Optional[float] = Field(None, ge=0.05, le=1.0)
+    """Screen brightness for the whole session (0-1, the app's window brightness; the phone's
+    own setting is left alone). Unset: the phone's setting. A display_calibration step
+    overrides it for the rest of the session."""
 
 
 class OnScreenTags(_Strict):
@@ -379,6 +383,22 @@ class RecognitionStep(_Step):
     confidence: bool = True
 
 
+class DisplayCalibrationStep(_Step):
+    """Finds the screen brightness and Neon scene camera exposure at which the scene camera
+    reads the on-screen tags best without blowing out the screen (CAM-165). The phone shows the
+    session's on-screen tags around a post image; a laptop running `socialeyes calibrate-display`
+    watches Companion's scene video, steps through brightness x exposure via a small server the
+    app runs on `port` during this step, and sends back the best setting, which the app keeps for
+    the rest of the session (the scene camera is put back at the end). Needs the Neon recording
+    (neon.auto_record). Without a laptop within `wait_s`, the researcher can skip it."""
+
+    type: Literal["display_calibration"]
+    text: str = "Hold the phone as you normally would and keep looking at the screen. This takes about half a minute."
+    port: int = Field(8091, ge=1024, le=65535)
+    wait_s: float = Field(60.0, ge=5, le=600)
+    """How long to wait for the laptop before offering Skip."""
+
+
 class EndStep(_Step):
     type: Literal["end"]
     text: str = "Thank you! Please hand the phone back to the researcher."
@@ -389,6 +409,7 @@ Step = Annotated[
         InstructionsStep,
         MarkerCalibrationStep,
         TagLadderStep,
+        DisplayCalibrationStep,
         CameraCheckStep,
         ProfilePhotoStep,
         ValidationStep,
@@ -519,6 +540,9 @@ class Study(_Strict):
             if isinstance(s, TagLadderStep) and taken & set(s.tag_ids):
                 raise ValueError(f"step {s.id}: tag ids {s.tag_ids[0]}-{s.tag_ids[-1]} overlap the screen or case "
                                  f"tags; set first_tag_id")
+            if isinstance(s, DisplayCalibrationStep) and not self.neon.auto_record:
+                raise ValueError(f"step {s.id}: display_calibration sets the Neon scene camera, so it needs "
+                                 "neon.auto_record")
         return self
 
     @property
