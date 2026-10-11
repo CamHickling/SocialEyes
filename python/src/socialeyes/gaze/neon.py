@@ -67,3 +67,30 @@ def read_recording(path: str | Path) -> NeonRecording:
     scene_t = np.fromfile(path / "Neon Scene Camera v1 ps1.time", "<u8").astype(np.int64)
     return NeonRecording(path, calib[0]["scene_camera_matrix"].copy(), calib[0]["scene_distortion_coefficients"].copy(),
                          gaze[:n], gaze_t[:n], scene_t)
+
+
+@dataclass
+class NeonImu:
+    t: np.ndarray            # (n,) Unix ns
+    gyro: np.ndarray         # (n, 3) deg/s, in the IMU's axes
+    accel: np.ndarray        # (n, 3) g
+    quat: np.ndarray         # (n, 4) w, x, y, z: the module's orientation (Neon's own fusion)
+
+
+_IMU_DTYPE = np.dtype([("t", "<i8"), ("gyro", "<f4", 3), ("accel", "<f4", 3), ("quat", "<f4", 4)])
+
+# Scene camera axes (x right, y down, z forward) from the IMU's (x right, y forward, z up): a
+# 102 degree turn about x, as the camera looks 12 degrees below the IMU's forward axis (Pupil Labs'
+# Neon documentation gives the same angle for the other direction, scene -> IMU).
+_a = np.deg2rad(90 + 12)
+CAMERA_FROM_IMU = np.array([[1, 0, 0], [0, np.cos(_a), -np.sin(_a)], [0, np.sin(_a), np.cos(_a)]])
+
+
+def read_imu(path: str | Path) -> NeonImu:
+    """The glasses' IMU (~110 Hz) from a native recording's 'imu ps1.raw' (see its imu.dtype)."""
+    f = Path(path) / "imu ps1.raw"
+    if not f.exists():
+        raise NeonFormatError(f"{path}: no 'imu ps1.raw' (recorded with an older Companion app?)")
+    a = np.fromfile(f, _IMU_DTYPE)
+    return NeonImu(a["t"].astype(np.int64), a["gyro"].astype(np.float64), a["accel"].astype(np.float64),
+                   a["quat"].astype(np.float64))

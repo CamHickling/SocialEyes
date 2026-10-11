@@ -1,8 +1,11 @@
 # Tag size ladder for the Neon glasses (Linear CAM-165).
 # Which on-screen AprilTag size, side inset and top/bottom clearance the scene camera can
-# read, for three ways of holding the phone (20 s each), then a 1-minute feed with the
-# on-screen tags. Analyse with:
+# read, for three ways of holding the phone (20 s each), two holds that move only the head or
+# only the phone (for the motion-sensor test), then a 1-minute feed with the on-screen tags.
+# Analyse with (checklist: docs/PHONE_TRACKING_TESTS.md):
 #   python -m socialeyes.gaze.ladder <neon recording folder> <session folder>
+#   python scripts/imu_tracking_test.py <neon recording folder> <session folder> analysis_out/tag_ladder/<session>
+#   python scripts/content_tracking_test.py <neon recording folder> <session folder> data/tag_ladder/builds/<hash> analysis_out/tag_ladder/<session>
 # Posts are copied from studies/accuracy_check (itself from studies/example).
 id: tag_ladder
 title: Neon tag size ladder (CAM-165)
@@ -51,7 +54,8 @@ feed:
 
 logging:                       # besides gaze; see docs/EVENT_LOG.md
   touches: true                # raw touch points
-  sensors: false               # accelerometer / gyroscope
+  sensors: true                # accelerometer / gyroscope: tests bridging tag gaps with the phone's gyro
+  sensor_hz: 100               # about the Neon IMU's rate (~105 Hz)
   screen_recording: false      # pilots only: Android asks permission every session
   front_camera:                # face video for expression analysis; add a camera_check
     enabled: false             # step before the recorded steps
@@ -66,10 +70,10 @@ markers:
 
 procedure:
   - {id: welcome, type: instructions, title: Tag size check,
-     text: "The screen will show patterns of black squares. Each time, hold the phone as asked and keep looking at the screen until it changes. It takes about a minute and a half."}
+     text: "The screen will show patterns of black squares. Each time, hold the phone as asked and keep looking at the screen until it changes. It takes about three minutes."}
   - id: ladder
     type: tag_ladder
-    hold_s: 20                 # per way of holding the phone
+    hold_s: 20                 # per way of holding the phone (5 holds: under 2 minutes)
     flip_every_s: 5            # order of sizes/insets reverses every 5 s
     sizes_mm: [8, 10, 12, 14]  # down the middle of the screen
     side_insets_mm: [3, 4, 5, 6]   # 12 mm tags at the left/right edges (curved on this phone)
@@ -78,6 +82,9 @@ procedure:
       - Hold the phone the way you normally would.
       - Hold the phone a little further away, near arm's length.
       - Rest the phone low, near your lap, and look down at it.
+      # the last two separate the head's motion (Neon IMU) from the phone's (phone gyroscope)
+      - Lay the phone flat on the table. Keep looking at it while you slowly turn your head left and right, then nod.
+      - Hold your head still and slowly tilt and turn the phone in your hand, keeping it in view.
   - {id: feed, type: feed, instructions: "Now scroll the feed as you normally would for a minute."}
   - {id: end, type: end}
 

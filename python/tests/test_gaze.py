@@ -122,3 +122,20 @@ def test_map_gaze_uses_the_nearest_frame_and_flags_off_screen():
     assert np.allclose(g.loc[0, ["x_px", "y_px"]].astype(float), [540, 1200], atol=1e-6)
     assert g["on_screen"].tolist() == [True, False]
     assert g["t_ns"].tolist() == [1_000 - 5, 10_000_000 - 5]
+
+
+def test_read_imu(tmp_path):
+    from socialeyes.gaze.neon import CAMERA_FROM_IMU, read_imu
+    rows = np.zeros(3, [("t", "<i8"), ("g", "<f4", 3), ("a", "<f4", 3), ("q", "<f4", 4)])
+    rows["t"] = [10, 20, 30]
+    rows["g"][1] = [1.5, -2.0, 0.25]
+    rows["q"][:, 0] = 1.0
+    rows.tofile(tmp_path / "imu ps1.raw")
+    imu = read_imu(tmp_path)
+    assert imu.t.tolist() == [10, 20, 30]
+    assert np.allclose(imu.gyro[1], [1.5, -2.0, 0.25]) and np.allclose(imu.quat[:, 0], 1.0)
+    # the camera looks 12 degrees below the IMU's forward axis (y): in camera axes (y down, z
+    # forward) that axis points forward and a little up; the IMU's up (z) points up the image
+    fwd, up = CAMERA_FROM_IMU @ [0, 1, 0], CAMERA_FROM_IMU @ [0, 0, 1]
+    assert np.isclose(np.degrees(np.arccos(fwd[2])), 12) and fwd[1] < 0
+    assert up[1] < -0.97

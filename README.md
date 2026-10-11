@@ -515,6 +515,11 @@ screen mapping) and `gaze_screen.csv` (every gaze sample in screen pixels, on
 the session's clock, with `on_screen`), and prints the share of frames and gaze
 samples mapped per step.
 
+How the phone is tracked is still being settled (tag size and placement, and
+whether screen content and motion sensors should fill the gaps between tag
+frames): the tests, the results so far and what each outcome would mean are in
+[`docs/PHONE_TRACKING_TESTS.md`](docs/PHONE_TRACKING_TESTS.md).
+
 > [!NOTE]
 > **Front camera:** Android shows a camera indicator while recording, and a
 > camera pointed at you may make you more aware of your appearance, which is
