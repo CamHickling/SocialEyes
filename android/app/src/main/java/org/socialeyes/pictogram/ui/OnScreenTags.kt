@@ -33,6 +33,9 @@ private const val TAG_CELLS = 8f
 private const val IMAGE_CELLS = 12f
 private const val SHOWN_CELLS = 10f // keep a 1-cell quiet zone, the detector's minimum
 private const val SIDE_INSET_MM = 6f // clear of rounded corners and curved screen edges
+// Clear of the top and bottom screen edges: with only the 1-cell quiet zone there, the tag's
+// border blurred into the dark bezel and the top tags were missed in most frames (CAM-165).
+private const val EDGE_INSET_MM = 2f
 
 /**
  * `markers.on_screen`: the four screen tags kept on screen for a whole step, two in a band
@@ -57,6 +60,7 @@ fun OnScreenTags(session: Session, step: Step, content: @Composable () -> Unit) 
     val shown = with(density) { (cell * SHOWN_CELLS).toDp() }
     val image = with(density) { (cell * IMAGE_CELLS).toDp() }
     val inset = with(density) { (SIDE_INSET_MM / 25.4f * metrics.xdpi - cell).coerceAtLeast(0f).toDp() }
+    val edge = with(density) { (EDGE_INSET_MM / 25.4f * metrics.ydpi).toDp() }
     val ids = pkg.study.markers.screenTagIds
     val rects = remember { HashMap<Int, ScreenRect>() }
 
@@ -96,16 +100,17 @@ fun OnScreenTags(session: Session, step: Step, content: @Composable () -> Unit) 
     }
 
     @Composable
-    fun Band(left: Int, right: Int) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = inset), horizontalArrangement = Arrangement.SpaceBetween) {
+    fun Band(left: Int, right: Int, top: Boolean) {
+        val pad = if (top) Modifier.padding(top = edge) else Modifier.padding(bottom = edge)
+        Row(Modifier.fillMaxWidth().then(pad).padding(horizontal = inset), horizontalArrangement = Arrangement.SpaceBetween) {
             Tag(left)
             Tag(right)
         }
     }
 
     Column(Modifier.fillMaxSize()) {
-        Band(ids[0], ids[1])
+        Band(ids[0], ids[1], top = true)
         Box(Modifier.weight(1f).fillMaxWidth()) { content() }
-        Band(ids[3], ids[2])
+        Band(ids[3], ids[2], top = false)
     }
 }
