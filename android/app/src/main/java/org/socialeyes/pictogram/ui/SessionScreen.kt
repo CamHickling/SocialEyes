@@ -61,6 +61,7 @@ fun SessionScreen(session: Session, onExit: () -> Unit) {
                     ) { session.next() }
                     "feed" -> FeedScreen(session, step) { reason -> session.next(reason) }
                     "marker_calibration" -> MarkerCalibrationStep(session, step) { session.next() }
+                    "tag_ladder" -> TagLadderStep(session, step) { session.next() }
                     "validation" -> ValidationStep(session, step) { session.next() }
                     "profile_photo" -> ProfilePhotoStep(session, step) { session.next() }
                     "camera_check" -> CameraCheckStep(session, step) { session.next() }

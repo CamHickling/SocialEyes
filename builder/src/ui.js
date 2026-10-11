@@ -73,6 +73,7 @@
   const STEP_INFO = {
     instructions: ["Instructions", "A screen of text with a Continue button."],
     marker_calibration: ["Marker calibration", "Shows AprilTags on screen and a sync flash so the scene camera can map gaze onto the screen. Do one before and one after the feed."],
+    tag_ladder: ["Tag size check", "Setup test, not for participants: tags in several sizes and edge distances while the phone is held in different ways, to choose the on-screen tag size for these glasses and phone (sizes, insets and holds are set in study.yaml)."],
     validation: ["Validation", "Dots to look at and tap: measures eye-tracking accuracy on the phone."],
     camera_check: ["Camera check", "Researcher-run framing check for the front camera. Shows a guide and whether a face is detected, never the video."],
     profile_photo: ["Profile photo", "Optional selfie as the participant's profile picture; kept in memory only and deleted when the session ends."],
@@ -347,6 +348,7 @@
     switch (s.type) {
       case "instructions": return `<div class="grid">${f("title", "Title", "text")}${f("button", "Button text", "text")}${f("min_time_s", "Minimum time (s)", "float", { min: 0 })}</div>${f("text", "Text", "textarea", { rows: 4 })}`;
       case "marker_calibration": return `<div class="grid">${f("duration_s", "Duration (s)", "float", { min: 1, max: 30 })}</div>`;
+      case "tag_ladder": return `<div class="grid">${f("hold_s", "Seconds per way of holding", "float", { min: 5, max: 120 })}${f("flip_every_s", "Reverse the order every (s)", "float", { min: 1, max: 60 })}</div>`;
       case "camera_check": return `<div class="grid">${f("min_face_s", "Face in view for (s)", "float", { min: 0.5, max: 30 })}${f("instructions", "Instructions", "text", { wide: true })}</div>`;
       case "profile_photo": return `${f("text", "Text", "textarea")}${f("allow_skip", "Participants can skip it", "bool")}`;
       case "validation": return `<div class="grid">${f("points", "Dots", "select", { num: true, options: [[5, "5"], [9, "9"], [13, "13"]] })}${f("target_dp", "Dot size (dp)", "int", { min: 12, max: 80 })}${f("instructions", "Instructions", "text", { wide: true })}</div>`;
@@ -955,7 +957,7 @@
     return base + k;
   }
 
-  const STEP_ID_BASE = { instructions: "info", marker_calibration: "cal", validation: "val", camera_check: "camcheck", profile_photo: "photo",
+  const STEP_ID_BASE = { instructions: "info", marker_calibration: "cal", tag_ladder: "ladder", validation: "val", camera_check: "camcheck", profile_photo: "photo",
     questionnaire: "q", feed: "feed", image_rating: "ratings", recognition: "recog", end: "end" };
 
   function newStep(type) {

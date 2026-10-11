@@ -284,6 +284,11 @@ class _Sim:
                 self.tap(540, 2250)
             elif kind == "marker_calibration":
                 self.wait(step.get("duration_s", 4.0))
+            elif kind == "tag_ladder":
+                for _ in step.get("holds", [""] * 3):
+                    self.wait(rng.uniform(2, 5))
+                    self.tap(540, 2250)
+                    self.wait(step.get("hold_s", 20.0))
             elif kind == "camera_check":
                 face_s = step.get("min_face_s", 3.0) + rng.uniform(0.5, 3.0)
                 self.wait(face_s)

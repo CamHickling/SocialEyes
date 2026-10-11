@@ -877,7 +877,7 @@ def compile_study(study_dir: Path | str, out_dir: Path | str | None = None, clea
 
     from ..markers import write_tag_png  # needs OpenCV; imported here so checking works without it
 
-    for tag_id in b.study.markers.screen_tag_ids:
+    for tag_id in b.study.markers.screen_tag_ids + b.study.ladder_tag_ids:
         write_tag_png(tag_id, out / "tags" / f"tag36h11_{tag_id}.png")
     write_checksums(out)
     return out, rep
@@ -969,7 +969,7 @@ def _study_manifest(b: StudyBundle) -> dict:
             s.id: [list(p) for p in validation_points(s.points)]
             for s in study.procedure if isinstance(s, ValidationStep)
         },
-        "screen_tags": {str(t): f"tags/tag36h11_{t}.png" for t in study.markers.screen_tag_ids},
+        "screen_tags": {str(t): f"tags/tag36h11_{t}.png" for t in study.markers.screen_tag_ids + study.ladder_tag_ids},
     }
 
 

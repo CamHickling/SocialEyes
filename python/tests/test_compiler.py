@@ -279,3 +279,15 @@ def test_explicit_comment_ids_and_id_rules(example):
 def test_story_ids_from_file_names_must_be_unique(example):
     edit_file(example / "stories.csv", "acc3,stories/acc3_2.png", "acc3,stories/acc3_1.png")
     assert "story_id 'acc3_1'" in errors_of(example)
+
+
+def test_tag_ladder_step(example, tmp_path):
+    y = example / "study.yaml"
+    edit_file(y, "  - {id: feed, type: feed}", "  - {id: ladder, type: tag_ladder}\n  - {id: feed, type: feed}")
+    out, rep = compile_study(example, tmp_path / "build")
+    assert rep.errors == []
+    manifest = json.loads((out / "study.json").read_text(encoding="utf-8"))
+    assert [int(t) for t in manifest["screen_tags"]][-16:] == list(range(20, 36))
+    assert (out / "tags" / "tag36h11_35.png").is_file()
+    edit_file(y, "type: tag_ladder}", "type: tag_ladder, first_tag_id: 2}")  # would reuse screen tags 2-3
+    assert "overlap the screen or case tags" in errors_of(example)

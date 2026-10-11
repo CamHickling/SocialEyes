@@ -437,6 +437,10 @@ dots, 5/9/13 points, used to measure gaze accuracy), `questionnaire` (items of
 kind `vas`, `likert`, `choice`, `text`, `number`), `feed` (exactly one),
 `image_rating`, `recognition` (old/new test with `foils` and/or the
 `alternate_version` of a seen image as lures) and `end` (must be last).
+`tag_ladder` is a setup test, not for participants: it shows tags in several
+sizes and distances from the screen edges while the phone is held in different
+ways, so a Neon recording shows which tag size these glasses and this phone need
+(`studies/tag_ladder`; analyse with `python -m socialeyes.gaze.ladder <neon folder> <session folder>`).
 
 **Profile photo.** A `profile_photo` step lets the participant take a selfie with the
 front camera; it replaces the default avatar in their story, the profile tab and their

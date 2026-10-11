@@ -218,6 +218,47 @@ class MarkerCalibrationStep(_Step):
     """Show on-screen tags + a full-screen sync flash code for this long."""
 
 
+class TagLadderStep(_Step):
+    """Which on-screen tag size and edge clearances the Neon scene camera can read (CAM-165).
+
+    For each hold (a way of holding the phone, given as an instruction) the screen shows, for
+    `hold_s` seconds on white: four tags of `sizes_mm` down the middle; `reference_mm` tags at
+    the left and right edges, their black border `side_insets_mm` from the edge; and two
+    `reference_mm` tags at the top and at the bottom edge, `edge_gaps_mm` from it. The order
+    flips every `flip_every_s` so that no size or inset always sits at the same height. Every
+    arrangement is logged in a `marker_layout` event (with `ladder`: what each tag tests);
+    socialeyes.gaze.ladder gives the detection rate of each.
+    """
+
+    type: Literal["tag_ladder"]
+    holds: list[str] = Field(default_factory=lambda: [
+        "Hold the phone the way you normally would.",
+        "Hold the phone a little further away, near arm's length.",
+        "Rest the phone low, near your lap, and look down at it.",
+    ], min_length=1, max_length=8)
+    hold_s: float = Field(20.0, ge=5, le=120)
+    flip_every_s: float = Field(5.0, ge=1, le=60)
+    sizes_mm: list[float] = Field([8.0, 10.0, 12.0, 14.0], min_length=4, max_length=4)
+    side_insets_mm: list[float] = Field([3.0, 4.0, 5.0, 6.0], min_length=4, max_length=4)
+    edge_gaps_mm: list[float] = Field([1.5, 3.5], min_length=2, max_length=2)
+    reference_mm: float = Field(12.0, ge=6, le=14)
+    """Size of the edge tags."""
+    first_tag_id: int = Field(20, ge=0, le=571)
+    """The step uses 16 tag ids from here: sizes, left insets, right insets, top gaps, bottom gaps."""
+
+    @model_validator(mode="after")
+    def _ranges(self):
+        if not all(4 <= s <= 16 for s in self.sizes_mm):
+            raise ValueError(f"step {self.id}: sizes_mm must be 4-16 mm")
+        if not all(0 <= s <= 12 for s in self.side_insets_mm + self.edge_gaps_mm):
+            raise ValueError(f"step {self.id}: side_insets_mm and edge_gaps_mm must be 0-12 mm")
+        return self
+
+    @property
+    def tag_ids(self) -> list[int]:
+        return list(range(self.first_tag_id, self.first_tag_id + 16))
+
+
 class CameraCheckStep(_Step):
     """Researcher-run framing check for the front camera.
 
@@ -290,6 +331,7 @@ Step = Annotated[
     Union[
         InstructionsStep,
         MarkerCalibrationStep,
+        TagLadderStep,
         CameraCheckStep,
         ProfilePhotoStep,
         ValidationStep,
@@ -415,7 +457,16 @@ class Study(_Strict):
         unknown = [s for s in self.markers.on_screen.steps if s not in ids]
         if unknown:
             raise ValueError(f"markers.on_screen.steps: unknown procedure step id(s) {unknown}")
+        taken = set(self.markers.screen_tag_ids) | set(self.markers.case_tag_ids)
+        for s in self.procedure:
+            if isinstance(s, TagLadderStep) and taken & set(s.tag_ids):
+                raise ValueError(f"step {s.id}: tag ids {s.tag_ids[0]}-{s.tag_ids[-1]} overlap the screen or case "
+                                 f"tags; set first_tag_id")
         return self
+
+    @property
+    def ladder_tag_ids(self) -> list[int]:
+        return sorted({t for s in self.procedure if isinstance(s, TagLadderStep) for t in s.tag_ids})
 
     @property
     def within(self) -> list[Factor]:

@@ -1,0 +1,87 @@
+# Tag size ladder for the Neon glasses (Linear CAM-165).
+# Which on-screen AprilTag size, side inset and top/bottom clearance the scene camera can
+# read, for three ways of holding the phone (20 s each), then a 1-minute feed with the
+# on-screen tags. Analyse with:
+#   python -m socialeyes.gaze.ladder <neon recording folder> <session folder>
+# Posts are copied from studies/accuracy_check (itself from studies/example).
+id: tag_ladder
+title: Neon tag size ladder (CAM-165)
+version: 1
+seed: 20251001                 # change it and every plan changes; never change it mid-study
+
+platform:
+  name: Pictogram              # never use a real platform's name or logo
+  theme: light
+  participant_handle: you      # name the participant's own comments appear under
+
+labels:
+  edited:
+    text: "This image has been digitally altered"
+    style: banner
+
+factors:
+  - name: edit
+    design: within
+    levels: [original, retouched]
+    sets:
+      image_version: "{level}"           # picks the image whose version is original/retouched
+  - name: label
+    design: within
+    levels: [none, edited]
+    sets:
+      label: {none: null, edited: edited}
+  - name: comments
+    design: between
+    levels: [neutral, appearance]
+    # applies_to: all would also switch the comments of filler posts; every
+    # filler would then need a neutral and an appearance comment set.
+    applies_to: critical
+    sets:
+      comment_variant: "{level}"
+
+feed:
+  order: shuffle
+  lead_in_fillers: 2
+  max_run_same_cell: 2
+  min_fillers_between_critical: 1
+  done_button_after_s: 20
+  time_limit_s: 60
+  allow_likes: true
+  allow_comment_typing: true   # participants can comment and reply (text and draft edits are logged)
+
+logging:                       # besides gaze; see docs/EVENT_LOG.md
+  touches: true                # raw touch points
+  sensors: false               # accelerometer / gyroscope
+  screen_recording: false      # pilots only: Android asks permission every session
+  front_camera:                # face video for expression analysis; add a camera_check
+    enabled: false             # step before the recorded steps
+    resolution: 720p
+    fps: 30
+    steps: [feed]
+
+markers:
+  on_screen:                   # screen tags above and below these steps, so nothing has
+    steps: [feed]              # to be fixed around the phone (hold it normally)
+    size_mm: 12
+
+procedure:
+  - {id: welcome, type: instructions, title: Tag size check,
+     text: "The screen will show patterns of black squares. Each time, hold the phone as asked and keep looking at the screen until it changes. It takes about a minute and a half."}
+  - id: ladder
+    type: tag_ladder
+    hold_s: 20                 # per way of holding the phone
+    flip_every_s: 5            # order of sizes/insets reverses every 5 s
+    sizes_mm: [8, 10, 12, 14]  # down the middle of the screen
+    side_insets_mm: [3, 4, 5, 6]   # 12 mm tags at the left/right edges (curved on this phone)
+    edge_gaps_mm: [1.5, 3.5]   # 12 mm tags at the top/bottom edges: old vs fixed clearance
+    holds:
+      - Hold the phone the way you normally would.
+      - Hold the phone a little further away, near arm's length.
+      - Rest the phone low, near your lap, and look down at it.
+  - {id: feed, type: feed, instructions: "Now scroll the feed as you normally would for a minute."}
+  - {id: end, type: end}
+
+participants:
+  n_plans: 8
+  id_prefix: T
+  id_digits: 2

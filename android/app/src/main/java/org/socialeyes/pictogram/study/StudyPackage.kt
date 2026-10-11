@@ -3,6 +3,7 @@ package org.socialeyes.pictogram.study
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
@@ -197,6 +198,9 @@ class Step(val raw: JsonObject) {
     fun str(key: String): String? = (raw[key] as? JsonPrimitive)?.takeIf { it.isString }?.content
     fun double(key: String): Double? = (raw[key] as? JsonPrimitive)?.doubleOrNull
     fun int(key: String): Int? = (raw[key] as? JsonPrimitive)?.intOrNull
+    fun doubles(key: String): List<Double>? = (raw[key] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.doubleOrNull }
+    fun strings(key: String): List<String>? =
+        (raw[key] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content }
 }
 
 fun JsonObject.flag(key: String, default: Boolean): Boolean =
@@ -238,7 +242,7 @@ class StudyPackage(val dir: File, val manifest: StudyManifest) {
         if (logging.flag("screen_recording", false)) add("logging.screen_recording (not recorded yet)")
         if (study.neon.required) add("neon.required (Neon control is not built yet; sessions run without it)")
         val supportedSteps = setOf(
-            "instructions", "marker_calibration", "validation", "questionnaire", "feed", "image_rating", "recognition",
+            "instructions", "marker_calibration", "tag_ladder", "validation", "questionnaire", "feed", "image_rating", "recognition",
             "profile_photo", "camera_check", "end",
         )
         steps.filter { it.type !in supportedSteps }.forEach {
