@@ -119,6 +119,20 @@ data class Neon(
     val required: Boolean = false,
     @SerialName("auto_record") val autoRecord: Boolean = true,
     @SerialName("sync_interval_s") val syncIntervalS: Double = 2.0,
+    /** Scene camera exposure for the session; null leaves Companion's setting alone. */
+    @SerialName("scene_exposure") val sceneExposure: SceneExposure? = null,
+    /** Companion template field title -> value, e.g. "Participant" -> "{participant_id}". */
+    val template: Map<String, String> = emptyMap(),
+    /** Confirmed by the researcher before the recording starts (the compiler fills the default list). */
+    val checklist: List<String> = emptyList(),
+)
+
+@Serializable
+data class SceneExposure(
+    val mode: String = "manual",
+    @SerialName("exposure_us") val exposureUs: Int? = null,
+    val gain: Int? = null,
+    val brightness: Int? = null,
 )
 
 @Serializable
@@ -240,7 +254,6 @@ class StudyPackage(val dir: File, val manifest: StudyManifest) {
     fun unsupportedFeatures(): List<String> = buildList {
         val logging = study.logging
         if (logging.flag("screen_recording", false)) add("logging.screen_recording (not recorded yet)")
-        if (study.neon.required) add("neon.required (Neon control is not built yet; sessions run without it)")
         val supportedSteps = setOf(
             "instructions", "marker_calibration", "tag_ladder", "validation", "questionnaire", "feed", "image_rating", "recognition",
             "profile_photo", "camera_check", "end",

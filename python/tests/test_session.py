@@ -483,3 +483,17 @@ def test_quality_reports_neon_recording(simulated, tmp_path):
          "error": "Companion didn't answer"},
     ], {"recording_id": "rec-2"})
     assert any("may not have saved: Companion didn't answer" in w for w in session_quality(s)["warnings"])
+
+
+def test_quality_reports_neon_setup(simulated, tmp_path):
+    _, src = simulated
+    s = with_neon(src, tmp_path / "a", [
+        {"t_ns": 0, "type": "neon", "status": "recording_start", "recording_id": "rec-1"},
+        {"t_ns": 2_000_000_000, "type": "neon", "status": "recording_stop", "recording_id": "rec-1"},
+        {"t_ns": 2_000_000_001, "type": "neon", "status": "scene_camera_restored", "ok": False},
+    ], {"recording_id": "rec-1", "scene_camera_set": {"ae_mode": "manual", "man_exp": "2000"},
+        "warnings": ["The phone's battery is low (18%)."]})
+    q = session_quality(s)
+    assert q["neon_scene_camera"] == {"ae_mode": "manual", "man_exp": "2000"}
+    assert any("scene camera settings back" in w for w in q["warnings"])
+    assert "Neon setup: The phone's battery is low (18%)." in q["warnings"]

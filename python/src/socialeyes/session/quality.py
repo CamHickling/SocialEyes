@@ -76,6 +76,12 @@ def session_quality(s: Session, build_sha256: str | None = None) -> dict:
     stops = neon[neon["status"] == "recording_stop"] if len(neon) else neon
     if len(stops) and "error" in stops and stops["error"].notna().any():
         warnings.append(f"the Neon recording may not have saved: {stops['error'].dropna().iloc[0]}")
+    restored = neon[neon["status"] == "scene_camera_restored"] if len(neon) else neon
+    if len(restored) and "ok" in restored and not bool(restored["ok"].iloc[-1]):
+        warnings.append("the app couldn't put Companion's scene camera settings back after the session: "
+                        "check them in Companion before the next recording")
+    neon_meta = s.meta.get("neon") or {}
+    warnings += [f"Neon setup: {w}" for w in neon_meta.get("warnings", [])]
     rotations = s.events_of("orientation")
     n_rotations = int((rotations["rotation"] != 0).sum()) if len(rotations) else 0
     if n_rotations:
@@ -124,7 +130,8 @@ def session_quality(s: Session, build_sha256: str | None = None) -> dict:
         "longest_frame_ms": longest_frame_ms,
         "slept_s": slept_s,
         "neon_disconnects": disconnects,
-        "neon_recording_id": (s.meta.get("neon") or {}).get("recording_id"),
+        "neon_recording_id": neon_meta.get("recording_id"),
+        "neon_scene_camera": neon_meta.get("scene_camera_set"),
         "orientation_changes": n_rotations,
         "thermal_max": thermal_max,
         "camera_checks": camera_checks,

@@ -17,15 +17,25 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.socialeyes.pictogram.log.DeviceMonitor
 import org.socialeyes.pictogram.log.InterruptionMonitor
+import org.socialeyes.pictogram.neon.NeonClient
 import org.socialeyes.pictogram.neon.NeonLink
+import org.socialeyes.pictogram.neon.NeonSetup
+import org.socialeyes.pictogram.neon.Preflight
 import org.socialeyes.pictogram.study.StudyPackage
 import org.socialeyes.pictogram.ui.NeonStartScreen
 import org.socialeyes.pictogram.ui.SessionScreen
 import org.socialeyes.pictogram.ui.SetupScreen
 import java.io.File
 
-/** A session waiting for its Neon recording to start; `error` says why it couldn't. */
-private data class NeonPending(val pkg: StudyPackage, val participantId: String, val error: String? = null)
+/** A session waiting for its Neon recording: being checked (no preflight yet), waiting for the
+ *  researcher, or starting; `error` says why it couldn't. */
+private data class NeonPending(
+    val pkg: StudyPackage,
+    val participantId: String,
+    val preflight: Preflight? = null,
+    val starting: Boolean = false,
+    val error: String? = null,
+)
 
 class MainActivity : ComponentActivity() {
     private var session by mutableStateOf<Session?>(null)
@@ -44,12 +54,17 @@ class MainActivity : ComponentActivity() {
             if (s == null && pending != null) {
                 NeonStartScreen(
                     participantId = pending.participantId,
+                    preflight = pending.preflight,
+                    checklist = pending.pkg.study.neon.checklist,
+                    starting = pending.starting,
                     error = pending.error,
                     required = pending.pkg.study.neon.required,
+                    onStart = { answers -> startRecording(pending, answers) },
                     onRetry = { startSession(pending.pkg, pending.participantId) },
                     onContinueWithout = {
                         neonPending = null
-                        launchSession(pending.pkg, pending.participantId, null, notStarted = pending.error)
+                        val why = pending.error ?: pending.preflight?.problems?.joinToString("; ")
+                        launchSession(pending.pkg, pending.participantId, null, notStarted = why)
                     },
                     onBack = { neonPending = null },
                 )
@@ -66,21 +81,39 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /** neon.auto_record: start the Neon recording first, so the whole session is in it. */
+    /** neon.auto_record: check the eye tracker, then (once the researcher confirms) start the
+     *  Neon recording first, so the whole session is in it. */
     private fun startSession(pkg: StudyPackage, participantId: String) {
         if (!pkg.study.neon.autoRecord) {
             launchSession(pkg, participantId, null)
             return
         }
         neonPending = NeonPending(pkg, participantId)
+        val values = mapOf(
+            "participant_id" to participantId,
+            "study_id" to pkg.study.id,
+            "study_version" to pkg.study.version.toString(),
+        )
         lifecycleScope.launch {
-            val result = withContext(Dispatchers.IO) { runCatching { NeonLink.start() } }
+            val result = withContext(Dispatchers.IO) { runCatching { NeonSetup.check(NeonClient(), pkg.study.neon, values) } }
+            neonPending = result.fold(
+                onSuccess = { NeonPending(pkg, participantId, preflight = it) },
+                onFailure = { e -> NeonPending(pkg, participantId, error = e.message ?: e.toString()) },
+            )
+        }
+    }
+
+    private fun startRecording(pending: NeonPending, checklist: List<Pair<String, Boolean>>) {
+        val preflight = pending.preflight ?: return
+        neonPending = pending.copy(starting = true)
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) { runCatching { NeonLink.start(NeonClient(), preflight, checklist) } }
             result.fold(
                 onSuccess = { neon ->
                     neonPending = null
-                    launchSession(pkg, participantId, neon)
+                    launchSession(pending.pkg, pending.participantId, neon)
                 },
-                onFailure = { e -> neonPending = NeonPending(pkg, participantId, e.message ?: e.toString()) },
+                onFailure = { e -> neonPending = pending.copy(starting = false, error = e.message ?: e.toString()) },
             )
         }
     }

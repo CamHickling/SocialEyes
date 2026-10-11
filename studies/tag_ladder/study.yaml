@@ -63,6 +63,14 @@ logging:                       # besides gaze; see docs/EVENT_LOG.md
     fps: 30
     steps: [feed]
 
+neon:
+  template:                    # filled in Companion's recording template, if it has these fields
+    Participant: "{participant_id}"
+    Study: "{study_id}"
+  # Recording B of the run sheet (docs/PHONE_TRACKING_TESTS.md, test X1): a darker scene camera.
+  # Set exposure_us to about a third of the man_exp the eye tracker check showed for recording A.
+  # scene_exposure: {mode: manual, exposure_us: 3000}
+
 markers:
   on_screen:                   # screen tags above and below these steps, so nothing has
     steps: [feed]              # to be fixed around the phone (hold it normally)

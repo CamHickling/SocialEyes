@@ -143,7 +143,7 @@ for mixed models in R.
 | Desktop app (Windows): Design tab edits study folders in place and runs the compiler's checks; Phone tab loads studies onto the phone; Data tab unloads sessions with a register; Studies tab lists studies with their status; Content tab lists the files each study still needs; edits that would break collected data need a new version; Windows installer (`packaging/build.py`, about 66 MB) | ✅ | `socialeyes app` (`python/src/socialeyes/desktop/`) |
 | CSV format reference | ✅ | `docs/STUDY_DESIGN.md` (version 1) |
 | Android SocialEyes app: Instagram-style feed (stories row, comments sheet), sync patch, touch / scroll / viewport / quality logging, instructions, marker calibration, validation, questionnaires, image ratings, recognition test, camera check, front camera video, motion sensors, interruption detection | 🟡 | `android/` (tested on a Pixel 3) |
-| App: Neon control: starts the recording before the session (`neon.auto_record`), pairs it with the session (`neon.recording_id` in session.json), marks each step in it, watches the glasses, stops and saves it at the end; `neon.required` | ✅ | `android/.../neon/` (Neon Companion on the same phone) |
+| App: Neon control: an eye tracker check before the session (glasses, battery, storage, streams, checklist), sets the scene camera exposure (`neon.scene_exposure`, put back afterwards), fills Companion's template (`neon.template`), saves the glasses' calibration, starts the recording (`neon.auto_record`), pairs it with the session (`neon.recording_id` in session.json), marks each step in it, watches the glasses and streams, stops and saves it at the end; `neon.required` | ✅ (camera, template and calibration calls not yet tried with the glasses) | `android/.../neon/` (Neon Companion on the same phone) |
 | App: screen recording | ⏳ | see [What the app doesn't do yet](#what-the-app-doesnt-do-yet) |
 | Neon: collect each session's recording in the Data tab | ⏳ | |
 | Gaze-to-screen mapping and AOI analysis | ⏳ | |
@@ -562,6 +562,36 @@ polygons or rectangles, and give each one a name such as `face`, `waist` or
 
 Designed for **Pupil Labs Neon**. Other head-mounted trackers with a scene
 camera should work once the analysis pipeline exists, but we haven't tested any.
+
+### Starting the recording from the app
+
+Neon Companion runs on the same phone as the app. With `neon.auto_record` (the
+default), "Start session" first shows the researcher an **eye tracker check**:
+glasses, phone battery and storage, Companion's gaze and scene streams, the
+scene camera settings, and the study's checklist. "Start recording" is enabled
+once there are no problems and every checklist item is ticked. The app then sets
+the scene camera, fills Companion's recording template, saves the glasses'
+calibration with the session (`neon_calibration.bin`) and starts the recording.
+
+```yaml
+neon:
+  required: false            # true: no "Continue without eye tracking"
+  auto_record: true
+  scene_exposure:            # optional; unset leaves Companion's setting alone
+    mode: manual             # or auto (then only brightness, to shift its target)
+    exposure_us: 2000        # the check screen shows the current value and allowed range
+  template:                  # Companion template fields, by title
+    Participant: "{participant_id}"
+    Study: "{study_id} v{study_version}"
+  checklist:                 # things the API can't set; answers go in session.json
+    - Companion's wearer is the SocialEyes profile (no gaze offset correction)
+```
+
+Companion keeps camera settings after a recording and the glasses are shared,
+so the app puts the scene camera back as it found it when the session ends (a
+quality warning says if it couldn't). Why exposure matters: Companion's default
+auto exposure meters the room, which blows out the bright phone screen and its
+tags ([`docs/PHONE_TRACKING_TESTS.md`](docs/PHONE_TRACKING_TESTS.md), test X1).
 
 ### Phone-case markers
 

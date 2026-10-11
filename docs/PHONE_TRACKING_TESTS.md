@@ -34,11 +34,14 @@ One session of about 15 minutes covers everything that needs the glasses right n
 
 - [ ] Install the latest Pictogram build and compile `studies/tag_ladder` (now with phone motion
       sensors at 100 Hz and five holds).
-- [ ] **Recording A** — Companion's scene camera exposure on its default (auto). Run the
-      tag_ladder study once (≈ 3 min).
-- [ ] **Recording B** — the same with the scene camera exposure darker (manual exposure, or an
-      auto mode that favours highlights, whichever the Companion version offers). Note the
-      exact setting.
+- [ ] **Recording A** — the scene camera on Companion's default (auto). Run the tag_ladder study
+      once (≈ 3 min). On the app's eye tracker check screen, note the scene camera's current
+      `man_exp` (µs) and the allowed range. This is also the first real test of the check screen
+      (camera, template and calibration calls).
+- [ ] **Recording B** — set a darker exposure in `studies/tag_ladder/study.yaml` (uncomment
+      `scene_exposure`, `exposure_us` ≈ a third of A's value), recompile, and run it again.
+      The app sets it at the start and puts Companion back afterwards; check that Companion's
+      setting is back to auto when it's done.
 - [ ] Copy both Neon recordings and both session folders off the phone (never delete anyone
       else's recordings or `Documents/TouchTracking`).
 - [ ] Run the analyses: X1, L1–L3, S2–S4, C2 (commands below).
@@ -58,7 +61,7 @@ Run: `content_tracking_test.py` (its step 0 prints the share of content the vide
 
 | Result | Meaning | Action |
 |---|---|---|
-| B resolves ≥ 80% of content and its tag detection is at least A's | Exposure was hurting us | Make B's setting the standard; CAM-219 sets/checks it at session start |
+| B resolves ≥ 80% of content and its tag detection is at least A's | Exposure was hurting us | Make B's setting the standard `neon.scene_exposure` in every study (the app sets it) |
 | B resolves more content but detects fewer tags (room/face too dark doesn't matter; tags do) | Trade-off | Keep the setting that gives better tag detection; content (option 1) gets less weight |
 | No difference | The screen's own brightness is the problem | Try lower phone brightness in the app during sessions (one-line change), retest |
 

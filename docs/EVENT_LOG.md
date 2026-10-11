@@ -26,6 +26,7 @@ data/<study id>/<participant id>/<session uid>/
   screen.mp4       screen recording                    (logging.screen_recording; planned)
   camera/front_000.mp4, front_001.mp4, ...   front camera video   (logging.front_camera)
   camera_frames.csv   one timestamp per front camera frame      (logging.front_camera)
+  neon_calibration.bin   the glasses' calibration (neon.auto_record)
 ```
 
 The app writes all files **while the session runs** and flushes at least once
@@ -113,7 +114,16 @@ camera's timestamp source (see Front camera) and the sensor orientation in degre
 `neon` (only when the app started a Neon recording, `neon.auto_record`) pairs the
 session with that recording: `recording_id` (the Neon recording's folder name and
 Pupil Cloud id), and when Companion reports them `device_name`, `device_id`,
-`module_serial` (the glasses' sensor module) and `frame_name`.
+`module_serial` (the glasses' sensor module), `frame_name` and `battery_level`.
+Also, when they apply: `scene_camera_before` (Companion's scene camera controls
+before the session: `ae_mode`, `man_exp` in µs, `gain`, `brightness`),
+`scene_camera_set` (what the app changed, from `neon.scene_exposure`; put back at
+the end), `template_filled` (Companion template fields the app filled),
+`checklist` (each `item` and whether it was `confirmed`), `warnings` (from the
+eye tracker check, e.g. low battery) and `scene_calibration` (`file`:
+`neon_calibration.bin` in the session folder, the glasses' `serial`, and the scene
+camera's `fx`, `fy`, `cx`, `cy` in pixels; the file is Companion's calibration.bin,
+the same as in the Neon recording).
 
 `feed_area` is the screen rectangle the feed scrolls in (below the status and
 app bars), used to decide how much of a post is visible. `end.reason` is
@@ -181,7 +191,7 @@ the type. Unknown types must be ignored by readers, so the app can add new ones.
 | type | fields |
 |---|---|
 | `sync_patch` | `level` (0/1): every change of the sync patch |
-| `neon` | `status`, `recording_id`, and per status: `connected` (Companion and the glasses answer; at the start also `module_serial`), `recording_start`, `recording_stop` (`error` when Companion couldn't confirm the save), `disconnected` with `reason`: `companion` (Companion stopped answering), `glasses` (unplugged), `recording_stopped` (stopped outside the app) or `not_started` (the researcher went on without eye tracking; `error` says why it couldn't start). Companion is checked every `neon.sync_interval_s`; a `connected` follows when the problem clears. The app also adds named events to the Neon recording itself: `socialeyes.session_start <session_uid>`, `step_start <step id>` and `socialeyes.session_end <reason>` |
+| `neon` | `status`, `recording_id`, and per status: `connected` (Companion and the glasses answer; at the start also `module_serial`), `recording_start`, `recording_stop` (`error` when Companion couldn't confirm the save), `disconnected` with `reason`: `companion` (Companion stopped answering), `glasses` (unplugged), `gaze_stream` / `scene_stream` (Companion reports that stream down), `recording_stopped` (stopped outside the app) or `not_started` (the researcher went on without eye tracking; `error` says why it couldn't start). Companion is checked every `neon.sync_interval_s`; a `connected` follows when the problem clears. `scene_camera_restored` with `ok` follows `recording_stop` when the app put back scene camera settings it changed. The app also adds named events to the Neon recording itself: `socialeyes.session_start <session_uid>`, `step_start <step id>` and `socialeyes.session_end <reason>` |
 
 **Session quality**
 
@@ -335,7 +345,7 @@ was covered.
 
 | file | contents |
 |---|---|
-| `quality.json` | duration, completed?, time in background, interruptions (count and seconds per kind), Do Not Disturb at start, dropped frames, phone slept?, Neon recording id, Neon disconnects (and warnings when the recording didn't start or may not have saved), thermal status, camera framing checks (`camera_checks`: result and seconds to a face, with a warning when one failed), front camera segments, dropped frames and coverage, motion sensor rate and gaps, the session's `group_key` and `package_sha256` (with a warning when it differs from the `--build` package) |
+| `quality.json` | duration, completed?, time in background, interruptions (count and seconds per kind), Do Not Disturb at start, dropped frames, phone slept?, Neon recording id, Neon disconnects, the scene camera settings the app set (`neon_scene_camera`), and warnings when the recording didn't start, may not have saved, the camera settings weren't put back, or the eye tracker check warned, thermal status, camera framing checks (`camera_checks`: result and seconds to a face, with a warning when one failed), front camera segments, dropped frames and coverage, motion sensor rate and gaps, the session's `group_key` and `package_sha256` (with a warning when it differs from the `--build` package) |
 | `strokes.csv` | one row per finger stroke: duration, distance, speed, `gesture` = `tap`, `double_tap`, `long_press`, `scroll`, `fling`, `pinch` |
 | `exposure.csv` | per post and element: seconds on screen (any part / fully / area-weighted), first time seen, times scrolled into view |
 | `touch_targets.csv` | every touch sample mapped to post, element, image pixel and AOI |

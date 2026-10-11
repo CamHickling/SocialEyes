@@ -423,8 +423,8 @@
       </div>
       <h3>Eye tracker</h3>
       <div class="card">
-        ${field({ path: "neon.required", label: "Require the Neon glasses to start a session", kind: "bool", help: "Neon control in the app isn't built yet; leave this off for now." })}
-        ${field({ path: "neon.auto_record", label: "Start and stop the Neon recording from the app", kind: "bool" })}
+        ${field({ path: "neon.required", label: "Require the Neon glasses to start a session", kind: "bool", help: "Without it, the researcher can go on without eye tracking when the glasses aren't ready." })}
+        ${field({ path: "neon.auto_record", label: "Start and stop the Neon recording from the app", kind: "bool", help: "Shows an eye tracker check (glasses, battery, streams, checklist) before each session. Scene camera exposure, template fields and the checklist are set under neon in study.yaml (see the README)." })}
       </div>`;
   }
 

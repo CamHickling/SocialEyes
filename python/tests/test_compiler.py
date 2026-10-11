@@ -291,3 +291,22 @@ def test_tag_ladder_step(example, tmp_path):
     assert (out / "tags" / "tag36h11_35.png").is_file()
     edit_file(y, "type: tag_ladder}", "type: tag_ladder, first_tag_id: 2}")  # would reuse screen tags 2-3
     assert "overlap the screen or case tags" in errors_of(example)
+
+
+def test_neon_session_settings(example, tmp_path):
+    y = example / "study.yaml"
+    edit_file(y, "logging:", "neon:\n  scene_exposure: {mode: manual, exposure_us: 2000}\n"
+                             "  template: {Participant: \"{participant_id}\"}\nlogging:")
+    out, rep = compile_study(example, tmp_path / "build")
+    assert rep.errors == []
+    neon = json.loads((out / "study.json").read_text(encoding="utf-8"))["study"]["neon"]
+    assert neon["scene_exposure"]["exposure_us"] == 2000 and neon["template"] == {"Participant": "{participant_id}"}
+    assert len(neon["checklist"]) == 3  # the default checklist goes to the app
+    edit_file(y, "{mode: manual, exposure_us: 2000}", "{mode: manual}")
+    assert "mode manual needs exposure_us" in errors_of(example)
+    edit_file(y, "{mode: manual}", "{mode: auto, brightness: -10}")
+    edit_file(y, "{participant_id}", "{participant}")
+    assert "unknown field {participant}" in errors_of(example)
+    edit_file(y, "{participant}", "{participant_id}")
+    edit_file(y, "neon:\n", "neon:\n  auto_record: false\n")
+    assert "need neon.auto_record" in errors_of(example)

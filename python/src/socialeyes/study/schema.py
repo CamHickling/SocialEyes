@@ -87,12 +87,69 @@ class Markers(_Strict):
         return self
 
 
+class SceneExposure(_Strict):
+    """Neon scene camera exposure, set through Companion's real-time API at session start and put
+    back as it was at the end (the phone and glasses are shared). The default auto exposure
+    meters the room, which blows out the bright phone screen (CAM-165)."""
+
+    mode: Literal["auto", "manual"] = "manual"
+    exposure_us: Optional[int] = Field(None, ge=1, le=1_000_000)
+    """Manual exposure time in microseconds (manual only; Companion reports the allowed range)."""
+    gain: Optional[int] = Field(None, ge=0)
+    brightness: Optional[int] = None
+    """In auto mode, shifts the auto exposure's target brightness (lower = darker)."""
+
+    @model_validator(mode="after")
+    def _check(self):
+        if self.mode == "manual" and self.exposure_us is None:
+            raise ValueError("neon.scene_exposure: mode manual needs exposure_us")
+        if self.mode == "auto" and (self.exposure_us is not None or self.gain is not None):
+            raise ValueError("neon.scene_exposure: exposure_us and gain only apply to mode manual")
+        return self
+
+
+NEON_TEMPLATE_FIELDS = ("participant_id", "study_id", "study_version")
+
+DEFAULT_NEON_CHECKLIST = [
+    "Companion's wearer is the SocialEyes profile (no gaze offset correction)",
+    "The glasses sit snugly and the participant can see the whole phone screen",
+    "The phone screen is clean, at the study's brightness, and not facing a window or lamp",
+]
+
+
 class Neon(_Strict):
     required: bool = False
     """If true, the app refuses to start a session without a Neon connection."""
     auto_record: bool = True
-    """Start/stop the Neon recording from the app so the two recordings always pair up."""
+    """Start/stop the Neon recording from the app so the two recordings always pair up. The
+    settings below are applied at that point, so they need auto_record."""
     sync_interval_s: float = Field(2.0, ge=0.5, le=30)
+    scene_exposure: Optional[SceneExposure] = None
+    """Scene camera exposure for the session; unset leaves Companion's setting alone."""
+    template: dict[str, str] = Field(default_factory=dict)
+    """Companion recording template fields to fill, by the field's title (case-insensitive), e.g.
+    {Participant: "{participant_id}"}. Values may use {participant_id}, {study_id}, {study_version}."""
+    checklist: list[str] = Field(default_factory=lambda: list(DEFAULT_NEON_CHECKLIST))
+    """What the researcher confirms before the recording starts (things the API can't set). The
+    answers are logged; [] skips the checklist."""
+
+    @field_validator("template")
+    @classmethod
+    def _template_fields(cls, v: dict[str, str]) -> dict[str, str]:
+        import string
+        for title, value in v.items():
+            for _, name, _, _ in string.Formatter().parse(value):
+                if name is not None and name not in NEON_TEMPLATE_FIELDS:
+                    raise ValueError(f"neon.template.{title}: unknown field {{{name}}} "
+                                     f"(use {', '.join('{' + f + '}' for f in NEON_TEMPLATE_FIELDS)})")
+        return v
+
+    @model_validator(mode="after")
+    def _needs_auto_record(self):
+        if not self.auto_record and (self.scene_exposure or self.template):
+            raise ValueError("neon.scene_exposure and neon.template are applied when the app starts the "
+                             "recording, so they need neon.auto_record")
+        return self
 
 
 # ---------------------------------------------------------------- content
