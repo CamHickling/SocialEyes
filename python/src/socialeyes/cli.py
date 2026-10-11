@@ -4,6 +4,7 @@
     socialeyes compile STUDY_DIR [-o OUT] [--clean]
     socialeyes case-sheet --width-mm W --height-mm H [--study STUDY_DIR] [-o case_sheet.svg]
     socialeyes session SESSION_DIR [--build BUILD_DIR] [-o OUT]
+    socialeyes gaze NEON_DIR SESSION_DIR [-o OUT] [--max-bridge-ms MS]
     socialeyes simulate BUILD_DIR PARTICIPANT_ID OUT_DIR [--seed N]
     socialeyes phone-check [STUDY_DIR] [--serial S]
     socialeyes load STUDY_DIR [--serial S] [--update-app] [--anyway]
@@ -112,6 +113,33 @@ def cmd_session(args) -> int:
     if not args.build:
         print("  (no --build given: touches are not mapped to images/AOIs)")
     print(f"Wrote {out}")
+    return 0
+
+
+def cmd_gaze(args) -> int:
+    from .gaze.mapping import map_gaze, summary
+    from .gaze.neon import NeonFormatError, read_recording
+    from .gaze.tracking import clock_offset_ns, track_recording
+    from .session.io import SessionFormatError, load_session
+
+    try:
+        rec = read_recording(args.neon)
+        session = load_session(args.session)
+        progress = lambda step, n, total: print(f"  {step}: frame {n}/{total}", file=sys.stderr, flush=True)  # noqa: E731
+        tracking = track_recording(rec, session, args.max_bridge_ms, progress)
+    except (NeonFormatError, SessionFormatError, ValueError, FileNotFoundError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    dev = session.device
+    gaze = map_gaze(rec, tracking, clock_offset_ns(session), dev["screen_width_px"], dev["screen_height_px"])
+    out = Path(args.out) if args.out else (Path("analysis_out") / (_study_id(args.session) or "unknown")
+                                           / session.participant_id / (session.meta.get("session_uid") or Path(args.session).name))
+    out.mkdir(parents=True, exist_ok=True)
+    tracking.to_csv(out / "screen_tracking.csv", index=False)
+    gaze.to_csv(out / "gaze_screen.csv", index=False)
+    print(f"{session.participant_id}: phone tracked in {len(tracking)} scene frames")
+    print(summary(tracking, gaze).to_string(index=False))
+    print(f"Wrote {out / 'screen_tracking.csv'} and {out / 'gaze_screen.csv'}")
     return 0
 
 
@@ -269,6 +297,14 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--finger-radius-mm", type=float, default=8.0,
                    help="AOIs this close to a touch count as covered by the finger (default 8)")
     s.set_defaults(func=cmd_session)
+
+    g = sub.add_parser("gaze", help="track the phone in a Neon recording and map gaze onto the screen")
+    g.add_argument("neon", help="Neon recording folder (native format, copied off the phone)")
+    g.add_argument("session", help="the matching session folder written by the app")
+    g.add_argument("-o", "--out", help="output folder (default: analysis_out/<study>/<participant>/<session>)")
+    g.add_argument("--max-bridge-ms", type=float, default=300.0,
+                   help="longest stretch without readable tags bridged by optical flow (default 300)")
+    g.set_defaults(func=cmd_gaze)
 
     m = sub.add_parser("simulate", help="write a fake session for a compiled plan (testing without the app)")
     m.add_argument("build", help="compiled study folder")

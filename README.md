@@ -494,6 +494,23 @@ and `quality.json`.
 Until the app exists, `socialeyes simulate build/my_study P001 <folder>` writes
 a realistic fake session to try the analysis on.
 
+To put the participant's gaze on the screen, give the matching Neon recording
+(the native folder copied off the phone) and the session. The session needs
+steps with on-screen tags (`markers.on_screen`):
+
+```powershell
+socialeyes gaze <neon recording folder> data/my_study/P001/<session>
+```
+
+This finds the phone in every scene camera frame from the tags (its 3-D pose, so
+one visible tag is enough). Frames where no tag is readable are bridged by
+optical flow for up to 300 ms (`--max-bridge-ms`). It writes
+`screen_tracking.csv` (one row per scene frame: `source` = `tags` / `flow` /
+empty, tags used, reprojection error, distance to the phone, and the scene ->
+screen mapping) and `gaze_screen.csv` (every gaze sample in screen pixels, on
+the session's clock, with `on_screen`), and prints the share of frames and gaze
+samples mapped per step.
+
 > [!NOTE]
 > **Front camera:** Android shows a camera indicator while recording, and a
 > camera pointed at you may make you more aware of your appearance, which is
@@ -815,6 +832,7 @@ Roughly in order:
       ratings, recognition and Neon control are built)
 - [ ] **Analysis pipeline**: tag detection → screen homography → scroll-aware
       mapping of gaze to post and image pixels → AOI fixation metrics
+      (in progress: phone tracking and gaze on screen are built, `socialeyes gaze`)
 - [ ] **R templates** for the standard mixed models
       (`dwell ~ edit * label + (1|participant) + (1|post)`)
 - [ ] More tests and docs, macOS/Linux setup
