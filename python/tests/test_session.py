@@ -497,3 +497,19 @@ def test_quality_reports_neon_setup(simulated, tmp_path):
     assert q["neon_scene_camera"] == {"ae_mode": "manual", "man_exp": "2000"}
     assert any("scene camera settings back" in w for w in q["warnings"])
     assert "Neon setup: The phone's battery is low (18%)." in q["warnings"]
+
+
+def test_quality_reports_display_calibration(simulated, tmp_path):
+    _, src = simulated
+    s = with_neon(src, tmp_path / "a", [
+        {"t_ns": 0, "type": "display_calibration", "step_id": "dcal", "status": "done", "brightness": 0.55,
+         "camera": {"ae_mode": "manual", "man_exp": "2000"}, "tags_read": 1.0, "blown_out": 0.01},
+        {"t_ns": 1, "type": "display_calibration", "step_id": "dcal2", "status": "skipped", "reason": "researcher",
+         "restored": True},
+    ], None)
+    q = session_quality(s)
+    assert q["display_calibration"][0]["brightness"] == 0.55
+    assert q["display_calibration"][0]["camera"] == {"ae_mode": "manual", "man_exp": "2000"}
+    assert q["display_calibration"][1]["status"] == "skipped"
+    assert any("display calibration 'dcal2' didn't run: it was skipped" in w for w in q["warnings"])
+    assert not any("'dcal'" in w for w in q["warnings"])

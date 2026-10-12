@@ -100,6 +100,20 @@ def session_quality(s: Session, build_sha256: str | None = None) -> dict:
         if e["result"] != "ok":
             warnings.append(f"camera check {e['step_id']!r} failed: no face was held in view, "
                             "the front camera video may not show the face")
+    display_calibrations = []
+    for _, e in s.events_of("display_calibration").iterrows():
+        def val(k):
+            v = e.get(k)
+            return None if v is None or (isinstance(v, float) and v != v) else v
+        display_calibrations.append({k: val(k) for k in ("step_id", "status", "brightness", "camera", "tags_read",
+                                                          "blown_out", "reason", "restored")})
+        if e["status"] != "done":
+            why = {"failed": "no setting let the scene camera read the tags",
+                   "skipped": "it was skipped" + (" (no Neon recording)" if val("reason") == "no_neon" else "")}
+            warnings.append(f"display calibration {e['step_id']!r} didn't run: {why.get(e['status'], e['status'])}; "
+                            "the session used the default screen brightness and scene exposure")
+        if val("restored") is False:
+            warnings.append(f"display calibration {e['step_id']!r}: the previous settings couldn't be put back")
     camera = camera_quality(s)
     if camera:
         warnings += camera.pop("warnings")
@@ -135,6 +149,7 @@ def session_quality(s: Session, build_sha256: str | None = None) -> dict:
         "orientation_changes": n_rotations,
         "thermal_max": thermal_max,
         "camera_checks": camera_checks,
+        "display_calibration": display_calibrations,
         "camera": camera,
         "sensors": sensors,
         "event_types": dict(sorted(ev["type"].value_counts().to_dict().items())) if len(types) else {},

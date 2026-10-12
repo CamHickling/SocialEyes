@@ -41,6 +41,8 @@ fun NeonStartScreen(
     starting: Boolean,
     error: String?,
     required: Boolean,
+    /** The phone's address for `socialeyes calibrate-display`, when the study has a display calibration. */
+    laptopAddress: String? = null,
     onStart: (List<Pair<String, Boolean>>) -> Unit,
     onRetry: () -> Unit,
     onContinueWithout: () -> Unit,
@@ -90,6 +92,7 @@ fun NeonStartScreen(
                                 " (put back afterwards)")
                 }
                 if (preflight.templateFilled.isNotEmpty()) Info("Template", "fills " + preflight.templateFilled.joinToString())
+                laptopAddress?.let { Info("Calibration", "on the laptop: socialeyes calibrate-display $it") }
                 preflight.problems.forEach { Text("✗ $it", color = MaterialTheme.colorScheme.error) }
                 preflight.warnings.forEach { Text("! $it", color = MaterialTheme.colorScheme.tertiary) }
                 checklist.forEachIndexed { i, item ->

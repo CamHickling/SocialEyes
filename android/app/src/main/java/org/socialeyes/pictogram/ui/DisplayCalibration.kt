@@ -193,10 +193,14 @@ fun DisplayCalibrationStep(session: Session, step: Step, onContinue: () -> Unit)
                 )
             }
         }
-        val hint = if (status == "Waiting for the laptop" && addresses.isNotEmpty())
-            "$status: socialeyes calibrate-display ${addresses.first()}" else status
-        Text(hint, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+        // the participant sees only the instruction; the phone's address is on the researcher's
+        // eye tracker check screen, and again here next to Skip
+        if (status == "Done") Text("Done", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (showSkip && !finished) {
+            if (addresses.isNotEmpty() || status.startsWith("Couldn't")) {
+                Text(if (status.startsWith("Couldn't")) status else "Laptop: socialeyes calibrate-display ${addresses.first()}",
+                    fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+            }
             TextButton(onClick = {
                 Thread {
                     val ok = restoreBefore()

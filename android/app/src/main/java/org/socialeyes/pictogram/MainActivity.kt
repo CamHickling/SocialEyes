@@ -17,6 +17,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.socialeyes.pictogram.log.DeviceMonitor
 import org.socialeyes.pictogram.log.InterruptionMonitor
+import org.socialeyes.pictogram.neon.ControlServer
 import org.socialeyes.pictogram.neon.NeonClient
 import org.socialeyes.pictogram.neon.NeonLink
 import org.socialeyes.pictogram.neon.NeonSetup
@@ -59,6 +60,8 @@ class MainActivity : ComponentActivity() {
                     starting = pending.starting,
                     error = pending.error,
                     required = pending.pkg.study.neon.required,
+                    laptopAddress = if (pending.pkg.steps.any { it.type == "display_calibration" })
+                        ControlServer.localAddresses().firstOrNull() ?: "(no Wi-Fi: connect the phone first)" else null,
                     onStart = { answers -> startRecording(pending, answers) },
                     onRetry = { startSession(pending.pkg, pending.participantId) },
                     onContinueWithout = {
