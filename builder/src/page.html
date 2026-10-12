@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SocialEyes Experiment Builder</title>
+<link rel="icon" type="image/svg+xml" href="/*FAVICON*/">
 <style>
 :root {
   --bg: #fbf8ff; --surface: #ffffff; --surface-2: #f3eefc; --text: #1d1b20; --muted: #625b71;
@@ -47,6 +48,9 @@ header span { color: var(--muted); font-size: 13px; }
 #nav button.on { background: var(--accent-soft); font-weight: 600; }
 #nav button:disabled { color: var(--muted); opacity: .5; cursor: default; }
 #nav .count:not(:empty) { background: var(--error); color: var(--surface); border-radius: 999px; font-size: 11px; padding: 0 7px; font-weight: 600; }
+#nav .adv-toggle { margin: 16px 0 0; padding: 12px 12px 0; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+.more-settings { margin-top: 24px; padding: 10px 14px; border: 1px dashed var(--line); border-radius: 10px; color: var(--muted); font-size: 13px; }
+.more-settings p { margin: 0 0 4px; }
 #main { min-width: 0; }
 #side { position: sticky; top: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; max-height: calc(100vh - 32px); overflow: auto; }
 h2 { margin: 0 0 8px; font-size: 24px; }
@@ -62,6 +66,7 @@ code { background: var(--surface-2); padding: 1px 5px; border-radius: 4px; font-
 .cards .card { margin: 0; display: flex; flex-direction: column; align-items: flex-start; }
 .cards .card p { flex: 1; margin: 4px 0 12px; color: var(--muted); }
 .cards .card h3 { margin: 0; }
+.card > h4:first-child { margin-top: 0; }
 .card-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px 16px; margin: 8px 0; }
 .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
@@ -124,10 +129,63 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 table.register { border-collapse: collapse; width: 100%; font-size: 13px; background: var(--surface); }
 table.register th, table.register td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
 table.register th { color: var(--muted); font-weight: 600; }
+/* ---------------------------------------------------------- look */
+:root { --shadow: 0 1px 2px rgba(33, 0, 93, .05), 0 4px 16px rgba(33, 0, 93, .05); --logo-ink: #21005d; --mark: url("/*MARK*/"); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 4px 16px rgba(0, 0, 0, .25); --logo-ink: #e6e0e9; } }
+:root[data-theme="dark"] { --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 4px 16px rgba(0, 0, 0, .25); --logo-ink: #e6e0e9; }
+body { background: radial-gradient(1200px 400px at 50% -120px, var(--accent-soft), transparent 70%) no-repeat, var(--bg); min-height: 100vh; -webkit-font-smoothing: antialiased; }
+header { position: sticky; top: 0; z-index: 10; gap: 20px; padding: 10px 24px; background: color-mix(in srgb, var(--surface) 86%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+header .brand { display: flex; align-items: center; gap: 12px; flex: none; }
+header .logo { width: auto; height: 34px; display: block; background: none; border-radius: 0; }
+header .logo .logo-ink { fill: var(--logo-ink); }
+header h1 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+header #app-sub { padding-left: 12px; border-left: 1px solid var(--line); font-weight: 500; }
+#apptabs { margin-left: 8px; padding: 4px; gap: 2px; background: var(--surface-2); border-radius: 999px; }
+#apptabs button { padding: 6px 18px; font-weight: 500; color: var(--muted); transition: background .15s, color .15s; }
+#apptabs button:hover:not(.on) { background: color-mix(in srgb, var(--surface) 60%, transparent); color: var(--text); }
+#apptabs button.on { background: var(--surface); color: var(--accent); font-weight: 600; box-shadow: var(--shadow); }
+#tabpage { max-width: 880px; }
+.layout { grid-template-columns: 200px minmax(0, 1fr) 300px; gap: 28px; padding: 28px 24px 48px; }
+#nav { counter-reset: section; top: 76px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 8px; box-shadow: var(--shadow); }
+#nav button { justify-content: flex-start; gap: 10px; padding: 7px 10px; border-radius: 10px; transition: background .15s; }
+#nav button::before { counter-increment: section; content: counter(section); flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 600; background: var(--surface-2); color: var(--muted); }
+#nav button[data-section="start"]::before { content: "★"; }
+#nav button.on::before { background: var(--accent); color: var(--accent-ink); }
+#nav button .count { margin-left: auto; }
+#nav .adv-toggle { margin: 8px 0 0; padding: 10px 10px 4px; }
+#side { top: 76px; border-radius: 16px; padding: 18px; box-shadow: var(--shadow); max-height: calc(100vh - 96px); }
+h2 { font-size: 28px; font-weight: 700; letter-spacing: -.015em; }
+h3 { font-weight: 650; }
+.card { border-radius: 16px; padding: 18px 20px; box-shadow: var(--shadow); }
+.cards { gap: 16px; }
+.cards .card { transition: transform .15s, box-shadow .15s, border-color .15s; }
+.cards .card:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
+input[type=text], input[type=number], select, textarea { background: var(--surface); border-radius: 10px; transition: border-color .15s, box-shadow .15s; }
+input:hover, select:hover, textarea:hover { border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); }
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+.btn { font-weight: 500; transition: background .15s, filter .15s, box-shadow .15s; }
+.btn.primary { box-shadow: 0 1px 2px rgba(33, 0, 93, .2); }
+.btn.primary:hover { box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 40%, transparent); }
+.btn.link:hover { background: var(--accent-soft); }
+.btn:disabled { opacity: .5; cursor: default; filter: none; }
+.summary { border: 1px solid var(--line); }
+.step.open { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent), var(--shadow); }
+.preview { border-radius: 0 12px 12px 12px; }
+.hero { display: flex; align-items: center; gap: 24px; margin: 0 0 24px; padding: 24px 28px; border-radius: 20px; background: linear-gradient(135deg, var(--accent-soft), color-mix(in srgb, var(--accent-soft) 30%, var(--surface))); border: 1px solid var(--line); }
+.hero::before { content: ""; flex: none; width: 88px; height: 70px; background: var(--mark) center / contain no-repeat; }
+.hero h2 { margin: 0 0 4px; }
+.hero p { margin: 0; color: var(--muted); max-width: 62ch; }
+table.register { border-radius: 12px; overflow: hidden; }
+.card > .check:first-child { margin-top: 0; }
+@media (max-width: 1000px) {
+  #nav, #side { top: auto; }
+  header #app-sub { display: none; }
+}
 @media (max-width: 1000px) {
   .layout { grid-template-columns: minmax(0, 1fr); padding: 16px; gap: 16px; }
   #nav { position: static; flex-direction: row; overflow-x: auto; }
   #nav button { flex: none; }
+  #nav .adv-toggle { margin: 0; padding: 8px 12px; border-top: 0; flex: none; }
   #side { position: static; max-height: none; }
   header { padding: 12px 16px; }
   header span { display: none; }
@@ -135,7 +193,7 @@ table.register th { color: var(--muted); font-weight: 600; }
 </style>
 </head>
 <body>
-<header><div class="logo">S</div><h1 id="app-title">SocialEyes Experiment Builder</h1><span id="app-sub">writes study.yaml and CSV skeletons</span><nav id="apptabs" hidden></nav></header>
+<header><div class="brand"><!--LOGO--><h1 id="app-title">SocialEyes Experiment Builder</h1><span id="app-sub">Experiment builder</span></div><nav id="apptabs" hidden></nav></header>
 <section id="tabpage" hidden></section>
 <div class="layout">
   <nav id="nav"></nav>

@@ -3,9 +3,12 @@
   "use strict";
   const C = Core;
   const STORE = "socialeyes-builder-draft";
+  const ADVANCED_STORE = "socialeyes-builder-advanced";
 
   const ui = {
     study: null, content: null, section: "start", withCsv: true,
+    advanced: false,        // show the advanced settings (remembered on this computer)
+    hidden: [],             // advanced settings left out of the section being drawn: {label, changed}
     opened: null,           // file name when the study came from a study.yaml
     openStep: null,         // procedure card that is expanded
     previewFile: "study.yaml",
@@ -85,6 +88,9 @@
     end: ["End", "The last screen. The session is saved when it appears."],
   };
 
+  /** Setup steps, offered under "Add step" only with advanced settings on. */
+  const ADVANCED_STEPS = ["tag_ladder", "display_calibration"];
+
   const KIND_INFO = { vas: "Slider (VAS)", likert: "Likert scale", choice: "Multiple choice", text: "Free text", number: "Number" };
 
   // ------------------------------------------------------------ paths
@@ -123,11 +129,43 @@
 
   function help(text) { return text ? `<p class="help">${text}</p>` : ""; }
 
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+  /** Whether the study sets `path` to something other than its default. */
+  function changed(path, def) {
+    const v = getP(path);
+    return v !== undefined && !same(v, def !== undefined ? def : C.get({}, path));
+  }
+
+  /**
+   * Advanced-only html: shown with "Advanced settings" on; otherwise left out and listed under
+   * the section (moreSettings), saying when the study has changed it.
+   */
+  function advanced(label, isChanged, html) {
+    if (ui.advanced) return html;
+    ui.hidden.push({ label, changed: !!isChanged });
+    return "";
+  }
+
+  /** Under a section: the advanced settings it has, when they are hidden. */
+  function moreSettings() {
+    const h = ui.hidden;
+    if (ui.advanced || !h.length) return "";
+    const names = [...new Set(h.map((x) => x.label))];
+    const ch = [...new Set(h.filter((x) => x.changed).map((x) => x.label))];
+    return `<div class="more-settings">
+      <p><b>${names.length} advanced setting${names.length === 1 ? "" : "s"}</b> on this page: ${names.map(esc).join(", ")}.
+      ${ch.length ? `<br><span class="pill">changed</span> This study doesn't use the usual value for ${ch.map(esc).join(", ")}.` : "The usual values suit most studies."}</p>
+      ${btn("advanced-on", "Show advanced settings", "link")}</div>`;
+  }
+
   /**
    * One form field bound to a path in the study (or "content.x" for builder-only numbers).
-   * kind: text | textarea | int | float | nullnum | bool | select | list
+   * kind: text | textarea | int | float | nullnum | bool | select | list | lines (a list, one per line)
+   * adv: only shown with "Advanced settings" on.
    */
   function field(o) {
+    if (o.adv) return advanced(o.label.replace(/<[^>]*>/g, ""), changed(o.path, o.def), field({ ...o, adv: false }));
     const id = "f_" + o.path.replace(/\W/g, "_");
     const cur = o.path.startsWith("content.") ? ui.content[o.path.slice(8)] : val(o.path, o.def);
     const attrs = `id="${id}" data-path="${esc(o.path)}" data-kind="${o.kind}" data-key="${esc(o.path)}"${o.num ? ' data-num="1"' : ""}`;
@@ -138,6 +176,8 @@
       input = `<select ${attrs}>${o.options.map(([v, l]) => `<option value="${esc(v)}" ${String(cur) === String(v) ? "selected" : ""}>${esc(l)}</option>`).join("")}</select>`;
     } else if (o.kind === "textarea") {
       input = `<textarea ${attrs} rows="${o.rows || 3}" placeholder="${esc(o.placeholder || "")}">${esc(cur)}</textarea>`;
+    } else if (o.kind === "lines") {
+      input = `<textarea ${attrs} rows="${o.rows || 3}" placeholder="${esc(o.placeholder || "one per line")}">${esc((cur || []).join("\n"))}</textarea>`;
     } else if (o.kind === "list") {
       input = `<input type="text" ${attrs} value="${esc((cur || []).join(", "))}" placeholder="${esc(o.placeholder || "comma-separated")}">`;
     } else if (o.kind === "int" || o.kind === "float" || o.kind === "nullnum") {
@@ -152,6 +192,7 @@
     const k = el.dataset.kind;
     if (k === "bool") return el.checked;
     if (k === "list") return el.value.split(",").map((s) => s.trim()).filter((s) => s !== "");
+    if (k === "lines") return el.value.split("\n").map((s) => s.trim()).filter((s) => s !== "");
     if (k === "int") return el.value === "" ? undefined : Math.round(Number(el.value));
     if (k === "float") return el.value === "" ? undefined : Number(el.value);
     if (k === "nullnum") return el.value === "" ? null : Number(el.value);
@@ -177,10 +218,12 @@
           <label class="btn file">Choose file…<input type="file" id="open-file" accept=".yaml,.yml,text/yaml"></label>
           <p class="hint">or drop the file here</p></div>`;
     return `
-      <h2>Start</h2>
-      <p class="lead">This builder walks you through the decisions for a SocialEyes study and writes
+      <div class="hero"><div><h2>Design your study</h2>
+      <p>The builder walks you through the decisions for a SocialEyes study and writes
       <code>study.yaml</code> plus CSV files with a row for every piece of content your design needs.
-      ${ui.desktop ? "Everything stays on this computer." : "Everything stays in this browser; nothing is uploaded."}</p>
+      ${ui.desktop ? "Everything stays on this computer." : "Everything stays in this browser; nothing is uploaded."}</p></div></div>
+      <p class="lead">Settings most studies can leave as they are are tucked away. Once you know your way around,
+      tick <b>Advanced settings</b> in the menu on the left to see them all.</p>
       ${ui.desktopError ? `<p class="error-box">${esc(ui.desktopError)}</p>` : ""}
       <div class="cards">
         <div class="card"><h3>New study</h3><p>Just the basic feed (posts, likes, comments to read) and the eye-tracking steps. Every optional feature starts off; switch on what you need.</p>${btn("new-blank", "Start blank", "primary")}</div>
@@ -200,9 +243,9 @@
       <div class="grid">
         ${field({ path: "id", label: "Study id", kind: "text", placeholder: "my_study", help: "Letters, digits, - and _." })}
         ${field({ path: "title", label: "Title", kind: "text", wide: true })}
-        ${field({ path: "version", label: "Version", kind: "int", def: 1, min: 1, help: "Raise it when you change the study after piloting." })}
-        <div class="field"><label for="f_seed">Seed</label><div class="row"><input type="number" id="f_seed" data-path="seed" data-kind="int" data-key="seed" value="${esc(val("seed", 1))}">${btn("random-seed", "Random")}</div>
-          ${help("Decides every participant's plan (post order, conditions). Same seed = same plans. Never change it once data collection has started.")}</div>
+        ${field({ path: "version", label: "Version", kind: "int", def: 1, min: 1, adv: true, help: "Raise it when you change the study after piloting. Saving asks for a new version when it's needed." })}
+        ${advanced("Seed", false, `<div class="field"><label for="f_seed">Seed</label><div class="row"><input type="number" id="f_seed" data-path="seed" data-kind="int" data-key="seed" value="${esc(val("seed", 1))}">${btn("random-seed", "Random")}</div>
+          ${help("Decides every participant's plan (post order, conditions). Same seed = same plans. Never change it once data collection has started.")}</div>`)}
       </div>
       <h3>How the app looks</h3>
       <div class="grid">
@@ -224,7 +267,7 @@
         ${field({ path: `${p}.name`, label: "Name", kind: "text", placeholder: "e.g. edit", help: "Used in the data; letters, digits and _." })}
         ${field({ path: `${p}.design`, label: "Design", kind: "select", options: [["within", "Within subjects"], ["between", "Between subjects"]], help: f.design === "between" ? "Each participant gets one level." : "Every participant sees every level." })}
         ${field({ path: `${p}.levels`, label: "Levels", kind: "list", placeholder: "e.g. original, retouched", wide: true, help: "At least 2. These names appear in the data and, for images, comments and captions, in the CSV files." })}
-        ${f.design === "between" ? field({ path: `${p}.applies_to`, label: "Applies to", kind: "select", def: "critical", options: [["critical", "Critical posts only"], ["all", "All posts (fillers too)"]], help: "With all posts, every filler needs the content for each level too." }) : ""}
+        ${f.design === "between" ? field({ path: `${p}.applies_to`, label: "Applies to", kind: "select", def: "critical", adv: true, options: [["critical", "Critical posts only"], ["all", "All posts (fillers too)"]], help: "With all posts, every filler needs the content for each level too." }) : ""}
       </div>
       <h4>What it changes</h4>
       ${controls || `<p class="hint">Nothing yet: choose what this factor manipulates.</p>`}
@@ -244,10 +287,13 @@
       body = `<div class="grid">${levels.map((lv) => field({ path: `${base}.${lv}`, label: `Likes for “${esc(lv)}”`, kind: "text", placeholder: "e.g. 5000" })).join("")}</div>`;
     } else {
       const custom = typeof spec !== "string";
-      body = `<label class="check"><input type="checkbox" data-action-change="custom-map:${i}:${attr}" ${custom ? "checked" : ""}> <span>Use different names than the level names</span></label>`;
-      if (custom) body += `<div class="grid">${levels.map((lv) => field({ path: `${base}.${lv}`, label: `Level “${esc(lv)}”`, kind: "text" })).join("")}</div>`;
-      else if (spec !== "{level}") body += field({ path: base, label: "Template", kind: "text", help: "{level} is replaced by the level name." });
-      else body += help(`Values: ${levels.map((l) => `<code>${esc(l)}</code>`).join(", ") || "…"}`);
+      const values = levels.map((l) => (custom ? (spec || {})[l] : String(spec).replace(/\{level\}/g, l)));
+      const plain = help(`Values: ${values.map((v) => `<code>${esc(v)}</code>`).join(", ") || "…"}${custom || spec !== "{level}" ? "" : " (the level names)"}`);
+      let names = `<label class="check"><input type="checkbox" data-action-change="custom-map:${i}:${attr}" ${custom ? "checked" : ""}> <span>Use different names than the level names</span></label>`;
+      if (custom) names += `<div class="grid">${levels.map((lv) => field({ path: `${base}.${lv}`, label: `Level “${esc(lv)}”`, kind: "text" })).join("")}</div>`;
+      else if (spec !== "{level}") names += field({ path: base, label: "Template", kind: "text", help: "{level} is replaced by the level name." });
+      else names += plain;
+      body = advanced("Names used in the CSV files", spec !== "{level}", names) || plain;
     }
     return `<div class="control"><div class="card-head"><b>${ATTR_INFO[attr][0]}</b>${btn(`del-attr:${i}:${attr}`, "Remove", "link danger")}</div>${help(ATTR_INFO[attr][1])}${body}</div>`;
   }
@@ -306,13 +352,13 @@
     return `
       <h2>Feed</h2>
       <div class="grid">
-        ${field({ path: P + "order", label: "Post order", kind: "select", options: [["shuffle", "Shuffled per participant"], ["fixed", "Fixed (posts.csv order)"]], help: "Shuffled orders still follow the rules below." })}
-        ${field({ path: P + "lead_in_fillers", label: "Fillers at the top", kind: "int", min: 0, help: "Warm-up posts before the first critical post." })}
-        ${field({ path: P + "max_run_same_cell", label: "Max critical posts in a row from one cell", kind: "int", min: 1 })}
-        ${field({ path: P + "min_fillers_between_critical", label: "Fillers between critical posts", kind: "int", min: 0 })}
         ${field({ path: P + "done_button_after_s", label: "“I'm done” button after (s)", kind: "nullnum", min: 0, placeholder: "never", help: "Blank = never shown." })}
         ${field({ path: P + "time_limit_s", label: "Time limit (s)", kind: "nullnum", min: 1, placeholder: "none", help: "Blank = no limit. With neither, participants scroll until the end of the feed." })}
-        ${field({ path: P + "story_duration_s", label: "Seconds per story", kind: "float", min: 1, max: 60 })}
+        ${field({ path: P + "order", label: "Post order", kind: "select", adv: true, options: [["shuffle", "Shuffled per participant"], ["fixed", "Fixed (posts.csv order)"]], help: "Shuffled orders still follow the spacing rules next to it." })}
+        ${field({ path: P + "lead_in_fillers", label: "Fillers at the top", kind: "int", min: 0, adv: true, help: "Warm-up posts before the first critical post." })}
+        ${field({ path: P + "max_run_same_cell", label: "Max critical posts in a row from one cell", kind: "int", min: 1, adv: true })}
+        ${field({ path: P + "min_fillers_between_critical", label: "Fillers between critical posts", kind: "int", min: 0, adv: true })}
+        ${ui.content.stories ? field({ path: P + "story_duration_s", label: "Seconds per story", kind: "float", min: 1, max: 60, adv: true }) : ""}
       </div>
       <h3>What participants can do</h3>
       <div class="checks-grid">
@@ -347,13 +393,13 @@
     const d = C.STEP_DEFAULTS[s.type] || {};
     const f = (key, label, kind, extra = {}) => field({ path: `${p}.${key}`, label, kind, def: d[key], ...extra });
     switch (s.type) {
-      case "instructions": return `<div class="grid">${f("title", "Title", "text")}${f("button", "Button text", "text")}${f("min_time_s", "Minimum time (s)", "float", { min: 0 })}</div>${f("text", "Text", "textarea", { rows: 4 })}`;
-      case "marker_calibration": return `<div class="grid">${f("duration_s", "Duration (s)", "float", { min: 1, max: 30 })}</div>`;
+      case "instructions": return `<div class="grid">${f("title", "Title", "text")}${f("button", "Button text", "text")}${f("min_time_s", "Minimum time (s)", "float", { min: 0, adv: true })}</div>${f("text", "Text", "textarea", { rows: 4 })}`;
+      case "marker_calibration": return `<div class="grid">${f("duration_s", "Duration (s)", "float", { min: 1, max: 30, adv: true })}</div>`;
       case "tag_ladder": return `<div class="grid">${f("hold_s", "Seconds per way of holding", "float", { min: 5, max: 120 })}${f("flip_every_s", "Reverse the order every (s)", "float", { min: 1, max: 60 })}</div>`;
-      case "display_calibration": return `<div class="grid">${f("wait_s", "Offer Skip after (s)", "float", { min: 5, max: 600 })}${f("port", "Port", "int", { min: 1024, max: 65535 })}</div>${f("text", "Text", "textarea", { rows: 2 })}`;
-      case "camera_check": return `<div class="grid">${f("min_face_s", "Face in view for (s)", "float", { min: 0.5, max: 30 })}${f("instructions", "Instructions", "text", { wide: true })}</div>`;
+      case "display_calibration": return `<div class="grid">${f("wait_s", "Offer Skip after (s)", "float", { min: 5, max: 600, adv: true })}${f("port", "Port", "int", { min: 1024, max: 65535, adv: true, help: "The laptop connects to the phone on this port." })}</div>${f("text", "Text", "textarea", { rows: 2 })}`;
+      case "camera_check": return `<div class="grid">${f("min_face_s", "Face in view for (s)", "float", { min: 0.5, max: 30, adv: true })}${f("instructions", "Instructions", "text", { wide: true })}</div>`;
       case "profile_photo": return `${f("text", "Text", "textarea")}${f("allow_skip", "Participants can skip it", "bool")}`;
-      case "validation": return `<div class="grid">${f("points", "Dots", "select", { num: true, options: [[5, "5"], [9, "9"], [13, "13"]] })}${f("target_dp", "Dot size (dp)", "int", { min: 12, max: 80 })}${f("instructions", "Instructions", "text", { wide: true })}</div>`;
+      case "validation": return `<div class="grid">${f("points", "Dots", "select", { num: true, options: [[5, "5"], [9, "9"], [13, "13"]] })}${f("target_dp", "Dot size (dp)", "int", { min: 12, max: 80, adv: true })}${f("instructions", "Instructions", "text", { wide: true })}</div>`;
       case "questionnaire":
       case "image_rating": {
         const items = s.items || [];
@@ -380,14 +426,16 @@
           <button type="button" class="step-title" data-action="toggle-step:${i}"><span class="num">${i + 1}</span><span class="badge">${esc(info[0])}</span> ${esc(s.id || "")}</button>
           <span>${btn(`move-step:${i}:-1`, "↑", "link", 'title="Move up"')}${btn(`move-step:${i}:1`, "↓", "link", 'title="Move down"')}${btn(`del-step:${i}`, "Remove", "link danger")}</span>
         </div>
-        ${open ? `${help(info[1])}<div class="grid">${field({ path: `procedure.${i}.id`, label: "Step id", kind: "text", help: "Names the step in the data." })}</div>${stepFields(s, i)}` : ""}
+        ${open ? `${help(info[1])}${advanced("Step id", false, `<div class="grid">${field({ path: `procedure.${i}.id`, label: "Step id", kind: "text", help: "Names the step in the data." })}</div>`)}${stepFields(s, i)}` : ""}
       </div>`;
     }).join("");
+    const types = C.STEP_TYPES.filter((t) => t !== "end" && (ui.advanced || !ADVANCED_STEPS.includes(t)));
+    if (!ui.advanced) ui.hidden.push(...ADVANCED_STEPS.map((t) => ({ label: `${STEP_INFO[t][0]} step`, changed: false })));
     return `
       <h2>Procedure</h2>
       <p class="lead">The screens a participant goes through, in order. Click a step to edit it.</p>
       ${cards}
-      <div class="row add-step"><select id="new-step">${C.STEP_TYPES.filter((t) => t !== "end").map((t) => `<option value="${t}">${STEP_INFO[t][0]}</option>`).join("")}</select>${btn("add-step", "+ Add step", "primary")}</div>
+      <div class="row add-step"><select id="new-step">${types.map((t) => `<option value="${t}">${STEP_INFO[t][0]}</option>`).join("")}</select>${btn("add-step", "+ Add step", "primary")}</div>
       <p class="hint">New steps go before the end screen.</p>`;
   }
 
@@ -395,7 +443,6 @@
     const L = "logging.";
     const cam = val("logging.front_camera.enabled", false);
     const camSteps = val("logging.front_camera.steps", ["feed"]);
-    const ids = (ui.study.procedure || []).map((s) => s.id).filter(Boolean);
     return `
       <h2>Recording</h2>
       <p class="lead">Gaze (from the Neon glasses), where every post is on screen, interactions, answers and
@@ -405,29 +452,73 @@
       </div>
       <div class="card">
         ${field({ path: L + "sensors", label: "Motion sensors", kind: "bool", help: "Accelerometer, gyroscope and rotation: how the phone is held and moved. Useful for cleaning gaze data; small files." })}
-        ${val("logging.sensors", false) ? `<div class="grid">${field({ path: L + "sensor_hz", label: "Samples per second", kind: "int", min: 5, max: 200 })}</div>` : ""}
+        ${val("logging.sensors", false) ? `<div class="grid">${field({ path: L + "sensor_hz", label: "Samples per second", kind: "int", min: 5, max: 200, adv: true })}</div>` : ""}
       </div>
       <div class="card">
         ${field({ path: L + "front_camera.enabled", label: "Front camera video of the face", kind: "bool", help: "For facial-expression analysis. Android shows a camera indicator while recording, which may make people more self-aware; pilot it. Uses battery and warms the phone." })}
         ${cam ? `<div class="grid">
-          ${field({ path: L + "front_camera.resolution", label: "Resolution", kind: "select", def: "720p", options: [["480p", "480p"], ["720p", "720p (recommended)"], ["1080p", "1080p"]] })}
-          ${field({ path: L + "front_camera.fps", label: "Frames per second", kind: "select", def: 30, num: true, options: [[15, "15"], [24, "24"], [30, "30"]] })}
-          ${field({ path: L + "front_camera.bitrate_mbps", label: "Bitrate (Mbit/s)", kind: "float", min: 0.5, max: 20, def: 3 })}
-          ${field({ path: L + "front_camera.segment_s", label: "New file every (s)", kind: "int", min: 10, max: 600, def: 60, help: "A crash loses at most one file." })}
+          ${field({ path: L + "front_camera.resolution", label: "Resolution", kind: "select", def: "720p", adv: true, options: [["480p", "480p"], ["720p", "720p (recommended)"], ["1080p", "1080p"]] })}
+          ${field({ path: L + "front_camera.fps", label: "Frames per second", kind: "select", def: 30, num: true, adv: true, options: [[15, "15"], [24, "24"], [30, "30"]] })}
+          ${field({ path: L + "front_camera.bitrate_mbps", label: "Bitrate (Mbit/s)", kind: "float", min: 0.5, max: 20, def: 3, adv: true })}
+          ${field({ path: L + "front_camera.segment_s", label: "New file every (s)", kind: "int", min: 10, max: 600, def: 60, adv: true, help: "A crash loses at most one file." })}
         </div>
         <h4>Steps to record</h4>
         <label class="check"><input type="checkbox" data-action-change="cam-all" ${camSteps === "all" ? "checked" : ""}> <span>All steps</span></label>
-        ${camSteps === "all" ? "" : `<div class="checks-grid">${ids.map((id) => `<label class="check"><input type="checkbox" data-action-change="cam-step:${esc(id)}" ${Array.isArray(camSteps) && camSteps.includes(id) ? "checked" : ""}> <span>${esc(id)}</span></label>`).join("")}</div>`}` : ""}
+        ${camSteps === "all" ? "" : stepChecks("cam-step", camSteps)}` : ""}
       </div>
-      <div class="card">
+      ${advanced("Screen recording", val("logging.screen_recording", false), `<div class="card">
         ${field({ path: L + "screen_recording", label: "Screen recording (pilots only)", kind: "bool", help: "Records exactly what was on screen, to check the gaze mapping. Android asks for permission every session and it costs performance. Not built in the app yet; can't be combined with the front camera." })}
         ${val("logging.screen_recording", false) ? `<div class="grid">${field({ path: L + "screen_recording_fps", label: "Frames per second", kind: "int", min: 5, max: 60 })}</div>` : ""}
-      </div>
+      </div>`)}
       <h3>Eye tracker</h3>
       <div class="card">
         ${field({ path: "neon.required", label: "Require the Neon glasses to start a session", kind: "bool", help: "Without it, the researcher can go on without eye tracking when the glasses aren't ready." })}
-        ${field({ path: "neon.auto_record", label: "Start and stop the Neon recording from the app", kind: "bool", help: "Shows an eye tracker check (glasses, battery, streams, checklist) before each session. Scene camera exposure, template fields and the checklist are set under neon in study.yaml (see the README)." })}
+        ${field({ path: "neon.auto_record", label: "Start and stop the Neon recording from the app", kind: "bool", adv: true, help: "Shows an eye tracker check (glasses, battery, streams, checklist) before each session. Keep it on: the settings below need it." })}
+      </div>
+      ${eyeTrackerAdvanced()}`;
+  }
+
+  /** A checkbox per procedure step; `action` gets the step id. */
+  function stepChecks(action, chosen) {
+    const ids = (ui.study.procedure || []).map((s) => s.id).filter(Boolean);
+    return `<div class="checks-grid">${ids.map((id) => `<label class="check"><input type="checkbox" data-action-change="${action}:${esc(id)}" ${Array.isArray(chosen) && chosen.includes(id) ? "checked" : ""}> <span>${esc(id)}</span></label>`).join("")}</div>`;
+  }
+
+  /** Phone tracking and the Neon scene camera: settings for researchers who have piloted their setup. */
+  function eyeTrackerAdvanced() {
+    const exp = getP("neon.scene_exposure");
+    const mode = exp ? exp.mode || "manual" : "__null__";
+    const tagSteps = val("markers.on_screen.steps", []);
+    const html = `
+      <div class="card">
+        <h4>On-screen tags</h4>
+        ${help("AprilTags at the top and bottom of the screen during the chosen steps, so the scene camera can find the phone all the time (marker calibrations show their own). Pilot the size with a Tag size check step.")}
+        ${stepChecks("tags-step", tagSteps)}
+        ${tagSteps.length ? `<div class="grid">${field({ path: "markers.on_screen.size_mm", label: "Tag size (mm)", kind: "float", min: 4, max: 20 })}</div>` : ""}
+      </div>
+      <div class="card">
+        <h4>Screen and scene camera</h4>
+        <div class="grid">
+          ${field({ path: "display.brightness", label: "Screen brightness (0.05 to 1)", kind: "nullnum", min: 0.05, max: 1, placeholder: "the phone's setting", help: "For the whole session. Blank = the phone's own setting. A Display calibration step chooses it for you." })}
+          <div class="field"><label for="f_exposure">Scene camera exposure</label><select id="f_exposure" data-action-change="exposure-mode" data-key="exposure-mode">
+            ${[["__null__", "Leave Companion's setting"], ["auto", "Automatic"], ["manual", "Fixed"]].map(([v, l]) => `<option value="${v}" ${mode === v ? "selected" : ""}>${l}</option>`).join("")}</select>
+            ${help("Automatic exposure meters the room and can blow out the bright screen. Set at the start of each session, put back at the end.")}</div>
+          ${mode === "manual" ? field({ path: "neon.scene_exposure.exposure_us", label: "Exposure time (µs)", kind: "int", min: 1, max: 1000000, placeholder: "e.g. 4000" }) : ""}
+          ${mode === "manual" ? field({ path: "neon.scene_exposure.gain", label: "Gain", kind: "int", min: 0, placeholder: "Companion's" }) : ""}
+          ${mode === "auto" ? field({ path: "neon.scene_exposure.brightness", label: "Target brightness", kind: "int", placeholder: "Companion's", help: "Lower = darker." }) : ""}
+        </div>
+      </div>
+      <div class="card">
+        ${field({ path: "neon.checklist", label: "Checklist before each recording", kind: "lines", rows: 4, wide: true, help: "One item per line; the researcher ticks each before starting. Leave empty for no checklist. Companion's template fields are set in study.yaml (neon.template)." })}
       </div>`;
+    if (ui.advanced) return `<h3>Phone tracking</h3>${html}`;
+    ui.hidden.push(
+      { label: "On-screen tags", changed: tagSteps.length > 0 || changed("markers.on_screen.size_mm") },
+      { label: "Screen brightness", changed: changed("display.brightness") },
+      { label: "Scene camera exposure", changed: exp != null },
+      { label: "Eye tracker checklist", changed: changed("neon.checklist") },
+    );
+    return "";
   }
 
   function sectionParticipants() {
@@ -443,8 +534,8 @@
       combination equally often. Recruit in multiples of the block too.</p>
       <div class="grid">
         ${field({ path: "participants.n_plans", label: "Number of plans", kind: "int", min: 1, max: 5000, help: "Make more plans than you expect to need; unused ones do no harm." })}
-        ${field({ path: "participants.id_prefix", label: "Id prefix", kind: "text" })}
-        ${field({ path: "participants.id_digits", label: "Digits", kind: "int", min: 1, max: 6 })}
+        ${field({ path: "participants.id_prefix", label: "Id prefix", kind: "text", adv: true })}
+        ${field({ path: "participants.id_digits", label: "Digits", kind: "int", min: 1, max: 6, adv: true })}
       </div>
       ${b > 1 && n % b ? `<div class="row">${btn(`set-n:${lo}`, `Use ${lo}`)}${hi !== lo ? btn(`set-n:${hi}`, `Use ${hi}`) : ""}</div>` : ""}
       <div class="summary">Ids: <code>${esc(id(1))}</code>, <code>${esc(id(2))}</code> … <code>${esc(id(n))}</code></div>`;
@@ -487,8 +578,7 @@
       your CSV files are never overwritten. The previous study.yaml is kept as <code>study.yaml.bak</code>.
       ${ui.hadComments ? "<b>Your study.yaml has comments (# …); they are not kept when you save.</b>" : ""}
       After saving, the study is checked like <code>socialeyes validate</code> does: images, AOIs and CSV contents (list on the right).</p>
-      <div class="tabs">${Object.keys(files).map((f) => `<button type="button" class="tab ${f === ui.previewFile ? "on" : ""}" data-action="preview:${esc(f)}">${esc(f)}</button>`).join("")}</div>
-      <pre class="preview">${esc(files[ui.previewFile])}</pre>`;
+      ${filePreview(files)}`;
   }
 
   function sectionDownload() {
@@ -501,10 +591,16 @@
       ${errors.length ? `<p class="error-box">There ${errors.length === 1 ? "is 1 problem" : `are ${errors.length} problems`} that <code>socialeyes validate</code> will reject (see the list on the right). You can still download and fix them later.</p>` : `<p class="ok-box">No problems found. <code>socialeyes validate</code> will also check your images, AOIs and CSV contents.</p>`}
       <label class="check"><input type="checkbox" data-path="ui.withCsv" data-kind="bool" data-ui="1" ${ui.withCsv ? "checked" : ""}> <span>Include CSV skeletons and NEXT_STEPS.txt</span></label>
       ${ui.opened && ui.withCsv ? `<p class="hint">Careful: unzipping over your study folder would replace your existing CSV files.</p>` : ""}
-      <div class="row">${btn("download-zip", `Download ${esc(ui.study.id || "study")}.zip`, "primary")}${btn("download-yaml", "Download study.yaml only")}</div>
+      <div class="row">${btn("download-zip", `Download ${esc(ui.study.id || "study")}.zip`, "primary")}${ui.advanced ? btn("download-yaml", "Download study.yaml only") : ""}</div>
       <p class="hint">Unzip into <code>studies/</code>, then follow NEXT_STEPS.txt.</p>
+      ${filePreview(files)}`;
+  }
+
+  /** The files saving writes, one tab each (advanced settings only). */
+  function filePreview(files) {
+    return advanced("Preview of the files", false, `
       <div class="tabs">${Object.keys(files).map((f) => `<button type="button" class="tab ${f === ui.previewFile ? "on" : ""}" data-action="preview:${esc(f)}">${esc(f)}</button>`).join("")}</div>
-      <pre class="preview">${esc(files[ui.previewFile])}</pre>`;
+      <pre class="preview">${esc(files[ui.previewFile])}</pre>`);
   }
 
   const RENDER = {
@@ -524,7 +620,7 @@
     side.innerHTML = `
       <h3>${esc(ui.study.title || ui.study.id || "Untitled")}</h3>
       <p class="design-line">${esc(C.designSummary(ui.study))}</p>
-      <dl class="stats"><dt>Cells</dt><dd>${C.cells(ui.study)}</dd><dt>Groups</dt><dd>${C.groups(ui.study)}</dd><dt>Block</dt><dd>${C.blockSize(ui.study)}</dd><dt>Steps</dt><dd>${(ui.study.procedure || []).length}</dd></dl>
+      ${ui.advanced ? `<dl class="stats"><dt>Cells</dt><dd>${C.cells(ui.study)}</dd><dt>Groups</dt><dd>${C.groups(ui.study)}</dd><dt>Block</dt><dd>${C.blockSize(ui.study)}</dd><dt>Steps</dt><dd>${(ui.study.procedure || []).length}</dd></dl>` : ""}
       <h3>Checks</h3>
       ${list.length ? `<ul class="checks">${list.map((c) => `<li class="${c.level}"><button type="button" data-action="goto:${c.section}"><span class="ic">${icon[c.level]}</span><span>${esc(c.msg)}</span></button></li>`).join("")}</ul>` : `<p class="ok-box">All good.</p>`}
       ${ui.desktop ? folderChecks() : ""}`;
@@ -910,9 +1006,12 @@
     let sel = null;
     try { sel = focused ? [document.activeElement.selectionStart, document.activeElement.selectionEnd] : null; } catch (e) { sel = null; }
     document.getElementById("nav").innerHTML = SECTIONS.map(([k, label]) =>
-      `<button type="button" data-section="${k}" class="${ui.section === k ? "on" : ""}" ${!ui.study && k !== "start" ? "disabled" : ""}>${sectionLabel(k, label)}<span class="count"></span></button>`).join("");
+      `<button type="button" data-section="${k}" class="${ui.section === k ? "on" : ""}" ${!ui.study && k !== "start" ? "disabled" : ""}>${sectionLabel(k, label)}<span class="count"></span></button>`).join("")
+      + `<label class="check adv-toggle" title="Show every setting, for researchers who know the study design and their eye-tracking setup"><input type="checkbox" id="advanced-toggle" ${ui.advanced ? "checked" : ""}> <span>Advanced settings</span></label>`;
     const main = document.getElementById("main");
-    main.innerHTML = (ui.study || ui.section === "start" ? RENDER[ui.section]() : sectionStart()) + navButtons();
+    ui.hidden = [];
+    const page = ui.study || ui.section === "start" ? RENDER[ui.section]() : sectionStart();
+    main.innerHTML = page + moreSettings() + navButtons();
     renderSide();
     if (focused) {
       const el = main.querySelector(`[data-key="${CSS.escape(focused)}"]`);
@@ -926,6 +1025,12 @@
     const i = SECTIONS.findIndex(([k]) => k === ui.section);
     const prev = SECTIONS[i - 1], next = SECTIONS[i + 1];
     return `<div class="pager">${prev ? btn(`goto:${prev[0]}`, `← ${sectionLabel(...prev)}`) : "<span></span>"}${next ? btn(`goto:${next[0]}`, `${sectionLabel(...next)} →`, "primary") : ""}</div>`;
+  }
+
+  /** Advanced settings on or off, remembered on this computer. */
+  function setAdvanced(on) {
+    ui.advanced = on;
+    try { localStorage.setItem(ADVANCED_STORE, on ? "1" : "0"); } catch (e) { /* storage unavailable */ }
   }
 
   /** Keeps the draft in the browser's storage, so it survives closing the page. */
@@ -1163,6 +1268,7 @@
         break;
       }
       case "set-n": setP("participants.n_plans", Number(args[0])); break;
+      case "advanced-on": setAdvanced(true); break;
       case "preview": ui.previewFile = args.join(":"); break;
       case "download-zip": {
         const files = C.studyFiles(S, ui.content, ui.withCsv);
@@ -1210,15 +1316,22 @@
       f.sets[a] = el.checked ? Object.fromEntries((f.levels || []).map((lv) => [lv, lv])) : "{level}";
     } else if (name === "cam-all") {
       setP("logging.front_camera.steps", el.checked ? "all" : ["feed"]);
-    } else if (name === "cam-step") {
-      let steps = val("logging.front_camera.steps", ["feed"]);
+    } else if (name === "cam-step" || name === "tags-step") {
+      const path = name === "cam-step" ? "logging.front_camera.steps" : "markers.on_screen.steps";
+      let steps = val(path, name === "cam-step" ? ["feed"] : []);
       steps = Array.isArray(steps) ? steps.slice() : [];
       const id = args.join(":");
       if (el.checked && !steps.includes(id)) steps.push(id);
       if (!el.checked) steps = steps.filter((x) => x !== id);
       const order = S.procedure.map((s) => s.id);
       steps.sort((x, y) => order.indexOf(x) - order.indexOf(y));
-      setP("logging.front_camera.steps", steps);
+      setP(path, steps);
+    } else if (name === "exposure-mode") {
+      // schema: manual needs exposure_us; exposure_us and gain only go with manual
+      const old = getP("neon.scene_exposure") || {};
+      if (el.value === "__null__") setP("neon.scene_exposure", undefined);
+      else if (el.value === "auto") setP("neon.scene_exposure", { mode: "auto", ...(old.brightness != null ? { brightness: old.brightness } : {}) });
+      else setP("neon.scene_exposure", { mode: "manual", exposure_us: old.exposure_us || 4000, ...(old.gain != null ? { gain: old.gain } : {}) });
     }
     render();
   }
@@ -1238,9 +1351,11 @@
     setP(path, v);
     // only once typing is done: half-typed levels would drop the choices made for the others
     if (commit && /^factors\.\d+\.levels$/.test(path)) normalizeFactors();
-    if (oldId !== null) {   // a renamed step stays chosen for the front camera
-      const camSteps = getP("logging.front_camera.steps");
-      if (Array.isArray(camSteps)) setP("logging.front_camera.steps", camSteps.map((x) => (x === oldId ? v : x)));
+    if (oldId !== null) {   // a renamed step stays chosen for the front camera and on-screen tags
+      for (const p of ["logging.front_camera.steps", "markers.on_screen.steps"]) {
+        const steps = getP(p);
+        if (Array.isArray(steps)) setP(p, steps.map((x) => (x === oldId ? v : x)));
+      }
     }
   }
 
@@ -1266,6 +1381,7 @@
     const el = e.target;
     if (el.id === "open-file" && el.files && el.files[0]) { openFile(el.files[0]); return; }
     if (el.id === "phone-update") { ui.phone.updateApp = el.checked; return; }
+    if (el.id === "advanced-toggle") { setAdvanced(el.checked); render(); return; }
     if (el.id === "files-missing") { ui.files.missingOnly = el.checked; render(); return; }
     if (el.id === "phone-serial") { ui.phone.serial = el.value; ui.phone.result = null; phoneCheck(); return; }
     if (el.dataset && el.dataset.actionChange) { actChange(el.dataset.actionChange, el); return; }
@@ -1291,6 +1407,7 @@
   }
   window.addEventListener("pywebviewready", enterDesktop);
 
+  try { ui.advanced = localStorage.getItem(ADVANCED_STORE) === "1"; } catch (e) { ui.advanced = false; }
   render();
   enterDesktop();
 })();

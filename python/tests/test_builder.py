@@ -113,6 +113,10 @@ def test_yaml_round_trip_keeps_every_value():
     (lambda s: s["logging"].update(screen_recording=True,
                                    front_camera={"enabled": True, "steps": ["feed"]}), "can't both be on"),
     (lambda s: s["factors"][2]["sets"].__setitem__("image_version", "{level}"), "controlled by both"),
+    (lambda s: s.__setitem__("markers", {"on_screen": {"steps": ["nope"]}}), "On-screen tags: there is no step"),
+    (lambda s: s.__setitem__("neon", {"scene_exposure": {"mode": "manual"}}), "needs an exposure time"),
+    (lambda s: (s.__setitem__("neon", {"auto_record": False}),
+                s["procedure"].insert(0, {"id": "dcal", "type": "display_calibration"})), "Display calibration sets"),
 ])
 def test_builder_errors_are_schema_errors(change, fragment):
     study = yaml.safe_load((EXAMPLE / "study.yaml").read_text(encoding="utf-8"))

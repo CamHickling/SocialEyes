@@ -19,8 +19,16 @@ const Core = (() => {
       touches: true, sensors: false, sensor_hz: 50, screen_recording: false, screen_recording_fps: 30,
       front_camera: { enabled: false, resolution: "720p", fps: 30, bitrate_mbps: 3, steps: ["feed"], segment_s: 60 },
     },
-    neon: { required: false, auto_record: true, sync_interval_s: 2 },
-    display: { viewing_distance_cm: 35 },
+    neon: {
+      required: false, auto_record: true, sync_interval_s: 2, scene_exposure: null, template: {},
+      checklist: [
+        "Companion's wearer is the SocialEyes profile (no gaze offset correction)",
+        "The glasses sit snugly and the participant can see the whole phone screen",
+        "The phone screen is clean, at the study's brightness, and not facing a window or lamp",
+      ],
+    },
+    display: { viewing_distance_cm: 35, brightness: null },
+    markers: { on_screen: { steps: [], size_mm: 12 } },
     participants: { n_plans: 120, id_prefix: "P", id_digits: 3 },
   };
 
@@ -28,7 +36,7 @@ const Core = (() => {
     instructions: { title: "", text: "", button: "Continue", min_time_s: 0 },
     marker_calibration: { duration_s: 4 },
     tag_ladder: { hold_s: 20, flip_every_s: 5 },
-    display_calibration: { wait_s: 60, port: 8091 },
+    display_calibration: { text: "Hold the phone as you normally would and keep looking at the screen. This takes about half a minute.", wait_s: 60, port: 8091 },
     camera_check: { min_face_s: 3, instructions: "Hold the phone as you normally would and look at the screen." },
     profile_photo: { text: "Take a photo for your profile picture. It is only used during this session and is deleted afterwards.", allow_skip: true },
     validation: { points: 9, target_dp: 28, instructions: "Look at each dot and tap it." },
@@ -302,8 +310,16 @@ const Core = (() => {
     if (feeds !== 1) add("error", "procedure", feeds ? "The procedure can have only one feed step." : "The procedure needs a feed step.");
     if (!steps.length || steps[steps.length - 1].type !== "end") add("error", "procedure", "The last step must be the end screen.");
     const feedAt = steps.findIndex((s) => s.type === "feed");
-    if (feedAt >= 0 && !steps.slice(0, feedAt).some((s) => s.type === "marker_calibration"))
+    const onScreen = get(study, "markers.on_screen.steps") || [];
+    for (const sid of onScreen) if (!ids.includes(sid)) add("error", "recording", `On-screen tags: there is no step "${sid}".`);
+    if (feedAt >= 0 && !onScreen.includes(steps[feedAt].id) && !steps.slice(0, feedAt).some((s) => s.type === "marker_calibration"))
       add("tip", "procedure", "Add a marker calibration before the feed: the gaze mapping uses it (and one after the feed to check for drift).");
+    const dcal = steps.findIndex((s) => s.type === "display_calibration");
+    if (dcal >= 0 && get(study, "neon.auto_record") === false)
+      add("error", "procedure", "Display calibration sets the eye tracker's camera, so it needs \"Start and stop the Neon recording from the app\" (Recording).");
+    const firstCal = steps.findIndex((s) => s.type === "marker_calibration" || s.type === "feed");
+    if (dcal >= 0 && firstCal >= 0 && dcal > firstCal)
+      add("warning", "procedure", "Put the display calibration before the first marker calibration and the feed, so they are recorded with its settings.");
     if (feedAt >= 0 && !steps.some((s) => s.type === "validation"))
       add("tip", "procedure", "A validation step measures eye-tracking accuracy on the phone for each participant.");
 
@@ -321,6 +337,11 @@ const Core = (() => {
       if (!steps.slice(0, Number.isFinite(first) ? first : steps.length).some((s) => s.type === "camera_check"))
         add("tip", "recording", "Add a camera check step before the recorded steps, so you know the face is in view.");
     }
+    const exp = get(study, "neon.scene_exposure");
+    if (exp && exp.mode !== "auto" && !exp.exposure_us)
+      add("error", "recording", "Scene camera: a fixed exposure needs an exposure time.");
+    if (exp && get(study, "neon.auto_record") === false)
+      add("error", "recording", "Scene camera exposure is set when the app starts the Neon recording, so it needs \"Start and stop the Neon recording from the app\".");
     if (get(study, "logging.screen_recording"))
       add("warning", "recording", "Screen recording is meant for pilots: Android asks for permission every session and it costs performance.");
     return out;
