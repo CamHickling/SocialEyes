@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from socialeyes.phone.adb import Adb, AdbError, Device
-from socialeyes.phone.loader import (ApkInfo, PhoneState, StudyInfo, _gradle_version, blocked, build_study,
+from socialeyes.phone.loader import (ApkInfo, PhoneState, StudyInfo, _build_version, blocked, build_study,
                                      discard, expected_hashes, parse_battery, parse_df, parse_package,
                                      parse_sessions, parse_sha256sum, parse_study_hashes, readiness, warned)
 
@@ -43,7 +43,7 @@ def test_parse_phone_output():
     assert parse_sessions("") == {}
     assert parse_sha256sum(f"{h}  ./plans/P001.json\n{'b' * 64}  ./files.sha256\n") == {
         "plans/P001.json": h, "files.sha256": "b" * 64}
-    assert _gradle_version('versionCode = 3\n        versionName = "0.2.0"') == (3, "0.2.0")
+    assert _build_version('{"elements": [{"versionCode": 3, "versionName": "0.2.0"}]}') == (3, "0.2.0")
 
 
 def phone(**kw) -> PhoneState:

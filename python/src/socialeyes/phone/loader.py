@@ -51,19 +51,23 @@ def find_apk() -> Optional[ApkInfo]:
             m = json.loads(meta.read_text(encoding="utf-8"))
             return ApkInfo(apk, int(m["version_code"]), m["version_name"])
         return None
-    gradle = REPO / "android" / "app" / "build.gradle.kts"
+    # Each build's own version (output-metadata.json), not build.gradle.kts: a stale
+    # release APK must not be installed under the source's newer version number.
     out = REPO / "android" / "app" / "build" / "outputs" / "apk"
+    found = []
     for apk in (out / "release" / "app-release.apk", out / "debug" / "app-debug.apk"):
-        if apk.is_file() and gradle.is_file():
-            code, name = _gradle_version(gradle.read_text(encoding="utf-8"))
-            return ApkInfo(apk, code, name)
-    return None
+        meta = apk.parent / "output-metadata.json"
+        if apk.is_file() and meta.is_file():
+            code, name = _build_version(meta.read_text(encoding="utf-8"))
+            found.append(ApkInfo(apk, code, name))
+    # The newest build; release before debug when both are the same version.
+    return max(found, key=lambda a: a.version_code, default=None)
 
 
-def _gradle_version(text: str) -> tuple[int, str]:
-    code = re.search(r"versionCode\s*=\s*(\d+)", text)
-    name = re.search(r'versionName\s*=\s*"([^"]+)"', text)
-    return int(code.group(1)) if code else 0, name.group(1) if name else "?"
+def _build_version(text: str) -> tuple[int, str]:
+    """Gradle's output-metadata.json -> (versionCode, versionName)."""
+    elements = json.loads(text).get("elements") or [{}]
+    return int(elements[0].get("versionCode", 0)), elements[0].get("versionName", "?")
 
 
 # ---------------------------------------------------------------- what the phone says
