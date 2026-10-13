@@ -73,7 +73,7 @@ import org.socialeyes.pictogram.study.FeedPost
 import org.socialeyes.pictogram.study.Step
 import org.socialeyes.pictogram.study.StudyPackage
 
-private val Wordmark = FontFamily(Font(R.font.grand_hotel))
+internal val Wordmark = FontFamily(Font(R.font.grand_hotel))
 
 /**
  * The feed step: the participant's posts in plan order. Logs viewport.csv,
@@ -386,7 +386,7 @@ private fun FeedContent(session: Session, onDone: (reason: String) -> Unit) {
 }
 
 @Composable
-private fun BarIcon(icon: ImageVector, tint: Color = Color.Unspecified, onClick: (() -> Unit)? = null) {
+internal fun BarIcon(icon: ImageVector, tint: Color = Color.Unspecified, onClick: (() -> Unit)? = null) {
     Box(
         Modifier
             .size(44.dp)
@@ -406,7 +406,7 @@ private fun BarIcon(icon: ImageVector, tint: Color = Color.Unspecified, onClick:
  * the feed. For the look only; tapping does nothing (the touch is still in touch.csv).
  */
 @Composable
-private fun StoriesTray(
+internal fun StoriesTray(
     pkg: StudyPackage,
     feed: List<FeedPost>,
     storyGroups: List<List<StoryItem>>,

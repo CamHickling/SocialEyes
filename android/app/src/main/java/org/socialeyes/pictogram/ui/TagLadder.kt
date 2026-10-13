@@ -85,8 +85,19 @@ private val DEFAULT_HOLDS = listOf(
  * `marker_layout` (with `ladder`) for every arrangement.
  */
 @Composable
-fun TagLadderStep(session: Session, step: Step, onContinue: () -> Unit) {
-    val holds = step.strings("holds")?.takeIf { it.isNotEmpty() } ?: DEFAULT_HOLDS
+fun TagLadderStep(session: Session, step: Step, onContinue: () -> Unit) =
+    HoldSequence(session, step, DEFAULT_HOLDS, onContinue) { hold, onDone -> LadderScreen(session, step, hold, onDone) }
+
+/**
+ * For each of the step's `holds` (default `defaults`): the instruction and a Start button, then
+ * `screen` until it calls onDone. Logs `tag_ladder_hold` start/end.
+ */
+@Composable
+internal fun HoldSequence(
+    session: Session, step: Step, defaults: List<String>, onContinue: () -> Unit,
+    screen: @Composable (hold: Int, onDone: () -> Unit) -> Unit,
+) {
+    val holds = step.strings("holds")?.takeIf { it.isNotEmpty() } ?: defaults
     var hold by remember { mutableIntStateOf(0) }
     var running by remember { mutableStateOf(false) }
     if (hold >= holds.size) {
@@ -102,7 +113,7 @@ fun TagLadderStep(session: Session, step: Step, onContinue: () -> Unit) {
         return
     }
     key(hold) {
-        LadderScreen(session, step, hold) {
+        screen(hold) {
             session.log.event("tag_ladder_hold", fields = arrayOf("step_id" to step.id, "hold" to hold, "status" to "end"))
             running = false
             hold++

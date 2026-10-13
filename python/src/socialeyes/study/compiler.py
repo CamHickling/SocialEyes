@@ -879,6 +879,9 @@ def compile_study(study_dir: Path | str, out_dir: Path | str | None = None, clea
 
     for tag_id in b.study.markers.screen_tag_ids + b.study.ladder_tag_ids:
         write_tag_png(tag_id, out / "tags" / f"tag36h11_{tag_id}.png")
+    for family in ("tag36h11", "tag25h9", "tag16h5"):  # tag_bars: tags/<family>_<id>.png
+        for tag_id in b.study.bar_tag_ids(family):
+            write_tag_png(tag_id, out / "tags" / f"{family}_{tag_id}.png", family=family)
     write_checksums(out)
     return out, rep
 

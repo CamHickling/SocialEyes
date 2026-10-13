@@ -58,8 +58,8 @@ def test_observe_detects_big_tags_and_measures_apparent_size():
     truth = np.mean(np.linalg.norm(c - np.roll(c, 1, axis=0), axis=1))
     assert abs(by_id[21][7] - truth) < 0.3
     assert abs(by_id[21][9] - np.linalg.norm(t)) < 5
-    text = report(__import__("pandas").DataFrame(rows, columns=["hold", "phase", "frame", "tag_id", "kind", "value_mm",
-                                                               "size_mm", "apparent_px", "detected", "distance_mm"]), 885)
+    from socialeyes.gaze.ladder import OBS_COLUMNS
+    text = report(__import__("pandas").DataFrame(rows, columns=OBS_COLUMNS), 885)
     assert "size (middle)" in text and "3 mm:   0%" in text
 
 
@@ -84,3 +84,45 @@ def test_arrangements_from_the_session_log(tmp_path):
     assert [(a.hold, a.phase, a.start_ns, a.end_ns) for a in arrs] == [
         (0, 0, 1_100_000_000, 6_100_000_000), (0, 1, 6_100_000_000, 9_000_000_000)]
     assert arrs[0].info[21]["size_mm"] == 10.0
+
+
+def bars_arrangement(family, size_mm, ids):
+    """Four tags of `family` in the screen's corners, as tag_bars logs them (TL, TR, BR, BL)."""
+    from socialeyes.markers import FAMILY_CELLS
+    cells = FAMILY_CELLS[family]
+    half = size_mm / 2
+    centres = [(8 + half, 8 + half), (61 - half, 8 + half), (61 - half, 142 - half), (8 + half, 142 - half)]
+    corners = ["top_left", "top_right", "bottom_right", "bottom_left"]
+    rects, info = {}, {}
+    for k, (i, (cx, cy)) in enumerate(zip(ids, centres)):
+        h = size_mm * (cells + 4) / cells / 2 * PX_PER_MM  # the whole image: tag + 2-cell margin
+        rects[i] = [cx * PX_PER_MM - h, cy * PX_PER_MM - h, cx * PX_PER_MM + h, cy * PX_PER_MM + h]
+        info[i] = {"kind": "bars", "value_mm": size_mm, "size_mm": size_mm, "family": family, "cells": cells,
+                   "grey": 0.0, "variant": f"{family[3:]} {size_mm:g} mm", "corner": corners[k]}
+    canvas = np.full((2400, 1080), 255, np.uint8)
+    for i, (x0, y0, x1, y1) in rects.items():
+        img = cv2.resize(tag_image(i, px_per_cell=20, family=family), (round(x1 - x0), round(y1 - y0)),
+                         interpolation=cv2.INTER_NEAREST)
+        canvas[round(y0):round(y0) + img.shape[0], round(x0):round(x0) + img.shape[1]] = img
+    arr = Arrangement(0, 0, 0, 1, {i: tag_corners(r, cells=cells) for i, r in rects.items()}, info,
+                      {"variant": info[ids[0]]["variant"], "top_bar_dp": 80.0, "tab_bar_dp": 70.0, "feed_px": 1500.0})
+    return arr, canvas
+
+
+def test_bars_count_every_frame_and_read_small_16h5_tags():
+    import pandas as pd
+    from socialeyes.gaze.ladder import OBS_COLUMNS, bars_table
+    R = cv2.Rodrigues(np.array([0.3, 0.0, 0.0]))[0]
+    t = np.array([-34.5, -76.0, 330.0])
+    rows = []
+    for family, size, ids in (("tag16h5", 9.0, [0, 1, 2, 3]), ("tag36h11", 2.0, [60, 61, 62, 63])):
+        arr, canvas = bars_arrangement(family, size, ids)
+        M = K @ np.column_stack([R[:, 0], R[:, 1], t]) @ SCREEN.S
+        scene = cv2.warpPerspective(canvas, M, (1600, 1200), flags=cv2.INTER_AREA, borderValue=60)
+        rows += list(observe([(7, 0, scene)], arr, K, np.zeros(8), SCREEN, TagDetector(family=family)))
+    obs = pd.DataFrame(rows, columns=OBS_COLUMNS)
+    table = bars_table(obs).set_index("variant")
+    assert table.loc["16h5 9 mm", "top_and_bottom"] == 1.0
+    # 2 mm tags are unreadable: no pose, but the frame still counts against the variant
+    assert table.loc["36h11 2 mm", "frames"] == 1 and table.loc["36h11 2 mm", "none"] == 1.0
+    assert "16h5 9 mm" in report(obs, 885)

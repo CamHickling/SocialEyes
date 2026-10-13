@@ -1,5 +1,6 @@
 """Tag size ladder (`tag_ladder` step): how often the Neon scene camera reads each tag size,
-side inset and top/bottom edge gap, per way of holding the phone (CAM-165).
+side inset and top/bottom edge gap, per way of holding the phone (CAM-165). Also `tag_bars`
+steps: how often each variant (tag family, size, grey level) fitted into the app's bars reads.
 
     python -m socialeyes.gaze.ladder <neon recording folder> <session folder> [-o OUT]
 
@@ -29,7 +30,7 @@ SETTLE_MS = 300.0   # skip frames this soon after the layout changes (the screen
 READABLE = 0.85     # detection rate counted as "readable"
 
 OBS_COLUMNS = ["hold", "phase", "frame", "tag_id", "kind", "value_mm", "size_mm", "apparent_px", "detected",
-               "distance_mm"]
+               "distance_mm", "family", "grey", "variant", "corner"]
 
 
 @dataclass
@@ -39,7 +40,12 @@ class Arrangement:
     start_ns: int        # session clock
     end_ns: int
     tags: dict           # tag id -> screen corners (px)
-    info: dict           # tag id -> {"kind", "value_mm", "size_mm"}
+    info: dict           # tag id -> {"kind", "value_mm", "size_mm"[, "family", "cells", "grey", "variant"]}
+    bars: dict | None = None   # tag_bars: {"variant", "top_bar_dp", "tab_bar_dp", "feed_px"}
+
+    @property
+    def family(self) -> str:
+        return next(iter(self.info.values()), {}).get("family", "tag36h11")
 
 
 def arrangements(session: Session) -> list[Arrangement]:
@@ -59,9 +65,10 @@ def arrangements(session: Session) -> list[Arrangement]:
         later_ends = [int(e) for e in ends if e > t0]
         t1 = min(nxt + later_ends[:1] + [session.end_ns])
         lad = r["ladder"]
+        info = {int(i): v for i, v in lad["tags"].items()}
         out.append(Arrangement(int(lad["hold"]), int(lad["phase"]), t0, t1,
-                               {int(i): tag_corners(v) for i, v in r["tags"].items()},
-                               {int(i): v for i, v in lad["tags"].items()}))
+                               {int(i): tag_corners(v, cells=info[int(i)].get("cells", 8)) for i, v in r["tags"].items()},
+                               info, lad.get("bars")))
     return out
 
 
@@ -72,15 +79,21 @@ def observe(frames: Iterable[tuple[int, int, np.ndarray]], arr: Arrangement, K: 
         raw = detector.detect(gray, want=len(arr.tags))
         dets = {i: undistort(c, K, dist) for i, c in raw.items() if i in arr.tags}
         pose = solve_pose(dets, arr.tags, K, screen)
-        if pose is None:
+        if pose is None and arr.bars is None:
             continue
-        M = np.linalg.inv(pose.H)
+        # tag_bars has no other tags to place the phone by, so every frame counts (a variant read
+        # badly must not drop its own frames); its apparent width needs a pose
+        M = np.linalg.inv(pose.H) if pose is not None else None
         for i, corners in arr.tags.items():
-            c = apply_h(M, corners)
-            side = float(np.mean(np.linalg.norm(c - np.roll(c, 1, axis=0), axis=1)))
+            side = float("nan")
+            if M is not None:
+                c = apply_h(M, corners)
+                side = float(np.mean(np.linalg.norm(c - np.roll(c, 1, axis=0), axis=1)))
             inf = arr.info[i]
             yield [arr.hold, arr.phase, fi, i, inf["kind"], float(inf["value_mm"]), float(inf["size_mm"]), side,
-                   i in dets, float(np.linalg.norm(pose.t))]
+                   i in dets, float(np.linalg.norm(pose.t)) if pose is not None else float("nan"),
+                   inf.get("family", "tag36h11"), float(inf.get("grey", 0)),
+                   inf.get("variant", ""), inf.get("corner", "")]
 
 
 def analyse(rec: NeonRecording, session: Session) -> pd.DataFrame:
@@ -89,7 +102,7 @@ def analyse(rec: NeonRecording, session: Session) -> pd.DataFrame:
         raise ValueError("this session has no tag_ladder arrangements (marker_layout events with 'ladder')")
     off = clock_offset_ns(session)
     screen = Screen.of(session.device)
-    detector = TagDetector()
+    detectors: dict[str, TagDetector] = {}
     cap = cv2.VideoCapture(str(rec.scene_video))
     rows = []
     try:
@@ -106,16 +119,53 @@ def analyse(rec: NeonRecording, session: Session) -> pd.DataFrame:
                         return
                     yield int(i), int(rec.scene_t[i]), cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-            rows.extend(observe(frames(), a, rec.K, rec.dist, screen, detector))
+            if a.family not in detectors:
+                detectors[a.family] = TagDetector(family=a.family)
+            rows.extend(observe(frames(), a, rec.K, rec.dist, screen, detectors[a.family]))
             print(f"  hold {a.hold} phase {a.phase}: {len(idx)} frames", file=sys.stderr, flush=True)
     finally:
         cap.release()
     return pd.DataFrame(rows, columns=OBS_COLUMNS)
 
 
-def report(obs: pd.DataFrame, focal_px: float, holds: dict[int, str] | None = None) -> str:
+def bars_table(obs: pd.DataFrame, bars: dict[str, dict] | None = None) -> pd.DataFrame:
+    """tag_bars: per variant and hold, the share of frames with each tag read, with a top and a
+    bottom tag read (what phone tracking needs), and with none; plus the bars' heights."""
+    b = obs[obs["kind"] == "bars"].copy()
+    if b.empty:
+        return pd.DataFrame()
+    b["top"] = b["corner"].str.startswith("top")
+    per_frame = b.groupby(["variant", "hold", "phase", "frame"]).apply(
+        lambda f: pd.Series({"top": bool((f["detected"] & f["top"]).any()), "bottom": bool((f["detected"] & ~f["top"]).any()),
+                             "any": bool(f["detected"].any())}), include_groups=False).reset_index()
+    rows = []
+    for (v, h), f in per_frame.groupby(["variant", "hold"]):
+        t = b[(b["variant"] == v) & (b["hold"] == h)]
+        rows.append({"variant": v, "hold": h, "frames": len(f), "tag_read": t["detected"].mean(),
+                     "top_and_bottom": (f["top"] & f["bottom"]).mean(), "none": 1 - f["any"].mean(),
+                     "family": t["family"].iloc[0], "size_mm": t["size_mm"].iloc[0], "grey": t["grey"].iloc[0],
+                     **{k: (bars or {}).get(v, {}).get(k) for k in ("top_bar_dp", "tab_bar_dp")}})
+    return pd.DataFrame(rows)
+
+
+def report(obs: pd.DataFrame, focal_px: float, holds: dict[int, str] | None = None,
+           bars: dict[str, dict] | None = None) -> str:
     """Detection rates per hold, and how far away each size stays readable."""
     lines = []
+    table = bars_table(obs, bars)
+    if len(table):
+        lines.append("tag_bars: share of frames with a top AND a bottom tag read (tag reads overall), per hold")
+        hs = sorted(table["hold"].unique())
+        lines.append(f"  {'variant':24s} {'bars dp (top/tab)':18s}" + "".join(f"  hold {h:<16d}" for h in hs))
+        order = table.groupby("variant")["top_and_bottom"].mean().sort_values(ascending=False).index
+        for v in order:
+            t = table[table["variant"] == v].set_index("hold")
+            dims = f"{t['top_bar_dp'].iloc[0] or 0:.0f}/{t['tab_bar_dp'].iloc[0] or 0:.0f}"
+            cells = "".join(f"  {t.loc[h, 'top_and_bottom']:4.0%} ({t.loc[h, 'tag_read']:4.0%})       " if h in t.index
+                            else " " * 24 for h in hs)
+            lines.append(f"  {v:24s} {dims:18s}{cells}")
+        lines.append("  (the feed's own bars are 52+strip / 50 dp; frames per cell: about 4 s x rounds x 30 fps)")
+        obs = obs[obs["kind"] != "bars"]
     rate = lambda d: f"{d['detected'].mean():4.0%} ({len(d)})"  # noqa: E731
     for h, d in obs.groupby("hold"):
         frames = d["frame"].nunique()
@@ -148,6 +198,12 @@ def report(obs: pd.DataFrame, focal_px: float, holds: dict[int, str] | None = No
     return "\n".join(lines)
 
 
+def out_dir(args) -> Path:
+    out = Path(args.out) if args.out else Path("analysis_out") / "tag_ladder" / Path(args.session).name
+    out.mkdir(parents=True, exist_ok=True)
+    return out
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="python -m socialeyes.gaze.ladder", description=__doc__.splitlines()[0])
     p.add_argument("neon", help="Neon recording folder (native format)")
@@ -162,9 +218,11 @@ def main(argv: list[str] | None = None) -> int:
     if "instruction" in ev:
         starts = ev[(ev["type"] == "tag_ladder_hold") & (ev["status"] == "start")]
         holds = {int(r["hold"]): r["instruction"] for _, r in starts.iterrows()}
-    text = report(obs, float(rec.K[0, 0]), holds)
-    out = Path(args.out) if args.out else Path("analysis_out") / "tag_ladder" / Path(args.session).name
-    out.mkdir(parents=True, exist_ok=True)
+    bars = {a.bars["variant"]: a.bars for a in arrangements(session) if a.bars}
+    text = report(obs, float(rec.K[0, 0]), holds, bars)
+    if bars:
+        bars_table(obs, bars).to_csv(out_dir(args) / "bars_summary.csv", index=False)
+    out = out_dir(args)
     obs.to_csv(out / "ladder_observations.csv", index=False)
     (out / "ladder_report.txt").write_text(text + "\n", encoding="utf-8")
     print(text)

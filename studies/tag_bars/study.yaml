@@ -1,0 +1,110 @@
+# Tags fitted into the app's top bar and tab bar, for the Neon glasses (Linear CAM-165).
+# The tag ladder (studies/tag_ladder) showed tags need to be ~28 px wide in the scene camera to
+# read, which is 14 mm for tag36h11 at a normal holding distance: too big for Instagram-sized
+# bars. Families with fewer cells (tag25h9: 7 across, tag16h5: 6) read at a smaller size. Each
+# variant below puts four tags in the corners of the top bar and tab bar of a still feed; the
+# bars grow only as much as the tags need. Three holds, every variant twice per hold (4 s each),
+# then a 1-minute feed with the usual on-screen tags.
+# First a display calibration (with a laptop: socialeyes calibrate-display <phone ip>).
+# Analyse with:
+#   python -m socialeyes.gaze.ladder <neon recording folder> <session folder>
+#   python scripts/tag_bars_gallery.py   (screenshots of each variant next to its read rates)
+# Posts are copied from studies/tag_ladder (itself from studies/example).
+id: tag_bars
+title: Neon tags in the app's bars (CAM-165)
+version: 1
+seed: 20251001                 # change it and every plan changes; never change it mid-study
+
+platform:
+  name: Pictogram              # never use a real platform's name or logo
+  theme: light
+  participant_handle: you      # name the participant's own comments appear under
+
+labels:
+  edited:
+    text: "This image has been digitally altered"
+    style: banner
+
+factors:
+  - name: edit
+    design: within
+    levels: [original, retouched]
+    sets:
+      image_version: "{level}"           # picks the image whose version is original/retouched
+  - name: label
+    design: within
+    levels: [none, edited]
+    sets:
+      label: {none: null, edited: edited}
+  - name: comments
+    design: between
+    levels: [neutral, appearance]
+    # applies_to: all would also switch the comments of filler posts; every
+    # filler would then need a neutral and an appearance comment set.
+    applies_to: critical
+    sets:
+      comment_variant: "{level}"
+
+feed:
+  order: shuffle
+  lead_in_fillers: 2
+  max_run_same_cell: 2
+  min_fillers_between_critical: 1
+  done_button_after_s: 20
+  time_limit_s: 60
+  allow_likes: true
+  allow_comment_typing: true   # participants can comment and reply (text and draft edits are logged)
+
+logging:                       # besides gaze; see docs/EVENT_LOG.md
+  touches: true                # raw touch points
+  sensors: true                # accelerometer / gyroscope: tests bridging tag gaps with the phone's gyro
+  sensor_hz: 100               # about the Neon IMU's rate (~105 Hz)
+  screen_recording: false      # pilots only: Android asks permission every session
+  front_camera:                # face video for expression analysis; add a camera_check
+    enabled: false             # step before the recorded steps
+    resolution: 720p
+    fps: 30
+    steps: [feed]
+
+neon:
+  template:                    # filled in Companion's recording template, if it has these fields
+    Participant: "{participant_id}"
+    Study: "{study_id}"
+
+markers:
+  on_screen:                   # screen tags above and below these steps, so nothing has
+    steps: [feed]              # to be fixed around the phone (hold it normally)
+    size_mm: 12
+
+procedure:
+  - {id: welcome, type: instructions, title: Tags in the bars,
+     text: "The screen will show the feed with small black squares in its corners. Each time, hold the phone as asked and keep looking at the screen until it changes. It takes about four minutes."}
+  - id: dcal
+    type: display_calibration  # laptop: socialeyes calibrate-display <phone ip>
+    wait_s: 10                 # Skip shows after 10 s (recording A)
+  - id: bars
+    type: tag_bars
+    variant_s: 4                 # each variant shows 4 s, twice per hold (forwards, then backwards)
+    rounds: 2
+    side_inset_mm: 5             # tag's black border from the curved left/right screen edge
+    edge_gap_mm: 2               # and from the top/bottom screen edge
+    variants:
+      - {family: tag36h11, size_mm: 14}            # reads reliably (tag ladder), but big
+      - {family: tag36h11, size_mm: 12}            # the on-screen tags used so far
+      - {family: tag25h9, size_mm: 12}
+      - {family: tag25h9, size_mm: 10}
+      - {family: tag16h5, size_mm: 10}
+      - {family: tag16h5, size_mm: 9}
+      - {family: tag16h5, size_mm: 8}
+      - {family: tag16h5, size_mm: 10, grey: 0.4}  # less striking: dark grey instead of black
+    holds:
+      - Hold the phone the way you normally would.
+      - "Hold the phone at arm's length: stretch your arm out fully."
+      - Rest the phone low, near your lap, and look down at it.
+  - {id: feed, type: feed, instructions: "Now scroll the feed as you normally would for a minute."}
+  - {id: end, type: end}
+
+participants:
+  n_plans: 8
+  id_prefix: T
+  id_digits: 2

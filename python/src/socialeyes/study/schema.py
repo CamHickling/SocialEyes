@@ -321,6 +321,68 @@ class TagLadderStep(_Step):
         return list(range(self.first_tag_id, self.first_tag_id + 16))
 
 
+class TagBarsVariant(_Strict):
+    """One way of fitting tags into the app's top bar and tab bar."""
+
+    family: Literal["tag36h11", "tag25h9", "tag16h5"] = "tag16h5"
+    size_mm: float = Field(ge=4, le=16)
+    """Black-border edge length on the screen."""
+    grey: float = Field(0.0, ge=0, le=0.6)
+    """How light the tag's dark cells are drawn (0 = black, 0.4 = 40% grey): less striking, less contrast."""
+    tag_ids: list[int] = []
+    """Filled in by the step: four ids of the family (top-left, top-right, bottom-right, bottom-left)."""
+
+    @property
+    def label(self) -> str:
+        return f"{self.family[3:]} {self.size_mm:g} mm" + (f" grey {self.grey:.0%}" if self.grey else "")
+
+
+class TagBarsStep(_Step):
+    """Tags fitted into the app's own top bar and tab bar, one variant at a time (CAM-165).
+
+    For each hold (a way of holding the phone) the screen shows a still copy of the feed: top bar,
+    the first posts and the tab bar, with four tags of one variant (family, size, grey level) in the
+    bars' corners. Each bar grows only as much as its tags need; the wordmark and icons fit between
+    them. Each variant shows for `variant_s` seconds; `rounds` times per hold, the order reversing
+    each round. Every arrangement is logged in a `marker_layout` event (with `ladder`, as
+    tag_ladder's, plus the variant and the bars' heights); socialeyes.gaze.ladder gives the
+    detection rate of each variant.
+    """
+
+    type: Literal["tag_bars"]
+    holds: list[str] = Field(default_factory=lambda: [
+        "Hold the phone the way you normally would.",
+        "Hold the phone at arm's length: stretch your arm out fully.",
+        "Rest the phone low, near your lap, and look down at it.",
+    ], min_length=1, max_length=8)
+    variants: list[TagBarsVariant] = Field(min_length=1, max_length=12)
+    variant_s: float = Field(4.0, ge=1, le=30)
+    rounds: int = Field(2, ge=1, le=6)
+    side_inset_mm: float = Field(5.0, ge=0, le=12)
+    """From the left/right screen edge to the tag's black border."""
+    edge_gap_mm: float = Field(2.0, ge=0, le=12)
+    """From the top/bottom screen edge to the tag's black border."""
+    first_tag_id: int = Field(60, ge=0, le=583)
+    """tag36h11 variants use ids from here (4 each); the other families from 0."""
+
+    @model_validator(mode="after")
+    def _ids(self):
+        from ..markers import FAMILY_IDS
+
+        nxt = {"tag36h11": self.first_tag_id, "tag25h9": 0, "tag16h5": 0}
+        for v in self.variants:
+            if not v.tag_ids:
+                v.tag_ids = list(range(nxt[v.family], nxt[v.family] + 4))
+            if len(v.tag_ids) != 4 or max(v.tag_ids) >= FAMILY_IDS[v.family] or min(v.tag_ids) < 0:
+                raise ValueError(f"step {self.id}: variant {v.label} needs 4 ids of {v.family} "
+                                 f"(0-{FAMILY_IDS[v.family] - 1}); too many variants of that family?")
+            nxt[v.family] = max(nxt[v.family], max(v.tag_ids) + 1)
+        return self
+
+    def family_ids(self, family: str) -> list[int]:
+        return sorted({t for v in self.variants if v.family == family for t in v.tag_ids})
+
+
 class CameraCheckStep(_Step):
     """Researcher-run framing check for the front camera.
 
@@ -410,6 +472,7 @@ Step = Annotated[
         InstructionsStep,
         MarkerCalibrationStep,
         TagLadderStep,
+        TagBarsStep,
         DisplayCalibrationStep,
         CameraCheckStep,
         ProfilePhotoStep,
@@ -541,6 +604,9 @@ class Study(_Strict):
             if isinstance(s, TagLadderStep) and taken & set(s.tag_ids):
                 raise ValueError(f"step {s.id}: tag ids {s.tag_ids[0]}-{s.tag_ids[-1]} overlap the screen or case "
                                  f"tags; set first_tag_id")
+            if isinstance(s, TagBarsStep) and (taken | set(self.ladder_tag_ids)) & set(s.family_ids("tag36h11")):
+                raise ValueError(f"step {s.id}: its tag36h11 ids overlap the screen, case or ladder tags; "
+                                 "set first_tag_id")
             if isinstance(s, DisplayCalibrationStep) and not self.neon.auto_record:
                 raise ValueError(f"step {s.id}: display_calibration sets the Neon scene camera, so it needs "
                                  "neon.auto_record")
@@ -549,6 +615,10 @@ class Study(_Strict):
     @property
     def ladder_tag_ids(self) -> list[int]:
         return sorted({t for s in self.procedure if isinstance(s, TagLadderStep) for t in s.tag_ids})
+
+    def bar_tag_ids(self, family: str) -> list[int]:
+        """Ids of `family` that tag_bars steps show."""
+        return sorted({t for s in self.procedure if isinstance(s, TagBarsStep) for t in s.family_ids(family)})
 
     @property
     def within(self) -> list[Factor]:

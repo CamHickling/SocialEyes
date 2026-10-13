@@ -15,22 +15,29 @@ import numpy as np
 CELLS = 8  # 6x6 data cells + 1-cell black border on each side
 QUIET = 2  # white quiet-zone cells added around the tag (detector needs >= 1)
 
+# Other AprilTag families, for on-screen tags only (tag_bars): fewer, bigger cells for the same
+# size, at the cost of fewer ids and more false detections. Cells across, black border included.
+FAMILY_CELLS = {"tag36h11": 8, "tag25h9": 7, "tag16h5": 6}
+FAMILY_IDS = {"tag36h11": 587, "tag25h9": 35, "tag16h5": 30}
+_DICTS = {"tag36h11": cv2.aruco.DICT_APRILTAG_36h11, "tag25h9": cv2.aruco.DICT_APRILTAG_25h9,
+          "tag16h5": cv2.aruco.DICT_APRILTAG_16h5}
 
-def _dictionary():
-    return cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
+
+def _dictionary(family: str = "tag36h11"):
+    return cv2.aruco.getPredefinedDictionary(_DICTS[family])
 
 
-def tag_image(tag_id: int, px_per_cell: int = 10, quiet_cells: int = QUIET) -> np.ndarray:
+def tag_image(tag_id: int, px_per_cell: int = 10, quiet_cells: int = QUIET, family: str = "tag36h11") -> np.ndarray:
     """Tag bitmap (uint8, 0/255) including a white quiet zone."""
-    side = CELLS * px_per_cell
-    img = cv2.aruco.generateImageMarker(_dictionary(), int(tag_id), side, borderBits=1)
+    side = FAMILY_CELLS[family] * px_per_cell
+    img = cv2.aruco.generateImageMarker(_dictionary(family), int(tag_id), side, borderBits=1)
     pad = quiet_cells * px_per_cell
     return cv2.copyMakeBorder(img, pad, pad, pad, pad, cv2.BORDER_CONSTANT, value=255)
 
 
-def write_tag_png(tag_id: int, path: Path, px_per_cell: int = 10) -> None:
+def write_tag_png(tag_id: int, path: Path, px_per_cell: int = 10, family: str = "tag36h11") -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    ok = cv2.imwrite(str(path), tag_image(tag_id, px_per_cell))
+    ok = cv2.imwrite(str(path), tag_image(tag_id, px_per_cell, family=family))
     if not ok:
         raise OSError(f"could not write {path}")
 
