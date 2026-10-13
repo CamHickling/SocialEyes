@@ -24,6 +24,13 @@ logging.sensors) and because either shifts sideways (neither measures this well)
        flow+sensors flow, with frames where flow fails bridged by the gyroscopes
 
 Results are printed and saved to OUT_DIR/imu_results.json.
+
+Findings (tag_ladder A and B, 12 Oct, after reading frames in order: seeking had paired frames with
+the wrong timestamps): the Neon IMU explains ~91% of the tags' motion when only the head turns (B,
+with the 12 degree tilt as now in neon.CAMERA_FROM_IMU, lag ~20 ms); the phone's gyroscope predicts
+~86% of the phone's own rotation at zero lag, but the phone also shifts a few mm sideways in the
+hand, which no gyroscope measures and which moves the tags as much. Bridging gaps, flow stays ~10x
+more accurate than the sensors (B: 0.06 vs 0.6 mm after 267 ms), so the sensors are not used.
 """
 from __future__ import annotations
 
@@ -42,7 +49,9 @@ from socialeyes.gaze.neon import CAMERA_FROM_IMU, NeonImu, read_imu  # noqa: E40
 
 GAPS = (1, 3, 8, 15, 30, 60)
 MOTION_FRAMES = (3, 8)
-LAGS_MS = np.arange(-60, 61, 10)
+LAGS_MS = np.arange(-100, 101, 10)
+PHONE_STILL_DEG = 0.2   # head-axes fit: the phone turned less than this over the 100 ms window
+HEAD_MOVED_DEG = 0.5    # ... while the head turned at least this much
 # Android sensor axes (x right, y up, z out of the screen) -> the screen axes the poses use
 # (x right, y down, z into the screen)
 SCREEN_FROM_PHONE = np.diag([1.0, -1.0, -1.0])
@@ -123,6 +132,31 @@ def pivot_mm(run: Run) -> np.ndarray:
     return np.array([*run.screen.mm(np.array([run.screen.w / 2, run.screen.h * 0.75])), 0.0])
 
 
+# ---------------------------------------------------------------- 0. the phone's gyroscope vs the poses
+
+def check_phone_axes(run: Run, sensors: Sensors, n: int = 8) -> dict:
+    """Share of the phone's rotation between reference poses n frames apart (in screen axes) that
+    its gyroscope predicts, per lag, plus how far the phone moved sideways meanwhile (which no
+    gyroscope measures, and which moves the tags in the image as much as the rotation does)."""
+    if not sensors.phone:
+        return {"note": "no phone gyroscope logged"}
+    by_i = {f.i: f for f in run.frames}
+    pairs = [(f, by_i.get(f.i + n)) for f in run.frames if f.ref]
+    pairs = [(a, b) for a, b in pairs if b is not None and b.ref and b.segment == a.segment]
+    obs = np.array([rotvec(a.pose.R.T @ b.pose.R) for a, b in pairs])
+    move = np.array([np.linalg.norm(b.pose.t - a.pose.t) for a, b in pairs])
+    out = {"pairs": len(pairs), "rotation_deg_median": round(float(np.degrees(np.median(np.linalg.norm(obs, axis=1)))), 2),
+           "moved_mm_median": round(float(np.median(move)), 1), "explained_by_lag": {}}
+    for lag in (-100, -50, 0, 50, 100):
+        pred = [sensors.phone.delta(a.t, b.t, int(lag * 1e6)) for a, b in pairs]
+        ok = np.array([d is not None for d in pred])
+        if ok.sum() < 20:
+            continue
+        p = np.array([rotvec(SCREEN_FROM_PHONE @ d @ SCREEN_FROM_PHONE.T) for d in pred if d is not None])
+        out["explained_by_lag"][lag] = round(float(1 - np.sum((obs[ok] - p) ** 2) / np.sum(obs[ok] ** 2)), 3)
+    return out
+
+
 # ---------------------------------------------------------------- 1. motion explained
 
 def motion_cases(run: Run, n: int):
@@ -143,9 +177,20 @@ def project(run: Run, R, t, P_mm):
 
 def fit_head_axes(run: Run, sensors: Sensors) -> dict:
     """IMU->camera rotation and lag that best explain the tags' image motion over 100 ms, using
-    the head's rotation alone (only meaningful when the head turned while the phone stayed put)."""
+    the head's rotation alone. Only cases where the phone stayed still are used (under
+    PHONE_STILL_DEG of rotation by the phone's gyroscope, and the head moved at least
+    HEAD_MOVED_DEG), as the hand's own motion would otherwise swamp the fit."""
     K, Ki = run.rec.K, np.linalg.inv(run.rec.K)
-    cases = list(motion_cases(run, 3))
+    cases = []
+    for f0, f1, k in motion_cases(run, 3):
+        dp, dh = sensors.d_phone(f0.t, f1.t), sensors.head.delta(f0.t, f1.t)
+        if dh is None or np.degrees(np.linalg.norm(rotvec(dh))) < HEAD_MOVED_DEG:
+            continue
+        if sensors.phone and (dp is None or np.degrees(np.linalg.norm(rotvec(dp))) > PHONE_STILL_DEG):
+            continue
+        cases.append((f0, f1, k))
+    if len(cases) < 20:
+        return {"note": f"too few frames with the head turning and the phone still ({len(cases)})"}
     p0 = np.array([f0.dets[k].mean(0) for f0, _, k in cases])
     obs = np.array([f1.dets[k].mean(0) for _, f1, k in cases]) - p0
     rays = np.c_[p0, np.ones(len(p0))] @ Ki.T
@@ -169,7 +214,7 @@ def fit_head_axes(run: Run, sensors: Sensors) -> dict:
         explained = 1 - o.fun / float(np.sum(obs[ok] ** 2))
         doc = 1 - cost(rotvec(CAMERA_FROM_IMU)) / float(np.sum(obs[ok] ** 2))
         if best is None or explained > best["explained_fitted"]:
-            best = {"lag_ms": float(lag), "explained_fitted": round(explained, 3), "explained_documented": round(doc, 3),
+            best = {"cases": int(ok.sum()), "lag_ms": float(lag), "explained_fitted": round(explained, 3), "explained_documented": round(doc, 3),
                     "fitted_vs_documented_deg": round(float(np.rad2deg(np.linalg.norm(rotvec(rot(o.x) @ CAMERA_FROM_IMU.T)))), 1),
                     "camera_from_imu": rot(o.x).round(4).tolist()}
     return best or {"note": "too few frames"}
@@ -297,9 +342,17 @@ def main(rec: Path, session: Path, out_dir: Path):
     print(f"{run.name}: Neon gyro integrated / Neon orientation = {res['gyro_units_check']} (1.0 = deg/s as expected)")
     print("phone gyroscope:", "yes" if sensors.phone else "not logged (logging.sensors was off)")
 
+    phone_axes = check_phone_axes(run, sensors)
+    res["phone_axes"] = phone_axes
+    if "pairs" in phone_axes:
+        print(f"\n0. Phone gyroscope vs the poses ({phone_axes['pairs']} pairs 267 ms apart; median rotation "
+              f"{phone_axes['rotation_deg_median']} deg, median sideways move {phone_axes['moved_mm_median']} mm): "
+              "share of the rotation predicted, by lag (ms): " + str(phone_axes["explained_by_lag"]))
+
     axes = fit_head_axes(run, sensors)
     res["head_axes"] = axes
-    print(f"\nIMU axes/lag fitted to the tags' motion: lag {axes.get('lag_ms')} ms, explains "
+    print(f"\nNeon IMU axes/lag fitted to the tags' motion ({axes.get('cases')} cases with the head turning and "
+          f"the phone still): lag {axes.get('lag_ms')} ms, explains "
           f"{axes.get('explained_fitted')} (documented axes: {axes.get('explained_documented')}); "
           f"fitted axes are {axes.get('fitted_vs_documented_deg')} deg from Pupil Labs' figures")
 

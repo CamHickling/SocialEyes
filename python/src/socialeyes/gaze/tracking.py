@@ -21,12 +21,14 @@ import numpy as np
 import pandas as pd
 
 from ..session.io import Session, load_session
-from .neon import NeonRecording, read_recording, undistort
+from .neon import NeonRecording, SceneVideo, read_recording, undistort
 from .tags import TagDetector, tag_corners
 
 MAX_RMS_PX = 2.0          # corner reprojection RMS (scene px) above which a pose is rejected
 MAX_BRIDGE_MS = 300.0     # longest stretch bridged by flow after the last frame with tags
 FLOW_REGION_SCALE = 2.0   # flow tracks features within this many tag-widths around each tag
+PREDICT_MS = 1000.0       # smart detection searches where the tags were up to this long ago
+MAX_FRAME_GAP_MS = 100.0  # no flow across a longer gap between frames (e.g. skipped frames)
 
 TRACKING_COLUMNS = ["frame", "unix_ns", "t_ns", "step_id", "source", "n_tags", "tag_ids", "reproj_px",
                     "distance_mm", "since_tags_ms"] + [f"h{i}{j}" for i in range(3) for j in range(3)]
@@ -110,6 +112,7 @@ class FrameResult:
     reproj_px: float = float("nan")
     distance_mm: float = float("nan")
     since_tags_ms: float = float("nan")
+    detected: tuple = ()         # every tag read in the frame (the pose may leave one out)
 
 
 class PhoneTracker:
@@ -124,24 +127,47 @@ class PhoneTracker:
 
     def reset(self) -> None:
         self._prev_gray = None
+        self._t_prev = None     # time of the previous frame
         self._H = None          # mapping of the previous frame (tags or flow)
         self._R = None          # last pose's rotation (resolves single-tag ambiguity)
         self._t_tags = None     # time of the last frame with a tag pose
+        self._H_known, self._t_known = None, None   # the latest mapping of any kind, for predictions
+
+    def predict(self, t_ns: int, tags: dict) -> tuple[Optional[dict], float]:
+        """Where each tag should be in this frame (distorted frame px, detector's corner order), from
+        the latest mapping if it is at most PREDICT_MS old, and how much to widen the search for
+        its age (1 = the previous frame)."""
+        if self._H_known is None or t_ns - self._t_known > PREDICT_MS * 1e6:
+            return None, 1.0
+        Hinv = np.linalg.inv(self._H_known)
+        pred = {i: _distort(apply_h(Hinv, c), self.K, self.dist) for i, c in tags.items()}
+        age_ms = (t_ns - self._t_known) / 1e6
+        return pred, min(1.0 + max(age_ms - 40, 0) / 150, 3.0)
+
+    def track(self, t_ns: int, gray: np.ndarray, tags: dict, detector: TagDetector, smart: bool = True) -> FrameResult:
+        """Detect the tags in this frame (smart: also closely where they're predicted to be) and update."""
+        pred, slack = self.predict(t_ns, tags) if smart else (None, 1.0)
+        return self.update(t_ns, gray, detector.detect_expected(gray, pred, tags.keys(), slack), tags)
 
     def update(self, t_ns: int, gray: np.ndarray, raw_dets: dict, tags: dict) -> FrameResult:
         """raw_dets: tag corners as detected (distorted px); tags: where each tag is on screen."""
         dets = {i: undistort(c, self.K, self.dist) for i, c in raw_dets.items() if i in tags}
         pose = solve_pose(dets, tags, self.K, self.screen, self._R, self.max_rms)
-        res = FrameResult("", None)
+        res = FrameResult("", None, detected=tuple(sorted(dets)))
+        recent = self._t_prev is not None and t_ns - self._t_prev <= MAX_FRAME_GAP_MS * 1e6
         if pose is not None:
             self._R, self._t_tags = pose.R, t_ns
-            res = FrameResult("tags", pose.H, pose.tag_ids, pose.rms, float(np.linalg.norm(pose.t)), 0.0)
-        elif self._H is not None and self._prev_gray is not None and t_ns - self._t_tags <= self.max_bridge_ns:
+            res = FrameResult("tags", pose.H, pose.tag_ids, pose.rms, float(np.linalg.norm(pose.t)), 0.0, res.detected)
+        elif (self._H is not None and self._prev_gray is not None and recent
+              and t_ns - self._t_tags <= self.max_bridge_ns):
             G = self._flow(self._prev_gray, gray, self._H, tags)
             if G is not None:
-                res = FrameResult("flow", self._H @ np.linalg.inv(G), since_tags_ms=(t_ns - self._t_tags) / 1e6)
+                res = FrameResult("flow", self._H @ np.linalg.inv(G), since_tags_ms=(t_ns - self._t_tags) / 1e6,
+                                  detected=res.detected)
         self._H = res.H
-        self._prev_gray = gray
+        if res.H is not None:
+            self._H_known, self._t_known = res.H, t_ns
+        self._prev_gray, self._t_prev = gray, t_ns
         return res
 
     def _flow(self, prev: np.ndarray, cur: np.ndarray, H_prev: np.ndarray, tags: dict) -> Optional[np.ndarray]:
@@ -202,8 +228,9 @@ def tag_windows(session: Session) -> list[tuple[str, int, int, dict]]:
 
 def track_recording(rec: NeonRecording | str | Path, session: Session | str | Path,
                     max_bridge_ms: float = MAX_BRIDGE_MS,
-                    progress: Optional[Callable[[str, int, int], None]] = None) -> pd.DataFrame:
+                    progress: Optional[Callable[[str, int, int], None]] = None, smart: bool = True) -> pd.DataFrame:
     """One row per scene frame during steps with on-screen tags (TRACKING_COLUMNS).
+    smart=False turns off the close search where tags are predicted to be (TagDetector.detect_expected).
     t_ns is in the session's clock (as in events.jsonl and viewport.csv); unix_ns in Neon's."""
     rec = rec if isinstance(rec, NeonRecording) else read_recording(rec)
     session = session if isinstance(session, Session) else load_session(session)
@@ -214,28 +241,20 @@ def track_recording(rec: NeonRecording | str | Path, session: Session | str | Pa
         raise ValueError("this session has no steps with on-screen tags (markers.on_screen), so the phone can't be tracked")
     detector = TagDetector()
     tracker = PhoneTracker(rec.K, rec.dist, screen, max_bridge_ms)
-    cap = cv2.VideoCapture(str(rec.scene_video))
     rows = []
-    try:
+    with SceneVideo(rec.scene_video) as video:
         for step_id, start, end, tags in windows:
             idx = np.where((rec.scene_t >= start + off) & (rec.scene_t <= end + off))[0]
             if not len(idx):
                 continue
             tracker.reset()
-            cap.set(cv2.CAP_PROP_POS_FRAMES, int(idx[0]))
-            for n, i in enumerate(idx):
-                ok, frame = cap.read()
-                if not ok:
-                    break
-                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                r = tracker.update(int(rec.scene_t[i]), gray, detector.detect(gray, want=len(tags)), tags)
+            for n, (i, gray) in enumerate(video.gray(idx)):
+                r = tracker.track(int(rec.scene_t[i]), gray, tags, detector, smart)
                 H = r.H if r.H is not None else np.full((3, 3), np.nan)
                 rows.append([int(i), int(rec.scene_t[i]), int(rec.scene_t[i]) - off, step_id, r.source, len(r.tag_ids),
                              " ".join(map(str, r.tag_ids)), r.reproj_px, r.distance_mm, r.since_tags_ms, *H.ravel()])
                 if progress and n % 100 == 0:
                     progress(step_id, n, len(idx))
-    finally:
-        cap.release()
     return pd.DataFrame(rows, columns=TRACKING_COLUMNS)
 
 

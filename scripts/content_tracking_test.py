@@ -37,6 +37,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parent))
 from tracking_reference import Frame, Run, load_run, stats, table  # noqa: E402
+from socialeyes.gaze.neon import SceneVideo  # noqa: E402
 from socialeyes.gaze.tracking import apply_h  # noqa: E402
 
 SCALE = 0.25                  # screen px -> working px (270 x 600 for the Edge 40 Pro)
@@ -171,18 +172,8 @@ def feed_frames(run: Run) -> list[Frame]:
 
 
 def read_frames(run: Run, indices) -> dict[int, np.ndarray]:
-    cap = cv2.VideoCapture(str(run.rec.scene_video))
-    out = {}
-    try:
-        for i in sorted(indices):
-            if cap.get(cv2.CAP_PROP_POS_FRAMES) != i:
-                cap.set(cv2.CAP_PROP_POS_FRAMES, i)
-            ok, frame = cap.read()
-            if ok:
-                out[i] = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    finally:
-        cap.release()
-    return out
+    with SceneVideo(run.rec.scene_video) as video:  # in order: seeking lands on the wrong frames
+        return dict(video.gray(sorted(indices)))
 
 
 def flow_chain(run: Run, by_i: dict, f0: Frame, f1: Frame) -> Optional[np.ndarray]:

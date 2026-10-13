@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Iterator
 
 import cv2
 import numpy as np
@@ -48,6 +49,50 @@ class NeonRecording:
         return cv2.projectPoints(xn, np.zeros(3), np.zeros(3), self.K, self.dist)[0].reshape(-1, 2)
 
 
+class SceneVideo:
+    """Scene video frames by index, decoded in order. Seeking (CAP_PROP_POS_FRAMES) can't be
+    trusted on Companion's videos: their frame rate varies, and a seek lands up to many frames
+    away from the one asked for (12 Oct recordings: tag_ladder B, tag_bars run 2). Going back
+    reopens the file; going forward decodes and drops the frames in between."""
+
+    def __init__(self, path: str | Path):
+        self.path = str(path)
+        self._cap, self._next = None, 0
+
+    def _open(self) -> None:
+        self.close()
+        self._cap, self._next = cv2.VideoCapture(self.path), 0
+        if not self._cap.isOpened():
+            raise NeonFormatError(f"can't open {self.path}")
+
+    def gray(self, indices) -> "Iterator[tuple[int, np.ndarray]]":
+        """(index, grey image) for each frame index asked for (in increasing order), until the video ends."""
+        for i in indices:
+            i = int(i)
+            if self._cap is None or i < self._next:
+                self._open()
+            while self._next < i:
+                if not self._cap.grab():
+                    return
+                self._next += 1
+            ok, img = self._cap.read()
+            if not ok:
+                return
+            self._next += 1
+            yield i, cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+    def close(self) -> None:
+        if self._cap is not None:
+            self._cap.release()
+            self._cap = None
+
+    def __enter__(self) -> "SceneVideo":
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self.close()
+
+
 def undistort(pts: np.ndarray, K: np.ndarray, dist: np.ndarray) -> np.ndarray:
     pts = np.asarray(pts, np.float64).reshape(-1, 1, 2)
     return cv2.undistortPoints(pts, K, dist, P=K).reshape(-1, 2)
@@ -80,9 +125,11 @@ class NeonImu:
 _IMU_DTYPE = np.dtype([("t", "<i8"), ("gyro", "<f4", 3), ("accel", "<f4", 3), ("quat", "<f4", 4)])
 
 # Scene camera axes (x right, y down, z forward) from the IMU's (x right, y forward, z up): a
-# 102 degree turn about x, as the camera looks 12 degrees below the IMU's forward axis (Pupil Labs'
-# Neon documentation gives the same angle for the other direction, scene -> IMU).
-_a = np.deg2rad(90 + 12)
+# 78 degree turn about x, the camera looking 12 degrees above the IMU's forward axis. Pupil Labs'
+# Neon documentation gives the 12 degrees; the direction is from the data: fitted to the tags'
+# motion while only the head turned (tag_ladder B, 12 Oct), 7 degrees from this and 23.5 from the
+# opposite tilt, which explained less of the motion (86% vs 91%).
+_a = np.deg2rad(90 - 12)
 CAMERA_FROM_IMU = np.array([[1, 0, 0], [0, np.cos(_a), -np.sin(_a)], [0, np.sin(_a), np.cos(_a)]])
 
 

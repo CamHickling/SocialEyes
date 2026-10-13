@@ -33,7 +33,7 @@ import cv2
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parent))
-from cam210_accuracy import black_square, detect, load_app, load_neon, undistort  # noqa: E402
+from cam210_accuracy import SceneVideo, black_square, detect, load_app, load_neon, undistort  # noqa: E402
 
 ON_SCREEN_STEPS = ("val1", "feed", "val2")
 TOP, BOTTOM = (0, 1), (2, 3)
@@ -153,20 +153,15 @@ def scan(rec: Path, session: Path, out: Path):
 
     from pupil_apriltags import Detector
     detector = Detector(families="tag36h11", quad_decimate=1.0, decode_sharpening=0.25, nthreads=4)
-    cap = cv2.VideoCapture(str(rec / "Neon Scene Camera v1 ps1.mp4"))
+    video = SceneVideo(rec / "Neon Scene Camera v1 ps1.mp4")
     frames = []
     for step in ON_SCREEN_STEPS:
         if step not in steps:
             continue
         end = steps[step].get("end", scene_t[-1])  # no step_end when the session was stopped
         idx = np.where((scene_t >= steps[step]["start"]) & (scene_t <= end))[0]
-        cap.set(cv2.CAP_PROP_POS_FRAMES, int(idx[0]))
         prev_gray, last_H = None, None
-        for n, i in enumerate(idx):
-            ok, frame = cap.read()
-            if not ok:
-                break
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        for n, (i, gray) in enumerate(video.gray(idx)):
             dets = detect(detector, gray, K, dist)
             G = None
             if prev_gray is not None and last_H is not None:

@@ -134,8 +134,8 @@ def test_read_imu(tmp_path):
     imu = read_imu(tmp_path)
     assert imu.t.tolist() == [10, 20, 30]
     assert np.allclose(imu.gyro[1], [1.5, -2.0, 0.25]) and np.allclose(imu.quat[:, 0], 1.0)
-    # the camera looks 12 degrees below the IMU's forward axis (y): in camera axes (y down, z
-    # forward) that axis points forward and a little up; the IMU's up (z) points up the image
+    # the camera looks 12 degrees above the IMU's forward axis (y): in camera axes (y down, z
+    # forward) that axis points forward and a little down; the IMU's up (z) points up the image
     fwd, up = CAMERA_FROM_IMU @ [0, 1, 0], CAMERA_FROM_IMU @ [0, 0, 1]
-    assert np.isclose(np.degrees(np.arccos(fwd[2])), 12) and fwd[1] < 0
+    assert np.isclose(np.degrees(np.arccos(fwd[2])), 12) and fwd[1] > 0
     assert up[1] < -0.97

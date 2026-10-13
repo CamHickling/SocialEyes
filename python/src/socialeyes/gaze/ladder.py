@@ -4,8 +4,8 @@ steps: how often each variant (tag family, size, grey level) fitted into the app
 
     python -m socialeyes.gaze.ladder <neon recording folder> <session folder> [-o OUT]
 
-For every scene frame during the ladder, the phone's pose is solved from all tags found
-(tracking.solve_pose), each tag on screen is projected into the frame to get its apparent
+For every scene frame during the ladder, the tags are found (with smart detection unless --plain:
+a close look where the tracker predicts each tag), the phone's pose is solved from them, each tag on screen is projected into the frame to get its apparent
 width in pixels, and whether it was detected is recorded. Prints detection rates per hold and
 writes ladder_observations.csv (one row per tag per frame).
 """
@@ -17,14 +17,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Iterator
 
-import cv2
 import numpy as np
 import pandas as pd
 
 from ..session.io import Session, load_session
-from .neon import NeonRecording, read_recording, undistort
+from .neon import NeonRecording, SceneVideo, read_recording
 from .tags import TagDetector, tag_corners
-from .tracking import Screen, apply_h, clock_offset_ns, solve_pose
+from .tracking import PhoneTracker, Screen, apply_h, clock_offset_ns
 
 SETTLE_MS = 300.0   # skip frames this soon after the layout changes (the screen is redrawing)
 READABLE = 0.85     # detection rate counted as "readable"
@@ -72,13 +71,13 @@ def arrangements(session: Session) -> list[Arrangement]:
     return out
 
 
-def observe(frames: Iterable[tuple[int, int, np.ndarray]], arr: Arrangement, K: np.ndarray, dist: np.ndarray,
-            screen: Screen, detector: TagDetector) -> Iterator[list]:
-    """Observation rows for one arrangement from (frame index, unix ns, gray image) frames."""
-    for fi, _, gray in frames:
-        raw = detector.detect(gray, want=len(arr.tags))
-        dets = {i: undistort(c, K, dist) for i, c in raw.items() if i in arr.tags}
-        pose = solve_pose(dets, arr.tags, K, screen)
+def observe(frames: Iterable[tuple[int, int, np.ndarray]], arr: Arrangement, tracker: PhoneTracker,
+            detector: TagDetector, smart: bool = True) -> Iterator[list]:
+    """Observation rows for one arrangement from (frame index, unix ns, gray image) frames. The
+    tracker carries over between arrangements of a hold, so smart detection knows where to look."""
+    for fi, t_ns, gray in frames:
+        res = tracker.track(t_ns, gray, arr.tags, detector, smart)
+        pose = res if res.source == "tags" else None
         if pose is None and arr.bars is None:
             continue
         # tag_bars has no other tags to place the phone by, so every frame counts (a variant read
@@ -91,40 +90,34 @@ def observe(frames: Iterable[tuple[int, int, np.ndarray]], arr: Arrangement, K: 
                 side = float(np.mean(np.linalg.norm(c - np.roll(c, 1, axis=0), axis=1)))
             inf = arr.info[i]
             yield [arr.hold, arr.phase, fi, i, inf["kind"], float(inf["value_mm"]), float(inf["size_mm"]), side,
-                   i in dets, float(np.linalg.norm(pose.t)) if pose is not None else float("nan"),
+                   i in res.detected, pose.distance_mm if pose is not None else float("nan"),
                    inf.get("family", "tag36h11"), float(inf.get("grey", 0)),
                    inf.get("variant", ""), inf.get("corner", "")]
 
 
-def analyse(rec: NeonRecording, session: Session) -> pd.DataFrame:
+def analyse(rec: NeonRecording, session: Session, smart: bool = True) -> pd.DataFrame:
     arrs = arrangements(session)
     if not arrs:
         raise ValueError("this session has no tag_ladder arrangements (marker_layout events with 'ladder')")
     off = clock_offset_ns(session)
     screen = Screen.of(session.device)
     detectors: dict[str, TagDetector] = {}
-    cap = cv2.VideoCapture(str(rec.scene_video))
+    tracker = PhoneTracker(rec.K, rec.dist, screen)
     rows = []
-    try:
+    with SceneVideo(rec.scene_video) as video:
+        hold = None
         for a in arrs:
             idx = np.where((rec.scene_t >= a.start_ns + off + SETTLE_MS * 1e6) & (rec.scene_t < a.end_ns + off))[0]
             if not len(idx):
                 continue
-            cap.set(cv2.CAP_PROP_POS_FRAMES, int(idx[0]))
-
-            def frames():
-                for i in idx:
-                    ok, img = cap.read()
-                    if not ok:
-                        return
-                    yield int(i), int(rec.scene_t[i]), cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
+            if a.hold != hold:
+                tracker.reset()
+                hold = a.hold
+            frames = ((i, int(rec.scene_t[i]), gray) for i, gray in video.gray(idx))
             if a.family not in detectors:
                 detectors[a.family] = TagDetector(family=a.family)
-            rows.extend(observe(frames(), a, rec.K, rec.dist, screen, detectors[a.family]))
+            rows.extend(observe(frames, a, tracker, detectors[a.family], smart))
             print(f"  hold {a.hold} phase {a.phase}: {len(idx)} frames", file=sys.stderr, flush=True)
-    finally:
-        cap.release()
     return pd.DataFrame(rows, columns=OBS_COLUMNS)
 
 
@@ -209,10 +202,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("neon", help="Neon recording folder (native format)")
     p.add_argument("session", help="the matching session folder")
     p.add_argument("-o", "--out", help="output folder (default: analysis_out/tag_ladder/<session>)")
+    p.add_argument("--plain", action="store_true", help="no smart detection (only the whole-frame search)")
     args = p.parse_args(argv)
     rec = read_recording(args.neon)
     session = load_session(args.session)
-    obs = analyse(rec, session)
+    obs = analyse(rec, session, smart=not args.plain)
     ev = session.events
     holds = {}
     if "instruction" in ev:

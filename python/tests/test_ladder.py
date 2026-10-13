@@ -6,7 +6,7 @@ import numpy as np
 
 from socialeyes.gaze.ladder import Arrangement, arrangements, observe, report
 from socialeyes.gaze.tags import TagDetector, tag_corners
-from socialeyes.gaze.tracking import Screen
+from socialeyes.gaze.tracking import PhoneTracker, Screen
 from socialeyes.markers import tag_image
 from socialeyes.session.io import load_session, write_session
 
@@ -46,7 +46,7 @@ def test_observe_detects_big_tags_and_measures_apparent_size():
     t = np.array([-34.5, -76.0, 330.0])  # screen centre ~33 cm in front of the camera
     arr = Arrangement(0, 0, 0, 1, {i: tag_corners(v[3]) for i, v in LAYOUT.items()},
                       {i: {"kind": k, "value_mm": v, "size_mm": s} for i, (k, v, s, _) in LAYOUT.items()})
-    rows = list(observe([(7, 0, render(R, t))], arr, K, np.zeros(8), SCREEN, TagDetector()))
+    rows = list(observe([(7, 0, render(R, t))], arr, PhoneTracker(K, np.zeros(8), SCREEN), TagDetector()))
     by_id = {r[3]: r for r in rows}
     assert set(by_id) == set(LAYOUT)
     detected = {i: r[8] for i, r in by_id.items()}
@@ -119,7 +119,7 @@ def test_bars_count_every_frame_and_read_small_16h5_tags():
         arr, canvas = bars_arrangement(family, size, ids)
         M = K @ np.column_stack([R[:, 0], R[:, 1], t]) @ SCREEN.S
         scene = cv2.warpPerspective(canvas, M, (1600, 1200), flags=cv2.INTER_AREA, borderValue=60)
-        rows += list(observe([(7, 0, scene)], arr, K, np.zeros(8), SCREEN, TagDetector(family=family)))
+        rows += list(observe([(7, 0, scene)], arr, PhoneTracker(K, np.zeros(8), SCREEN), TagDetector(family=family)))
     obs = pd.DataFrame(rows, columns=OBS_COLUMNS)
     table = bars_table(obs).set_index("variant")
     assert table.loc["16h5 9 mm", "top_and_bottom"] == 1.0

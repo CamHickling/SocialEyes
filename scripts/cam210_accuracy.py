@@ -26,6 +26,9 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+sys.path.insert(0, str(Path(__file__).parents[1] / "python" / "src"))
+from socialeyes.gaze.neon import SceneVideo  # noqa: E402  (seeking lands on the wrong frames)
+
 CASE_IDS = range(10, 16)
 WINDOW_NS = 500_000_000      # gaze window before each tap
 SKIP_BEFORE_TAP_NS = 0       # gaze leads the finger, so keep up to the tap itself
@@ -70,13 +73,8 @@ def black_square(rect) -> np.ndarray:
     return square((x0 + x1) / 2, (y0 + y1) / 2, (x1 - x0) / 3)
 
 
-def frames_between(cap, scene_t, t0, t1, step=1):
-    idx = np.where((scene_t >= t0) & (scene_t <= t1))[0][::step]
-    for i in idx:
-        cap.set(cv2.CAP_PROP_POS_FRAMES, int(i))
-        ok, frame = cap.read()
-        if ok:
-            yield int(i), cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+def frames_between(video: SceneVideo, scene_t, t0, t1, step=1):
+    yield from video.gray(np.where((scene_t >= t0) & (scene_t <= t1))[0][::step])
 
 
 GAMMA = (np.linspace(0, 1, 256) ** 3 * 255).astype(np.uint8)  # darkens an overexposed screen
@@ -132,8 +130,8 @@ def main(rec: Path, session: Path, sheet: Path | None = None) -> None:
 
     from pupil_apriltags import Detector
     detector = Detector(families="tag36h11", quad_decimate=1.0, decode_sharpening=0.25, nthreads=4)
-    cap = cv2.VideoCapture(str(rec / "Neon Scene Camera v1 ps1.mp4"))
-    print(f"scene video {int(cap.get(cv2.CAP_PROP_FRAME_COUNT))} frames, {len(scene_t)} timestamps; "
+    cap = SceneVideo(rec / "Neon Scene Camera v1 ps1.mp4")
+    print(f"scene video {len(scene_t)} frames; "
           f"gaze {len(gaze)} samples ({len(gaze) / ((gaze_t[-1] - gaze_t[0]) / 1e9):.0f} Hz)")
 
     # ---- 1. where the case tags sit in screen pixels, from each marker_calibration step

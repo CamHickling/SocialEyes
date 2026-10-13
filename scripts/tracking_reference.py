@@ -21,7 +21,7 @@ import cv2
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "python" / "src"))
-from socialeyes.gaze.neon import NeonRecording, read_recording, undistort  # noqa: E402
+from socialeyes.gaze.neon import NeonRecording, SceneVideo, read_recording, undistort  # noqa: E402
 from socialeyes.gaze.tags import TagDetector, tag_corners  # noqa: E402
 from socialeyes.gaze.tracking import (PhoneTracker, Pose, Screen, apply_h, clock_offset_ns,  # noqa: E402
                                       solve_pose)
@@ -81,20 +81,15 @@ def layouts(session: Session) -> list[tuple[str, int, int, dict, str]]:
 
 def _scan(rec: NeonRecording, session: Session, screen: Screen, off: int, cache: Path) -> list[dict]:
     detector, tracker = TagDetector(), PhoneTracker(rec.K, rec.dist, screen)
-    cap = cv2.VideoCapture(str(rec.scene_video))
+    video = SceneVideo(rec.scene_video)  # in order: seeking lands on the wrong frames
     frames = []
     try:
         for n, (step, start, end, tags, _) in enumerate(layouts(session)):
             idx = np.where((rec.scene_t >= start + off) & (rec.scene_t < end + off))[0]
             if not len(idx):
                 continue
-            cap.set(cv2.CAP_PROP_POS_FRAMES, int(idx[0]))
             prev, H_prev = None, None
-            for i in idx:
-                ok, frame = cap.read()
-                if not ok:
-                    break
-                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            for i, gray in video.gray(idx):
                 dets = {k: undistort(c, rec.K, rec.dist) for k, c in detector.detect(gray, len(tags)).items() if k in tags}
                 G = tracker._flow(prev, gray, H_prev, tags) if prev is not None and H_prev is not None else None
                 pose = solve_pose(dets, tags, rec.K, screen)
@@ -104,7 +99,7 @@ def _scan(rec: NeonRecording, session: Session, screen: Screen, off: int, cache:
                 prev = gray
             print(f"  scanned layout {n} ({step}): {len(idx)} frames", flush=True)
     finally:
-        cap.release()
+        video.close()
     cache.parent.mkdir(parents=True, exist_ok=True)
     cache.write_text(json.dumps(frames), encoding="utf-8")
     return frames
