@@ -118,6 +118,7 @@ DEFAULT_NEON_CHECKLIST = [
     "Companion's wearer is the SocialEyes profile (no gaze offset correction)",
     "The glasses sit snugly and the participant can see the whole phone screen",
     "The phone screen is clean, at the study's brightness, and not facing a window or lamp",
+    "Companion's scene camera auto exposure is set to Highlights (the API can't set it)",
 ]
 
 

@@ -301,7 +301,7 @@ def test_neon_session_settings(example, tmp_path):
     assert rep.errors == []
     neon = json.loads((out / "study.json").read_text(encoding="utf-8"))["study"]["neon"]
     assert neon["scene_exposure"]["exposure_us"] == 2000 and neon["template"] == {"Participant": "{participant_id}"}
-    assert len(neon["checklist"]) == 3  # the default checklist goes to the app
+    assert len(neon["checklist"]) == 4  # the default checklist goes to the app
     edit_file(y, "{mode: manual, exposure_us: 2000}", "{mode: manual}")
     assert "mode manual needs exposure_us" in errors_of(example)
     edit_file(y, "{mode: manual}", "{mode: auto, brightness: -10}")
