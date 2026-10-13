@@ -4,7 +4,7 @@
 # Posts are copied from studies/example; its AOIs show what we need to tell apart.
 id: accuracy_check
 title: Neon gaze accuracy check (CAM-210)
-version: 3
+version: 4
 seed: 20251001                 # change it and every plan changes; never change it mid-study
 
 platform:
@@ -65,6 +65,7 @@ markers:
 procedure:
   - {id: welcome, type: instructions, title: Accuracy check,
      text: "Sit back and hold the phone the way you normally would. Keep your head still and look at each dot as precisely as you can before tapping it."}
+  - {id: dcal, type: display_calibration}  # laptop: socialeyes calibrate-display <phone ip>
   - {id: cal1, type: marker_calibration, duration_s: 4}
   - {id: val1, type: validation, points: 13, target_dp: 20}
   - {id: feed, type: feed}
