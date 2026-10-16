@@ -1,0 +1,7 @@
+account_id,handle,display_name,avatar,verified
+acc1,maya.moves,Maya,avatars/acc1.png,false
+acc2,jordan_outdoors,Jordan,avatars/acc2.png,false
+acc3,fitwithsam,Sam,avatars/acc3.png,true
+acc4,the.daily.alex,Alex,avatars/acc4.png,false
+acc5,riley_eats,Riley,avatars/acc5.png,false
+acc6,casey.travels,Casey,avatars/acc6.png,false

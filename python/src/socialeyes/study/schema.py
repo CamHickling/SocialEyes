@@ -59,13 +59,23 @@ class Display(_Strict):
     overrides it for the rest of the session."""
 
 
+# Ids in each AprilTag family (as markers.FAMILY_IDS, which needs OpenCV).
+TAG_FAMILY_IDS = {"tag36h11": 587, "tag25h9": 35, "tag16h5": 30}
+
+
 class OnScreenTags(_Strict):
     """Screen tags kept on screen during whole steps (e.g. the feed), for when nothing can be
-    fixed around the phone. Two tags in a band above the step and two below it; the step's own
-    content gets the space in between. Their positions are logged in a `marker_layout` event."""
+    fixed around the phone. Their positions are logged in a `marker_layout` event."""
 
     steps: list[str] = []
     """Procedure step ids that show them. Empty = off."""
+    layout: Literal["bands", "bars"] = "bands"
+    """bands: two tags in a band above the step and two below it; the step's own content gets the
+    space in between. bars: in the corners of the feed's own top bar and tab bar, which grow only
+    as much as the tags need (CAM-165; feed steps only, other steps listed get bands)."""
+    family: Literal["tag36h11", "tag25h9", "tag16h5"] = "tag36h11"
+    """AprilTag family. Fewer cells read at a smaller size: tag16h5 at 10 mm was chosen for the
+    bars (CAM-165, tag_bars runs of 12 Oct 2026)."""
     size_mm: float = Field(12.0, ge=4, le=20)
     """Black-border edge length on the screen. 9 mm was at the Neon scene camera's detection limit
     with the phone held low (CAM-210), so 12 mm by default."""
@@ -88,6 +98,9 @@ class Markers(_Strict):
             raise ValueError("markers.screen_tag_ids and markers.case_tag_ids must not overlap")
         if len(set(self.case_tag_ids)) != len(self.case_tag_ids):
             raise ValueError("markers.case_tag_ids contains duplicates")
+        n = TAG_FAMILY_IDS[self.on_screen.family]
+        if max(self.screen_tag_ids) >= n:
+            raise ValueError(f"markers.screen_tag_ids: {self.on_screen.family} only has ids 0-{n - 1}")
         return self
 
 

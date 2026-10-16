@@ -217,7 +217,7 @@ fun PostCard(
                     tint = if (liked) FeedColors.LikeRed else primary,
                     modifier = Modifier.scale(likeBounce.value),
                 ) { setLiked(!liked, "button") }
-                ActionIcon(FeedIcons.Comment, primary, onClick = onOpenComments)
+                ActionIcon(FeedIcons.Comment, primary, description = "Comment", onClick = onOpenComments)
                 ActionIcon(FeedIcons.Share, primary, onClick = if (allowShares) {
                     {
                         event("share", emptyArray())
@@ -404,6 +404,7 @@ private fun ActionIcon(
     icon: ImageVector,
     tint: Color,
     modifier: Modifier = Modifier,
+    description: String? = null,
     onClick: (() -> Unit)?,
 ) {
     Box(
@@ -416,6 +417,6 @@ private fun ActionIcon(
             ),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, null, tint = tint, modifier = modifier.size(26.dp))
+        Icon(icon, description, tint = tint, modifier = modifier.size(26.dp))
     }
 }

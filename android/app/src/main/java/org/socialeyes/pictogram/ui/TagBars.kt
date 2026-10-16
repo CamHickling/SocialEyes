@@ -2,7 +2,6 @@ package org.socialeyes.pictogram.ui
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -17,7 +16,6 @@ import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -40,12 +38,9 @@ import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -55,6 +50,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import org.socialeyes.pictogram.Session
 import org.socialeyes.pictogram.log.ScreenRect
 import org.socialeyes.pictogram.study.Step
+import org.socialeyes.pictogram.study.StudyPackage
 import kotlin.math.roundToInt
 
 /** Cells across each AprilTag family's black square (border included). */
@@ -128,29 +124,17 @@ private fun BarsLayout(session: Session, step: Step, hold: Int, phase: Int, v: B
     val primary = MaterialTheme.colorScheme.onBackground
     fun Float.asDp(): Dp = with(density) { this@asDp.toDp() }
 
-    val pxPerMm = metrics.xdpi / 25.4f
-    val tagPx = v.sizeMm.toFloat() * pxPerMm
-    val cell = tagPx / v.cells
-    val insetPx = (step.double("side_inset_mm") ?: 5.0).toFloat() * pxPerMm
-    val edgePx = (step.double("edge_gap_mm") ?: 2.0).toFloat() * metrics.ydpi / 25.4f
-    // The bars keep a 1-cell quiet zone around the tags; each grows only if its tags need it.
+    val tags = rememberBarTags(v.family, v.ids, v.sizeMm, step.double("side_inset_mm") ?: 5.0, step.double("edge_gap_mm") ?: 2.0)
+    // each bar grows only if its tags need it
     val sync = pkg.study.display.syncPatch
     val topStrip = if (sync.enabled) maxOf(24, sync.sizeDp + 16).dp else 0.dp
-    val topBarH = maxOf(topStrip + 52.dp, (edgePx + tagPx + cell).asDp())
-    val tabBarH = maxOf(50.dp, (edgePx + tagPx + cell).asDp())
-    val clear = (insetPx + tagPx + cell).asDp() // bar content starts this far from the screen edge
+    val topBarH = maxOf(topStrip + 52.dp, tags.barPx.asDp())
+    val tabBarH = maxOf(50.dp, tags.barPx.asDp())
+    val clear = tags.clearPx.asDp()
 
     var origin by remember { mutableStateOf<Offset?>(null) }
     var boxPx by remember { mutableStateOf(Offset.Zero) }
     var feedPx by remember { mutableFloatStateOf(0f) }
-
-    // Whole tag images (the black square in a 2-cell white margin), in box pixels: TL, TR, BR, BL.
-    fun rect(k: Int): ScreenRect {
-        val img = cell * (v.cells + 4)
-        val l = if (k == 0 || k == 3) insetPx - 2 * cell else boxPx.x - insetPx - tagPx - 2 * cell
-        val t = if (k < 2) edgePx - 2 * cell else boxPx.y - edgePx - tagPx - 2 * cell
-        return ScreenRect(l, t, l + img, t + img)
-    }
 
     LaunchedEffect(origin, feedPx) {
         val o = origin ?: return@LaunchedEffect
@@ -159,7 +143,7 @@ private fun BarsLayout(session: Session, step: Step, hold: Int, phase: Int, v: B
             "marker_layout",
             fields = arrayOf(
                 "step_id" to step.id,
-                "tags" to v.ids.withIndex().associate { (k, id) -> id.toString() to rect(k).offset(o.x, o.y).toJson() },
+                "tags" to v.ids.withIndex().associate { (k, id) -> id.toString() to tags.rect(k, boxPx).offset(o.x, o.y).toJson() },
                 "ladder" to mapOf(
                     "hold" to hold, "phase" to phase,
                     "screen" to ScreenRect(o.x, o.y, o.x + boxPx.x, o.y + boxPx.y).toJson(),
@@ -195,16 +179,7 @@ private fun BarsLayout(session: Session, step: Step, hold: Int, phase: Int, v: B
                     Modifier.fillMaxWidth().height(52.dp).padding(start = maxOf(14.dp, clear), end = maxOf(6.dp, clear)),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    BoxWithConstraints(Modifier.weight(1f)) {
-                        val measurer = rememberTextMeasurer()
-                        val full = with(density) {
-                            measurer.measure(pkg.study.platform.name, TextStyle(fontFamily = Wordmark, fontSize = 32.sp))
-                                .size.width.toDp()
-                        }
-                        val scale = (maxWidth / full).coerceAtMost(1f)
-                        Text(pkg.study.platform.name, fontFamily = Wordmark, fontSize = (32 * scale).sp, color = primary,
-                            maxLines = 1, softWrap = false, modifier = Modifier.offset(y = 2.dp))
-                    }
+                    FittedWordmark(pkg.study.platform.name, primary, Modifier.weight(1f))
                     BarIcon(FeedIcons.Heart)
                     BarIcon(FeedIcons.Messages)
                 }
@@ -245,29 +220,68 @@ private fun BarsLayout(session: Session, step: Step, hold: Int, phase: Int, v: B
             }
         }
 
-        // the tags, over the bars' corners; a 1-cell quiet zone shows around each
-        if (boxPx != Offset.Zero) {
-            val filter = if (v.grey > 0) {
-                val s = 1f - v.grey.toFloat()
-                val o = v.grey.toFloat() * 255f
-                ColorFilter.colorMatrix(ColorMatrix(floatArrayOf(s, 0f, 0f, 0f, o, 0f, s, 0f, 0f, o, 0f, 0f, s, 0f, o, 0f, 0f, 0f, 1f, 0f)))
-            } else null
-            v.ids.forEachIndexed { k, id ->
-                val file = pkg.file("tags/${v.family}_$id.png")
-                val bitmap by rememberImage(file, 0)
-                val r = rect(k)
-                Box(
-                    Modifier
-                        .offset { IntOffset((r.left + cell).roundToInt(), (r.top + cell).roundToInt()) }
-                        .size((cell * (v.cells + 2)).asDp())
-                        .clipToBounds(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    bitmap?.let {
-                        Image(it, "tag $id", Modifier.requiredSize((cell * (v.cells + 4)).asDp()),
-                            contentScale = ContentScale.FillBounds, filterQuality = FilterQuality.None, colorFilter = filter)
-                    }
-                }
+        // the tags, over the bars' corners
+        val filter = if (v.grey > 0) {
+            val s = 1f - v.grey.toFloat()
+            val o = v.grey.toFloat() * 255f
+            ColorFilter.colorMatrix(ColorMatrix(floatArrayOf(s, 0f, 0f, 0f, o, 0f, s, 0f, 0f, o, 0f, 0f, s, 0f, o, 0f, 0f, 0f, 1f, 0f)))
+        } else null
+        BarTagImages(pkg, tags, boxPx, filter)
+    }
+}
+
+/**
+ * Four tags (TL, TR, BR, BL) in the corners of a top bar and a tab bar, in pixels: tag_bars, and
+ * the feed with `markers.on_screen` layout `bars`. The tags' black borders are `insetPx` from the
+ * side edges and `edgePx` from the top and bottom edges; the bars keep a 1-cell quiet zone.
+ */
+internal class BarTags(val family: String, val ids: List<Int>, val tagPx: Float, val insetPx: Float, val edgePx: Float) {
+    val cells: Int = FAMILY_CELLS.getValue(family)
+    val cell: Float = tagPx / cells
+
+    /** The least height a bar needs for its tags. */
+    val barPx: Float get() = edgePx + tagPx + cell
+
+    /** Bar content starts this far from the side edges. */
+    val clearPx: Float get() = insetPx + tagPx + cell
+
+    /** Tag k's whole image (the black square in a 2-cell white margin) in a box of `box` px. */
+    fun rect(k: Int, box: Offset): ScreenRect {
+        val img = cell * (cells + 4)
+        val l = if (k == 0 || k == 3) insetPx - 2 * cell else box.x - insetPx - tagPx - 2 * cell
+        val t = if (k < 2) edgePx - 2 * cell else box.y - edgePx - tagPx - 2 * cell
+        return ScreenRect(l, t, l + img, t + img)
+    }
+}
+
+@Composable
+internal fun rememberBarTags(family: String, ids: List<Int>, sizeMm: Double, sideInsetMm: Double = 5.0, edgeGapMm: Double = 2.0): BarTags {
+    val metrics = LocalContext.current.resources.displayMetrics
+    return remember(family, ids, sizeMm, sideInsetMm, edgeGapMm) {
+        BarTags(family, ids, (sizeMm / 25.4 * metrics.xdpi).toFloat(), (sideInsetMm / 25.4 * metrics.xdpi).toFloat(),
+            (edgeGapMm / 25.4 * metrics.ydpi).toFloat())
+    }
+}
+
+/** The tags of [tags] over a Box of `box` px, each showing a 1-cell quiet zone. */
+@Composable
+internal fun BarTagImages(pkg: StudyPackage, tags: BarTags, box: Offset, filter: ColorFilter? = null) {
+    if (box == Offset.Zero) return
+    val density = LocalDensity.current
+    val cell = tags.cell
+    tags.ids.forEachIndexed { k, id ->
+        val bitmap by rememberImage(pkg.file("tags/${tags.family}_$id.png"), 0)
+        val r = tags.rect(k, box)
+        Box(
+            Modifier
+                .offset { IntOffset((r.left + cell).roundToInt(), (r.top + cell).roundToInt()) }
+                .size(with(density) { (cell * (tags.cells + 2)).toDp() })
+                .clipToBounds(),
+            contentAlignment = Alignment.Center,
+        ) {
+            bitmap?.let {
+                Image(it, "tag $id", Modifier.requiredSize(with(density) { (cell * (tags.cells + 4)).toDp() }),
+                    contentScale = ContentScale.FillBounds, filterQuality = FilterQuality.None, colorFilter = filter)
             }
         }
     }

@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -61,6 +62,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
@@ -84,7 +87,7 @@ fun FeedScreen(session: Session, step: Step, onDone: (reason: String) -> Unit) {
     val instructions = step.str("instructions").orEmpty()
     var started by remember { mutableStateOf(instructions.isBlank()) }
     if (started) {
-        FeedContent(session, onDone)
+        FeedContent(session, step, onDone)
     } else {
         MessageScreen(title = "", text = instructions, button = "Start") {
             session.log.event("feed_start")
@@ -94,7 +97,7 @@ fun FeedScreen(session: Session, step: Step, onDone: (reason: String) -> Unit) {
 }
 
 @Composable
-private fun FeedContent(session: Session, onDone: (reason: String) -> Unit) {
+private fun FeedContent(session: Session, step: Step, onDone: (reason: String) -> Unit) {
     val pkg = session.pkg
     val log = session.log
     val cfg = pkg.study.feed
@@ -174,19 +177,64 @@ private fun FeedContent(session: Session, onDone: (reason: String) -> Unit) {
     val sync = pkg.study.display.syncPatch
     val topStrip = if (sync.enabled) maxOf(24, sync.sizeDp + 16).dp else 0.dp
 
-    Box(Modifier.fillMaxSize()) {
-    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        if (topStrip > 0.dp) Spacer(Modifier.height(topStrip))
+    // markers.on_screen with layout bars: the screen tags in the corners of the top bar and tab
+    // bar, which grow only as much as the tags need (CAM-165). Stories, reels and the comments
+    // sheet leave both bars uncovered.
+    val tagCfg = pkg.study.markers.onScreen
+    val barTags = if (tagCfg.layout == "bars" && step.id in tagCfg.steps) {
+        rememberBarTags(tagCfg.family, pkg.study.markers.screenTagIds, tagCfg.sizeMm)
+    } else null
+    val density = LocalDensity.current
+    val topBarH = maxOf(topStrip + 52.dp, with(density) { (barTags?.barPx ?: 0f).toDp() })
+    val tabBarH = maxOf(50.dp, with(density) { (barTags?.barPx ?: 0f).toDp() })
+    val clear = with(density) { (barTags?.clearPx ?: 0f).toDp() } // bar content starts this far from the edges
+    val overlayTop = if (barTags != null) topBarH else topStrip
+    val overlayBottom = if (barTags != null) Modifier.padding(bottom = tabBarH + 0.5.dp) else Modifier
+    var origin by remember { mutableStateOf<Offset?>(null) }
+    var boxPx by remember { mutableStateOf(Offset.Zero) }
+    if (barTags != null) {
+        LaunchedEffect(origin, boxPx) {
+            val o = origin ?: return@LaunchedEffect
+            if (boxPx == Offset.Zero) return@LaunchedEffect
+            val rects = barTags.ids.withIndex().associate { (k, id) -> id to barTags.rect(k, boxPx).offset(o.x, o.y) }
+            session.screenTagRects = rects
+            log.event(
+                "marker_layout",
+                fields = arrayOf(
+                    "step_id" to step.id,
+                    "on_screen" to true,
+                    "layout" to "bars",
+                    "family" to barTags.family,
+                    "tags" to rects.mapKeys { it.key.toString() }.mapValues { it.value.toJson() },
+                    "bars" to mapOf("top_bar_dp" to topBarH.value, "tab_bar_dp" to tabBarH.value),
+                ),
+            )
+        }
+    }
 
-        // top bar: wordmark, notifications, messages
+    Box(
+        Modifier.fillMaxSize().onGloballyPositioned { c ->
+            val loc = IntArray(2).also(view::getLocationOnScreen)
+            origin = c.positionInWindow() + Offset(loc[0].toFloat(), loc[1].toFloat())
+            boxPx = Offset(c.size.width.toFloat(), c.size.height.toFloat())
+        },
+    ) {
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        // top bar: wordmark, notifications, messages, at the bottom of the (sometimes taller) bar
+        Column(Modifier.fillMaxWidth().height(topBarH)) {
+        Spacer(Modifier.weight(1f))
         Row(
-            Modifier.fillMaxWidth().height(52.dp).padding(start = 14.dp, end = 6.dp),
+            Modifier.fillMaxWidth().height(52.dp).padding(start = maxOf(14.dp, clear), end = maxOf(6.dp, clear)),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(pkg.study.platform.name, fontFamily = Wordmark, fontSize = 32.sp, color = primary,
-                modifier = Modifier.offset(y = 2.dp))
-            Icon(FeedIcons.ChevronDown, null, tint = primary, modifier = Modifier.padding(start = 2.dp).size(16.dp))
-            Spacer(Modifier.weight(1f))
+            if (barTags == null) {
+                Text(pkg.study.platform.name, fontFamily = Wordmark, fontSize = 32.sp, color = primary,
+                    modifier = Modifier.offset(y = 2.dp))
+                Icon(FeedIcons.ChevronDown, null, tint = primary, modifier = Modifier.padding(start = 2.dp).size(16.dp))
+                Spacer(Modifier.weight(1f))
+            } else {
+                FittedWordmark(pkg.study.platform.name, primary, Modifier.weight(1f))
+            }
             // In the top bar rather than over the feed, so it never covers a post.
             if (showDone) {
                 Button(
@@ -197,8 +245,13 @@ private fun FeedContent(session: Session, onDone: (reason: String) -> Unit) {
                     modifier = Modifier.height(32.dp).padding(end = 4.dp),
                 ) { Text("I'm done", fontWeight = FontWeight.SemiBold, fontSize = 14.sp) }
             }
-            BarIcon(FeedIcons.Heart)
-            BarIcon(FeedIcons.Messages)
+            // Between bar tags there is no room for the button, the icons and the wordmark: the
+            // icons (for the look only) give way to the button.
+            if (barTags == null || !showDone) {
+                BarIcon(FeedIcons.Heart)
+                BarIcon(FeedIcons.Messages)
+            }
+        }
         }
 
         Box(Modifier.weight(1f)) {
@@ -251,11 +304,17 @@ private fun FeedContent(session: Session, onDone: (reason: String) -> Unit) {
         HorizontalDivider(thickness = 0.5.dp, color = if (reelsOpen) Color(0xFF262626) else FeedColors.divider(dark))
         // Tab bar. Home scrolls back to the top of the feed; the other tabs are for the look only.
         Row(
-            Modifier.fillMaxWidth().height(50.dp).background(if (reelsOpen) Color.Black else MaterialTheme.colorScheme.background),
+            Modifier.fillMaxWidth().height(tabBarH).background(if (reelsOpen) Color.Black else MaterialTheme.colorScheme.background)
+                .padding(horizontal = clear),
             horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            BarIcon(FeedIcons.HomeFilled, barTint) {
+            // between bar tags the five tabs share the space left, shrinking if they must
+            @Composable
+            fun Tab(content: @Composable () -> Unit) =
+                if (barTags != null) Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { content() } else content()
+
+            Tab { BarIcon(FeedIcons.HomeFilled, barTint, "Home") {
                 if (reelsOpen) {
                     reelsOpen = false // ReelsScreen logs reel_end on close via onClose
                     log.event("reels_close", fields = arrayOf("reason" to "home_tab"))
@@ -264,16 +323,16 @@ private fun FeedContent(session: Session, onDone: (reason: String) -> Unit) {
                     log.event("home_tap")
                     scope.launch { listState.animateScrollToItem(0) }
                 }
-            }
-            BarIcon(FeedIcons.Search, barTint)
-            BarIcon(FeedIcons.Create, barTint)
-            BarIcon(FeedIcons.Reels, barTint) {
+            } }
+            Tab { BarIcon(FeedIcons.Search, barTint, "Search") }
+            Tab { BarIcon(FeedIcons.Create, barTint, "New post") }
+            Tab { BarIcon(FeedIcons.Reels, barTint, "Reels") {
                 if (!reelsOpen && pkg.manifest.reels.isNotEmpty()) {
                     log.event("reels_open")
                     reelsOpen = true
                 }
-            }
-            Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) { ParticipantAvatar(27.dp, dark) }
+            } }
+            Tab { Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) { ParticipantAvatar(27.dp, dark) } }
         }
     }
 
@@ -282,7 +341,7 @@ private fun FeedContent(session: Session, onDone: (reason: String) -> Unit) {
         ReelsScreen(
             pkg = pkg,
             reels = pkg.manifest.reels,
-            topInset = topStrip,
+            topInset = overlayTop,
             allowLikes = cfg.allowLikes,
             allowShares = cfg.allowShares,
             reelLikes = reelLikes,
@@ -295,7 +354,7 @@ private fun FeedContent(session: Session, onDone: (reason: String) -> Unit) {
                 reelsOpen = false
                 tracker.clearOverlay()
             },
-            modifier = Modifier.padding(bottom = 50.5.dp), // the tab bar stays visible
+            modifier = Modifier.padding(bottom = tabBarH + 0.5.dp), // the tab bar stays visible
         )
     }
 
@@ -315,11 +374,12 @@ private fun FeedContent(session: Session, onDone: (reason: String) -> Unit) {
     }
 
     openStoryGroup?.let { g ->
+        Box(overlayBottom) {
         StoryViewer(
             pkg = pkg,
             groups = storyGroups,
             startGroup = g,
-            topInset = topStrip,
+            topInset = overlayTop,
             track = { storyId, coords -> tracker.updateOverlay(storyId, "story", coords) },
             untrack = { storyId -> tracker.removeOverlay(storyId, "story") },
             event = { type, fields -> log.event(type, fields = fields) },
@@ -334,14 +394,16 @@ private fun FeedContent(session: Session, onDone: (reason: String) -> Unit) {
                 openStoryGroup = null
             },
         )
+        }
     }
 
     commentsFor?.let { post ->
         key(post.postId) {
+            Box(overlayBottom) {
             CommentsSheet(
                 pkg = pkg,
                 post = post,
-                topInset = topStrip,
+                topInset = overlayTop,
                 allowCommentLikes = cfg.allowCommentLikes,
                 allowTyping = cfg.allowCommentTyping,
                 participantHandle = pkg.study.platform.participantHandle,
@@ -380,13 +442,31 @@ private fun FeedContent(session: Session, onDone: (reason: String) -> Unit) {
                     commentsFor = null
                 },
             )
+            }
         }
     }
+
+    // the screen tags, over everything
+    barTags?.let { BarTagImages(pkg, it, boxPx) }
+    }
+}
+
+/** The platform name in the wordmark font, shrunk to fit the space it is given. */
+@Composable
+internal fun FittedWordmark(name: String, color: Color, modifier: Modifier = Modifier) {
+    BoxWithConstraints(modifier) {
+        val measurer = rememberTextMeasurer()
+        val full = with(LocalDensity.current) {
+            measurer.measure(name, TextStyle(fontFamily = Wordmark, fontSize = 32.sp)).size.width.toDp()
+        }
+        val scale = (maxWidth / full * 0.92f).coerceAtMost(1f) // the script font's last letter overhangs its measured width
+        Text(name, fontFamily = Wordmark, fontSize = (32 * scale).sp, color = color,
+            maxLines = 1, softWrap = false, modifier = Modifier.offset(y = 2.dp))
     }
 }
 
 @Composable
-internal fun BarIcon(icon: ImageVector, tint: Color = Color.Unspecified, onClick: (() -> Unit)? = null) {
+internal fun BarIcon(icon: ImageVector, tint: Color = Color.Unspecified, description: String? = null, onClick: (() -> Unit)? = null) {
     Box(
         Modifier
             .size(44.dp)
@@ -397,7 +477,7 @@ internal fun BarIcon(icon: ImageVector, tint: Color = Color.Unspecified, onClick
             ),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, null, tint = if (tint == Color.Unspecified) MaterialTheme.colorScheme.onBackground else tint, modifier = Modifier.size(26.dp))
+        Icon(icon, description, tint = if (tint == Color.Unspecified) MaterialTheme.colorScheme.onBackground else tint, modifier = Modifier.size(26.dp))
     }
 }
 

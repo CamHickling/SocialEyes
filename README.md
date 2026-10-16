@@ -625,6 +625,25 @@ socialeyes case-sheet --width-mm 70 --height-mm 152 --study studies/my_study -o 
 Print it at **100% scale** (no "fit to page"), check that a tag's black border
 measures `case_tag_size_mm`, and mount it flush with the screen.
 
+### Tags on the screen itself
+
+Without anything around the phone, the screen tags can stay on screen for whole steps
+(`markers.on_screen.steps`). For the feed, the recommended layout puts them in the corners of
+the feed's own top bar and tab bar, which grow only as much as the tags need; stories, reels
+and the comments sheet then leave both bars uncovered:
+
+```yaml
+markers:
+  on_screen:
+    steps: [feed]
+    layout: bars        # bands (default): a band above and below the step instead
+    family: tag16h5     # reads at a smaller size than tag36h11
+    size_mm: 10
+```
+
+`python scripts/tag_ui_shots.py` takes screenshots of every feed screen with and without them
+(`studies/tag_ui`).
+
 ### Clock synchronisation
 
 A small patch in the top corner of the screen (16 dp by default, a barely
@@ -883,7 +902,7 @@ Roughly in order:
       (in progress: phone tracking and gaze on screen are built, `socialeyes gaze`)
 - [ ] **R templates** for the standard mixed models
       (`dwell ~ edit * label + (1|participant) + (1|post)`)
-- [ ] **On-screen tags in the real UI** (next, no glasses needed): the chosen AprilTag 16h5
+- [x] **On-screen tags in the real UI**: the chosen AprilTag 16h5
       10 mm tags drawn in the feed's own top bar and tab bar (`markers.on_screen` layout
       `bars`), kept visible over stories, reels and the comments sheet, plus a screenshot
       test of every screen with and without tags to check the app still looks like Instagram

@@ -88,8 +88,12 @@ Test report (summary, method, charts plain vs smart, tables, Tests, screenshots;
 
 The glasses are away for now, so work goes in this order (full descriptions in the README roadmap):
 
-1. **Tags in the real UI** (step 2 above) and a screenshot test of every screen with and
-   without the tags.
+1. ~~**Tags in the real UI** (step 2 above) and a screenshot test~~: done 16 Oct.
+   `markers.on_screen: {layout: bars, family: tag16h5, size_mm: 10}` draws the tags in the feed's
+   bars; stories, reels and comments leave both bars uncovered; `socialeyes gaze` reads the
+   family from `marker_layout`. Screenshots: `python scripts/tag_ui_shots.py` (studies/tag_ui) ->
+   `analysis_out/tag_ui/index.html`. On a narrow phone the top bar drops its heart and messages
+   icons while "I'm done" shows. Not yet in the experiment builder.
 2. **Clean data export**: by session, by item (participant x post), by condition, with a codebook.
 3. **Front (face) camera features**: face presence, head pose, distance, looking away; quality
    report and exclusion flags; blurred exports.

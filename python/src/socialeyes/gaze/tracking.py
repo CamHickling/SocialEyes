@@ -22,6 +22,7 @@ import pandas as pd
 
 from ..session.io import Session, load_session
 from .neon import NeonRecording, SceneVideo, read_recording, undistort
+from ..markers import FAMILY_CELLS
 from .tags import TagDetector, tag_corners
 
 MAX_RMS_PX = 2.0          # corner reprojection RMS (scene px) above which a pose is rejected
@@ -209,9 +210,9 @@ def clock_offset_ns(session: Session) -> int:
     return int(c["wall_ms"]) * 1_000_000 - int(c["elapsed_ns"])
 
 
-def tag_windows(session: Session) -> list[tuple[str, int, int, dict]]:
-    """(step_id, start_ns, end_ns, {tag id: screen corners}) for each step with on-screen tags,
-    in the session's clock."""
+def tag_windows(session: Session) -> list[tuple[str, int, int, dict, str]]:
+    """(step_id, start_ns, end_ns, {tag id: screen corners}, tag family) for each step with
+    on-screen tags, in the session's clock."""
     layouts = session.events_of("marker_layout")
     if "on_screen" not in layouts:
         return []
@@ -221,8 +222,9 @@ def tag_windows(session: Session) -> list[tuple[str, int, int, dict]]:
         if e["step_id"] not in steps.index:
             continue
         s = steps.loc[e["step_id"]]
-        tags = {int(k): tag_corners(v) for k, v in e["tags"].items()}
-        out.append((e["step_id"], int(s["start_ns"]), int(s["end_ns"]), tags))
+        family = e.get("family") if isinstance(e.get("family"), str) else "tag36h11"  # NaN before bars
+        tags = {int(k): tag_corners(v, cells=FAMILY_CELLS[family]) for k, v in e["tags"].items()}
+        out.append((e["step_id"], int(s["start_ns"]), int(s["end_ns"]), tags, family))
     return out
 
 
@@ -239,11 +241,12 @@ def track_recording(rec: NeonRecording | str | Path, session: Session | str | Pa
     windows = tag_windows(session)
     if not windows:
         raise ValueError("this session has no steps with on-screen tags (markers.on_screen), so the phone can't be tracked")
-    detector = TagDetector()
+    detectors: dict[str, TagDetector] = {}
     tracker = PhoneTracker(rec.K, rec.dist, screen, max_bridge_ms)
     rows = []
     with SceneVideo(rec.scene_video) as video:
-        for step_id, start, end, tags in windows:
+        for step_id, start, end, tags, family in windows:
+            detector = detectors.setdefault(family, TagDetector(family=family))
             idx = np.where((rec.scene_t >= start + off) & (rec.scene_t <= end + off))[0]
             if not len(idx):
                 continue

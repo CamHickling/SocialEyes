@@ -115,6 +115,9 @@ data class Markers(
 @Serializable
 data class OnScreenTagsConfig(
     val steps: List<String> = emptyList(),
+    /** "bands" (above and below the step) or "bars" (in the feed's top bar and tab bar). */
+    val layout: String = "bands",
+    val family: String = "tag36h11",
     @SerialName("size_mm") val sizeMm: Double = 12.0,
 )
 
