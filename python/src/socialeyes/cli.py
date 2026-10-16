@@ -296,6 +296,22 @@ def cmd_unload(args) -> int:
     return 1 if failed else 0
 
 
+def cmd_export(args) -> int:
+    from .session.export import export
+
+    try:
+        r = export(args.study, data_dir=args.data, out_dir=args.out, progress=lambda s: print(s, flush=True))
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    for folder, why in r.skipped:
+        print(f"  skipped {folder}: {why}")
+    print(f"{r.sessions} session(s) -> {r.out_dir}")
+    for f in r.files:
+        print(f"  {Path(f).name}")
+    return 1 if r.skipped and not r.sessions else 0
+
+
 def cmd_folders(args) -> int:
     from . import settings
     from .phone.unload import study_id_of
@@ -411,6 +427,12 @@ def main(argv: list[str] | None = None) -> int:
     ul.add_argument("study", help="study folder (or its study.yaml)")
     ul.add_argument("--serial", help="the phone to use when several are connected (see: adb devices)")
     ul.set_defaults(func=cmd_unload)
+
+    ex = sub.add_parser("export", help="tidy tables of every session: by session, by item, by condition, with a codebook")
+    ex.add_argument("study", help="study folder (or its study.yaml)")
+    ex.add_argument("--data", help="the sessions' folder (default: the study's data folder, see: socialeyes folders)")
+    ex.add_argument("-o", "--out", help="output folder (default: export/ in the data folder)")
+    ex.set_defaults(func=cmd_export)
 
     fo = sub.add_parser("folders", help="show or set where this computer keeps a study's data and second copy")
     fo.add_argument("study", help="study folder (or its study.yaml)")

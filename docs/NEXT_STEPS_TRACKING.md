@@ -94,7 +94,8 @@ The glasses are away for now, so work goes in this order (full descriptions in t
    family from `marker_layout`. Screenshots: `python scripts/tag_ui_shots.py` (studies/tag_ui) ->
    `analysis_out/tag_ui/index.html`. On a narrow phone the top bar drops its heart and messages
    icons while "I'm done" shows. Not yet in the experiment builder.
-2. **Clean data export**: by session, by item (participant x post), by condition, with a codebook.
+2. ~~**Clean data export**~~: done 16 Oct (`socialeyes export`, Data tab **Make tables**). Gaze
+   columns join by_item once gaze is mapped to AOIs.
 3. **Front (face) camera features**: face presence, head pose, distance, looking away; quality
    report and exclusion flags; blurred exports.
 4. **Image AOIs for face and body**, made automatically and reviewed by the researcher.

@@ -177,6 +177,13 @@ class Api:
         return unload(folder, serial=serial or None, progress=self._progress).to_json()
 
     @_reply
+    def data_export(self, folder: str) -> dict:
+        """Tables of every unloaded session (by session, by item, by condition) and their codebook."""
+        from ..session.export import export
+
+        return export(folder, progress=self._progress).to_json()
+
+    @_reply
     def open_path(self, path: str) -> bool:
         """Shows a folder in Explorer."""
         import os

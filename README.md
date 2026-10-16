@@ -139,6 +139,7 @@ for mixed models in R.
 | Example study (placeholder images) and tests | ✅ | `studies/example/`, `python/tests/` |
 | Session log format (touches, scrolling, interactions, quality events) | ✅ | `docs/EVENT_LOG.md` (version 1) |
 | Session analysis: gestures, time on screen, touch→AOI, finger occlusion, quality checks | ✅ | `python/src/socialeyes/session/` (tested on simulated sessions) |
+| Tables for analysis: by session, by item, by condition, with a codebook (`socialeyes export`, Data tab) | ✅ | `python/src/socialeyes/session/export.py` |
 | Experiment builder: guided form that writes study.yaml and CSV skeletons | ✅ | `builder/index.html` (open in a browser) |
 | Desktop app (Windows): Design tab edits study folders in place and runs the compiler's checks; Phone tab loads studies onto the phone; Data tab unloads sessions with a register; Studies tab lists studies with their status; Content tab lists the files each study still needs; edits that would break collected data need a new version; Windows installer (`packaging/build.py`, about 66 MB) | ✅ | `socialeyes app` (`python/src/socialeyes/desktop/`) |
 | CSV format reference | ✅ | `docs/STUDY_DESIGN.md` (version 1) |
@@ -268,7 +269,7 @@ overwritten. Each save (and the **Check study** button) also runs the compiler's
 checks, the same as `socialeyes validate`: missing images, AOI sizes and mistakes
 in the CSVs. They appear next to the design checks. The **Phone** tab loads the
 study onto the phone and the **Data** tab copies sessions back off it (see [Running the
-app](#running-the-app)). **Studies** lists every study in `studies/` as designing
+app](#running-the-app)) and makes the [tables for analysis](#tables-for-analysis). **Studies** lists every study in `studies/` as designing
 (with its number of problems), ready, or collecting data (with its number of sessions),
 and starts new ones, blank or as a copy of the example. **Content** lists every image,
 avatar, story image, video and AOI file the study's CSVs point to, found or missing
@@ -504,8 +505,30 @@ screen), `touch_targets.csv` (every touch mapped to post, image pixel and AOI),
 `occlusion.csv` (when a finger probably covered an AOI), `interactions.csv`
 and `quality.json`.
 
-Until the app exists, `socialeyes simulate build/my_study P001 <folder>` writes
-a realistic fake session to try the analysis on.
+`socialeyes simulate build/my_study P001 <folder>` writes a realistic fake session
+to try the analysis on.
+
+### Tables for analysis
+
+Once sessions are unloaded, one command (or **Make tables** in the desktop app's Data tab)
+turns all of them into tidy tables for Excel, SPSS or R:
+
+```powershell
+socialeyes export studies/my_study
+```
+
+| file | one row per | columns |
+|---|---|---|
+| `by_session.csv` | session | group and between-subjects levels, start time, completed, session and feed length, how the feed ended, totals (posts seen, likes, saves, shares, comments opened and posted, stories and reels watched), time in the background, interruptions, quality warnings, the register's duplicate-id flag and notes, every questionnaire answer, recognition hit and false alarm rates |
+| `by_item.csv` | session x feed post | the post's position, role, cell and factor levels, image, label and comment set; seconds on screen (post and image: any part, whole, area-weighted), when it was first seen, times scrolled into view, time its comments were open; liked, saved, shared, comments opened, posted and liked, caption, label and profile taps; its image ratings; the recognition answers for the version seen and the other version (answer, correct, confidence, response time) |
+| `by_condition.csv` | session x within-subjects cell (and one row for the fillers) | the means of `by_item`'s measures over the cell's posts (shares for yes/no columns) |
+| `codebook.csv` | column | what each column means and its values, with the question wording from the study |
+
+They go to `export/` in the study's data folder (`--data` and `-o` choose others), so they
+stay on the same drive as the sessions. Files are UTF-8 with a byte-order mark, which Excel
+needs for accents. Each session is analysed with the exact build it ran, and a session that
+can't be read is listed and skipped. Gaze columns (dwell per AOI, time to first fixation)
+join `by_item` when the gaze pipeline maps fixations to AOIs.
 
 To put the participant's gaze on the screen, give the matching Neon recording
 (the native folder copied off the phone) and the session. The session needs
@@ -906,7 +929,7 @@ Roughly in order:
       10 mm tags drawn in the feed's own top bar and tab bar (`markers.on_screen` layout
       `bars`), kept visible over stories, reels and the comments sheet, plus a screenshot
       test of every screen with and without tags to check the app still looks like Instagram
-- [ ] **Clean data export**: tidy tables ready for Excel, SPSS or R, in three shapes:
+- [x] **Clean data export** (gaze columns to come with the gaze pipeline): tidy tables ready for Excel, SPSS or R, in three shapes:
       **by session** (one row per participant: group, questionnaire answers, session length,
       quality flags for exclusions), **by item** (one row per participant x post: the post's
       conditions, time on screen, likes, comment opens, ratings, recognition answers, gaze

@@ -888,7 +888,7 @@ if (typeof module !== "undefined") module.exports = Core;
     // Phone tab: result of the last phone check / load, and the choices on the tab
     phone: { result: null, folder: null, serial: "", devices: [], updateApp: false, progress: null, error: null },
     // Data tab: the study's folders and register, the phone's sessions, the last unload
-    data: { status: null, folder: null, unload: null, error: null },
+    data: { status: null, folder: null, unload: null, export: null, error: null },
     studies: { list: null, newId: "", error: null },
     files: { result: null, folder: null, missingOnly: true, error: null },   // Content tab
   };
@@ -1806,6 +1806,20 @@ if (typeof module !== "undefined") module.exports = Core;
       }).join("")}</ul>`;
     }
     const rows = st.register || [];
+    const x = D.export;
+    html += `
+      <div class="card">
+        <h3>Tables for analysis</h3>
+        <p>One file per view of the data, ready for Excel, SPSS or R: <b>by session</b> (one row per session: group,
+        questionnaire answers, totals, quality flags), <b>by item</b> (one row per post a participant saw: its
+        conditions, time on screen, likes, comments, ratings, recognition) and <b>by condition</b> (one row per
+        participant and condition: the averages over its posts), with a <b>codebook</b> explaining every column.</p>
+        <div class="row">${btn("data-export", "Make tables", "primary", busy || !rows.length ? "disabled" : "")}
+          ${x && x.out_dir ? btn("data-open-export", "Open folder", "", dis) : ""}</div>
+        ${x && x.out_dir ? `<p class="hint">${x.sessions} session${x.sessions === 1 ? "" : "s"} written to <b class="folder">${esc(x.out_dir)}</b>${x.skipped.length
+          ? `. Skipped ${x.skipped.length}: ${x.skipped.map((s) => esc(`${s.folder.split(/[\\/]/).slice(-2).join("/")} (${s.why})`)).join("; ")}` : ""}</p>` : ""}
+        ${!rows.length ? `<p class="hint">Unload some sessions first.</p>` : ""}
+      </div>`;
     html += `<h3>Sessions (${rows.length})</h3>`;
     html += rows.length ? `<div class="table-wrap"><table class="register"><thead><tr><th>Participant</th><th>Started</th><th>Completed</th><th>Warnings</th><th>Phone</th><th>Notes</th></tr></thead><tbody>
       ${rows.map((r) => `<tr><td>${esc(r.participant_id)}${r.duplicate_id ? ` <span class="pill">ID used twice</span>` : ""}${r.on_phone ? ` <span class="pill">still on phone</span>` : ""}</td>
@@ -1833,6 +1847,16 @@ if (typeof module !== "undefined") module.exports = Core;
     catch (e) { D.error = e.message; }
     ui.phone.progress = null;
     await dataRefresh();
+  }
+
+  async function dataExport() {
+    const D = ui.data;
+    D.error = null;
+    ui.phone.progress = "Starting…";
+    try { D.export = await bridge("data_export", "Making tables…", dataFolder()); }
+    catch (e) { D.error = e.message; }
+    ui.phone.progress = null;
+    render();
   }
 
   async function dataPick(which) {
@@ -2150,6 +2174,8 @@ if (typeof module !== "undefined") module.exports = Core;
       case "open-path": bridge("open_path", null, args.join(":")).catch((e) => { ui.desktopError = e.message; render(); }); return;
       case "data-refresh": dataRefresh(); return;
       case "data-unload": dataUnload(); return;
+      case "data-export": dataExport(); return;
+      case "data-open-export": bridge("open_path", null, ui.data.export.out_dir).catch((e) => { ui.data.error = e.message; render(); }); return;
       case "data-pick": dataPick(args[0]); return;
       case "data-clear": case "data-open": case "data-folder": dataAct(name, args[0]); return;
       case "phone-check": phoneCheck(); return;

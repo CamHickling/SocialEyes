@@ -355,6 +355,10 @@ was covered.
 | `occlusion.csv` | periods when a finger rested on an image, and which AOIs it probably covered |
 | `interactions.csv` | the feed interaction events, one row each |
 
+`socialeyes export <study>` combines every session of a study into `by_session.csv`,
+`by_item.csv` (session x post), `by_condition.csv` (session x cell) and `codebook.csv`; see
+the README (Tables for analysis).
+
 Finger occlusion is an estimate. The app knows the touch point, not the finger's
 outline, so an AOI counts as covered if it lies within `finger_radius_mm`
 (default 8 mm) of the touch point.

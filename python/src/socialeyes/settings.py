@@ -91,6 +91,12 @@ def data_dir(study_id: str) -> Path:
     return Path(chosen) if chosen else workspace() / "data" / study_id
 
 
+def export_dir(study_id: str) -> Path:
+    """Where `socialeyes export` writes the study's tables: inside its data folder, so they stay on
+    the same (perhaps encrypted) drive as the sessions."""
+    return data_dir(study_id) / "export"
+
+
 def second_copy_dir(study_id: str) -> Optional[Path]:
     chosen = study(study_id).get("second_copy_dir")
     return Path(chosen) if chosen else None
