@@ -883,6 +883,35 @@ Roughly in order:
       (in progress: phone tracking and gaze on screen are built, `socialeyes gaze`)
 - [ ] **R templates** for the standard mixed models
       (`dwell ~ edit * label + (1|participant) + (1|post)`)
+- [ ] **On-screen tags in the real UI** (next, no glasses needed): the chosen AprilTag 16h5
+      10 mm tags drawn in the feed's own top bar and tab bar (`markers.on_screen` layout
+      `bars`), kept visible over stories, reels and the comments sheet, plus a screenshot
+      test of every screen with and without tags to check the app still looks like Instagram
+- [ ] **Clean data export**: tidy tables ready for Excel, SPSS or R, in three shapes:
+      **by session** (one row per participant: group, questionnaire answers, session length,
+      quality flags for exclusions), **by item** (one row per participant x post: the post's
+      conditions, time on screen, likes, comment opens, ratings, recognition answers, gaze
+      dwell per AOI, time to first fixation) and **by condition** (one row per participant x
+      condition cell, averaged over posts); a codebook describing every column; a one-click
+      button in the desktop app's Data tab and `socialeyes export`; the R templates read these
+- [ ] **Front (face) camera features**: built on the existing front camera recording.
+      Per-frame face detection after unloading (face present, head pose, distance from the
+      screen, looking at the phone or away), a coverage report per step in `quality.json`,
+      face-based exclusion flags in the export, and face blurring / anonymised exports for
+      sharing
+- [ ] **Image AOIs for face and body**: automatic AOIs on every post image (face, hair,
+      upper body, waist / stomach, legs, whole body) from local face, pose and
+      segmentation models, written as AOI files the researcher reviews and edits (in
+      LabelMe, or the AOI drawing tool below); the same AOI names on original and edited
+      versions so they compare directly
+- [ ] **Gaze heatmaps**: fixation heatmaps over each post image, per participant and pooled
+      by condition (e.g. retouched vs original, labelled vs not), with AOI outlines drawn on
+      top; difference maps between conditions; PNGs plus an HTML report per study
+- [ ] **Desktop app review**: go back over the study builder and loader with fresh eyes
+      (how a new researcher makes and loads an experiment, what is confusing or missing)
+      and fold in the export, AOI and heatmap features above
+- [ ] *Later:* **Facial expression analysis** of the front camera video (expressions / action
+      units over time, aligned to the posts on screen), once the face camera features are in
 - [ ] More tests and docs, macOS/Linux setup
 - [x] **Experiment builder**: a form that walks you through the study's decisions
       (factors, procedure, feed, logging) and writes `study.yaml` and CSV skeletons for you
@@ -937,12 +966,7 @@ Roughly in order:
         shown unless asked for, error messages that say what to do
   - [ ] **Safety nets**: undo, autosave, and a saved copy of the study each time it is
         loaded onto a phone, so you can always see and restore what participants ran
-  - [ ] **One-click tidy data export**: combine every session of a study into tables ready
-        for Excel, SPSS or R: one row per participant x post (group, the post's conditions,
-        time on screen, likes, comment opens, ratings, recognition answers, and later gaze
-        dwell per AOI and time to first fixation) and one row per participant
-        (questionnaire answers, group, session length, quality flags for exclusions); the
-        R templates read these files
+  - [ ] **One-click tidy data export**: see **Clean data export** above
   - [ ] **Short guides**: a printable "running a session" sheet and short screen
         recordings of the main tasks (design a study, add content, load a phone, unload data)
 - [ ] **Different phones and screen sizes**: run and test on other Android phones (Samsung,
@@ -959,7 +983,8 @@ Roughly in order:
 - [ ] *Stretch:* **AOI drawing tool**: open each critical image and draw rectangles or
       polygons over the regions (face, waist, ...), name them, and the app writes the AOI
       file with the right image size, optionally with a local **Segment Anything (SAM)**
-      assist that proposes a region's outline. Until then, draw AOIs in LabelMe
+      assist that proposes a region's outline; also the place to review the automatic face
+      and body AOIs. Until then, draw AOIs in LabelMe
 - [ ] *Stretch:* **generated content**: draft comments and account usernames automatically,
       optionally based on what each post's image shows, written into `comments.csv` /
       `accounts.csv` for the researcher to review and edit before compiling

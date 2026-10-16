@@ -84,6 +84,23 @@ Test report (summary, method, charts plain vs smart, tables, Tests, screenshots;
 5. Retire the laptop display calibration (`socialeyes calibrate-display`, `display_calibration` step)
    once fixed settings are confirmed.
 
+## Without the glasses (added 16 Oct)
+
+The glasses are away for now, so work goes in this order (full descriptions in the README roadmap):
+
+1. **Tags in the real UI** (step 2 above) and a screenshot test of every screen with and
+   without the tags.
+2. **Clean data export**: by session, by item (participant x post), by condition, with a codebook.
+3. **Front (face) camera features**: face presence, head pose, distance, looking away; quality
+   report and exclusion flags; blurred exports.
+4. **Image AOIs for face and body**, made automatically and reviewed by the researcher.
+5. **Gaze heatmaps** per image, pooled by condition, with difference maps.
+6. **Desktop app review** (making and loading experiments).
+7. Later: **facial expression analysis** of the front camera video.
+
+Steps 3–5 above (settings test etc.) wait for the glasses; step 1 (rerun older analyses) can
+be slotted in any time.
+
 ## Loose ends
 
 - Results posted to Linear (CAM-220, CAM-165, CAM-210, CAM-219, CAM-162); statuses not changed yet.
