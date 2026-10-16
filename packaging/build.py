@@ -122,7 +122,11 @@ def main() -> None:
          "--add-data", f"{stage / 'app'}{sep}app",
          "--add-binary", f"{stage / 'adb'}{sep}adb",
          "--collect-submodules", "socialeyes",
-         *[a for m in ("matplotlib", "scipy", "tkinter", "IPython", "pytest") for a in ("--exclude-module", m)],
+         # the face analysis: MediaPipe's own model graphs and libraries, and its face model
+         "--collect-all", "mediapipe",
+         "--add-data", f"{ROOT / 'python' / 'src' / 'socialeyes' / 'face' / 'models'}{sep}socialeyes/face/models",
+         # matplotlib stays: MediaPipe imports it
+         *[a for m in ("scipy", "tkinter", "IPython", "pytest", "jax", "jaxlib") for a in ("--exclude-module", m)],
          ROOT / "packaging" / "launch.py"],
         env={**os.environ, "PYTHONNOUSERSITE": "1"})  # only the toolchain's packages, never the user's own
     folder = OUT / "pyinstaller" / "SocialEyes"

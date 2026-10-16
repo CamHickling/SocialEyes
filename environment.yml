@@ -36,4 +36,12 @@ dependencies:
       - pupil-labs-realtime-api==1.9.0  # Companion's scene video for socialeyes calibrate-display
       - pywebview>=5  # the desktop app (socialeyes app)
       - pyinstaller>=6  # packaging the desktop app (packaging/build.py)
+      # MediaPipe's own dependencies for the face analysis (socialeyes face). MediaPipe itself is
+      # installed with --no-deps by setup-toolchain.ps1: its declared dependencies would add a
+      # second OpenCV (opencv-contrib-python 5) on top of the one above, and JAX, neither needed.
+      - absl-py
+      - attrs
+      - flatbuffers
+      - sounddevice
+      - protobuf>=4.25.3,<5
       - -e ./python

@@ -140,6 +140,7 @@ for mixed models in R.
 | Session log format (touches, scrolling, interactions, quality events) | ✅ | `docs/EVENT_LOG.md` (version 1) |
 | Session analysis: gestures, time on screen, touch→AOI, finger occlusion, quality checks | ✅ | `python/src/socialeyes/session/` (tested on simulated sessions) |
 | Tables for analysis: by session, by item, by condition, with a codebook (`socialeyes export`, Data tab) | ✅ | `python/src/socialeyes/session/export.py` |
+| Face camera analysis: face present, head pose, distance, looking away, expression scores, blurred copies (`socialeyes face`) | ✅ | `python/src/socialeyes/face/` |
 | Experiment builder: guided form that writes study.yaml and CSV skeletons | ✅ | `builder/index.html` (open in a browser) |
 | Desktop app (Windows): Design tab edits study folders in place and runs the compiler's checks; Phone tab loads studies onto the phone; Data tab unloads sessions with a register; Studies tab lists studies with their status; Content tab lists the files each study still needs; edits that would break collected data need a new version; Windows installer (`packaging/build.py`, about 66 MB) | ✅ | `socialeyes app` (`python/src/socialeyes/desktop/`) |
 | CSV format reference | ✅ | `docs/STUDY_DESIGN.md` (version 1) |
@@ -529,6 +530,30 @@ stay on the same drive as the sessions. Files are UTF-8 with a byte-order mark, 
 needs for accents. Each session is analysed with the exact build it ran, and a session that
 can't be read is listed and skipped. Gaze columns (dwell per AOI, time to first fixation)
 join `by_item` when the gaze pipeline maps fixations to AOIs.
+
+### Face camera analysis
+
+For studies that record the front camera (`logging.front_camera`), one command analyses a
+session's face video on the computer (MediaPipe's face landmarker, about as long as the video):
+
+```powershell
+socialeyes face data/my_study/P001/<session> --blur
+```
+
+| file | contents |
+|---|---|
+| `face.csv` | one row per video frame: faces found, head turn / tilt / roll (degrees), distance from the phone (mm, from the iris size and the camera's focal length), eye position, blink score, looking at the phone (1) or away (0), the face's box |
+| `face_expressions.csv` | MediaPipe's 52 expression scores per frame (smile, brow raise, jaw open, ...) for facial-expression analysis |
+| `face_summary.json` | per recorded step: share of frames with a face, with more than one face, looking at the phone; median distance and head pose; warnings (face visible less than 80% of a step, someone else in view, looked away more than 20%) |
+| `camera_blurred/` | with `--blur`: copies of the video for sharing, the face replaced by a smooth smear of its colours (frames without a detected face smeared whole). Hair outside the face, clothes and the room stay visible |
+
+"Looking away" is judged against each participant's own usual head pose and eye position
+during the feed: the head turned more than 20° or the eyes well off-centre, for at least a
+quarter of a second (blinks don't count). `socialeyes export` (and **Make tables**) analyses
+any face videos not analysed yet and adds `face_present`, `face_multiple`, `looking_at_phone`,
+`face_distance_cm` and `face_warnings` to `by_session.csv`; `--no-faces` skips the analysis.
+Checked against a recording of known actions (`studies/face_test`): the phone put down, held
+close (18 cm) and at arm's length (48 cm), the head turned away, a hand over the mouth.
 
 To put the participant's gaze on the screen, give the matching Neon recording
 (the native folder copied off the phone) and the session. The session needs
@@ -936,7 +961,7 @@ Roughly in order:
       dwell per AOI, time to first fixation) and **by condition** (one row per participant x
       condition cell, averaged over posts); a codebook describing every column; a one-click
       button in the desktop app's Data tab and `socialeyes export`; the R templates read these
-- [ ] **Front (face) camera features**: built on the existing front camera recording.
+- [x] **Front (face) camera features** (`socialeyes face`): built on the existing front camera recording.
       Per-frame face detection after unloading (face present, head pose, distance from the
       screen, looking at the phone or away), a coverage report per step in `quality.json`,
       face-based exclusion flags in the export, and face blurring / anonymised exports for

@@ -107,7 +107,9 @@ wrote them.
 recording the front camera) gives the resolution
 and frame rate actually achieved, which can differ from what was requested, the
 camera's timestamp source (see Front camera) and the sensor orientation in degrees
-(the MP4s carry it as a rotation flag, so players show them upright).
+(the MP4s carry it as a rotation flag, so players show them upright), and, when the camera
+reports them, the lens's focal length `focal_mm` and `focal_px`, the focal length in pixels
+of the recorded frames (for the face's distance from the phone).
 
 `sync_patch` is the sync patch's screen rectangle `[left, top, right, bottom]`
 (absent when the patch is disabled).
@@ -354,6 +356,11 @@ was covered.
 | `touch_targets.csv` | every touch sample mapped to post, element, image pixel and AOI |
 | `occlusion.csv` | periods when a finger rested on an image, and which AOIs it probably covered |
 | `interactions.csv` | the feed interaction events, one row each |
+
+`socialeyes face <session> [--blur]` analyses the front camera video: `face.csv` (per frame:
+faces, head pose, distance, eye position, blink, looking at the phone), `face_expressions.csv`
+(52 expression scores per frame), `face_summary.json` (per step, with warnings) and with
+`--blur` copies of the video with the face smeared; see the README (Face camera analysis).
 
 `socialeyes export <study>` combines every session of a study into `by_session.csv`,
 `by_item.csv` (session x post), `by_condition.csv` (session x cell) and `codebook.csv`; see

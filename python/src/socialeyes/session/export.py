@@ -97,6 +97,14 @@ _ITEM = [
     ("profile_tapped", "The account's name or picture was tapped", "1 = yes, 0 = no"),
     ("image_taps", "Single taps on the image that did nothing else", "count"),
 ]
+_FACE = [  # only in studies that record the front camera; from `socialeyes face`, over the feed step
+    ("face_present", "Share of the feed's front camera frames with a face", "0-1"),
+    ("face_multiple", "Share of the feed's frames with more than one face (someone else in view)", "0-1"),
+    ("looking_at_phone", "Share of the feed's frames with a face where the participant looked at the phone, "
+                         "against their own typical head pose and eye position", "0-1"),
+    ("face_distance_cm", "Median distance from the face to the phone during the feed, from the iris size", "cm"),
+    ("face_warnings", "The face analysis's warnings, joined by ;", ""),
+]
 _CONDITION = [
     ("cell", "Within-subjects cell (filler: all filler posts)", ""),
     ("n_posts", "Posts of this cell in the participant's feed", "count"),
@@ -117,11 +125,15 @@ class ExportResult:
 
 def export_study(study_dir: Path | str, data_dir: Path | str, out_dir: Path | str,
                  build_for: Optional[Callable[[Path], Optional[Path]]] = None,
-                 progress: Callable[[str], None] = lambda s: None) -> ExportResult:
+                 progress: Callable[[str], None] = lambda s: None,
+                 analysis_dir: Optional[Path | str] = None, faces: bool = True) -> ExportResult:
     """Writes the tables for every session under ``data_dir`` (<participant>/<session>/) to ``out_dir``.
 
     ``build_for(session folder)`` returns the compiled package the session ran, or None for the
-    study as it compiles now; its plans give each participant's feed and trials.
+    study as it compiles now; its plans give each participant's feed and trials. With
+    ``analysis_dir`` (<participant>/<session>/ inside), sessions with front camera video get their
+    face summary from there; with ``faces`` the ones not analysed yet are analysed first (slow:
+    about real time).
     """
     r = ExportResult(out_dir=str(out_dir))
     data = Path(data_dir)
@@ -148,7 +160,8 @@ def export_study(study_dir: Path | str, data_dir: Path | str, out_dir: Path | st
                 key = str(build)
                 if key not in studies:
                     studies[key] = json.loads((build / "study.json").read_text(encoding="utf-8"))
-                srow, irows = _session_tables(folder, build, studies[key], reg)
+                face = _face_summary(folder, analysis_dir, faces, progress) if analysis_dir else None
+                srow, irows = _session_tables(folder, build, studies[key], reg, face)
             except Exception as e:  # one bad session never stops the export
                 r.skipped.append((str(folder), str(e)))
                 continue
@@ -181,7 +194,40 @@ def export_study(study_dir: Path | str, data_dir: Path | str, out_dir: Path | st
 # ---------------------------------------------------------------- one session
 
 
-def _session_tables(folder: Path, build: Path, manifest: dict, reg: dict) -> tuple[dict, list[dict]]:
+def _face_summary(folder: Path, analysis_dir: Path | str, run: bool, progress: Callable[[str], None]) -> Optional[dict]:
+    """The session's face_summary.json from `socialeyes face`; analysed now if missing and ``run``."""
+    if not (folder / "camera_frames.csv").is_file():
+        return None
+    out = Path(analysis_dir) / folder.parent.name / folder.name
+    path = out / "face_summary.json"
+    if not path.is_file() and run:
+        from ..face.analyze import analyze_faces, write_face
+
+        progress(f"Analysing the face video of {folder.parent.name} ({folder.name}); this takes about as long as the video…")
+        write_face(analyze_faces(folder), out)
+    return json.loads(path.read_text(encoding="utf-8")) if path.is_file() else None
+
+
+def _face_columns(study: dict, face: Optional[dict]) -> dict:
+    """by_session's face columns, over the feed step (blank when the face video wasn't analysed)."""
+    feed = next((st["id"] for st in study["procedure"] if st["type"] == "feed"), None)
+    st = ((face or {}).get("steps") or {}).get(feed) or {}
+    dist = st.get("distance_mm_median")
+    return {
+        "face_present": st.get("face_share"),
+        "face_multiple": st.get("multi_face_share"),
+        "looking_at_phone": st.get("looking_share"),
+        "face_distance_cm": None if dist is None else round(dist / 10, 1),
+        "face_warnings": "; ".join((face or {}).get("warnings", [])) if face else None,
+    }
+
+
+def _front_camera(study: dict) -> bool:
+    return bool(((study.get("logging") or {}).get("front_camera") or {}).get("enabled"))
+
+
+def _session_tables(folder: Path, build: Path, manifest: dict, reg: dict,
+                    face: Optional[dict] = None) -> tuple[dict, list[dict]]:
     s = load_session(folder)
     plan = json.loads((build / "plans" / f"{s.participant_id}.json").read_text(encoding="utf-8"))
     res = analyze_session(folder, build)
@@ -293,6 +339,8 @@ def _session_tables(folder: Path, build: Path, manifest: dict, reg: dict) -> tup
     }
     srow.update(_questionnaires(resp, study))
     srow.update(recog["session"])
+    if _front_camera(study):
+        srow.update(_face_columns(study, face))
     return srow, items
 
 
@@ -310,7 +358,7 @@ def _ids(s: Session, plan: dict, study: dict) -> dict:
 
 def factor_col(name: str) -> str:
     """A factor's column: its name, or <name>_level if that is one of the fixed columns."""
-    fixed = {c for c, _, _ in _ID + _SESSION + _ITEM + _CONDITION}
+    fixed = {c for c, _, _ in _ID + _SESSION + _ITEM + _CONDITION + _FACE}
     return f"{name}_level" if name in fixed else name
 
 
@@ -426,6 +474,8 @@ def _columns(manifest: dict) -> dict[str, list[str]]:
     item_cols = [c for c, _, _ in _ITEM]
     by_item = ids + item_cols[:4] + within + item_cols[4:] + rating + recog_item
     by_session = ids + [c for c, _, _ in _SESSION] + [c for c, _, _ in _questionnaire_columns(study)] + recog_session
+    if _front_camera(study):
+        by_session += [c for c, _, _ in _FACE]
     return {"by_session": by_session, "by_item": by_item, "between": between, "within": within, "ids": ids}
 
 
@@ -471,7 +521,7 @@ def _by_condition(items: pd.DataFrame, cols: dict) -> pd.DataFrame:
 
 def _write_codebook(path: Path, manifest: dict, tables: dict[str, pd.DataFrame]) -> None:
     study = manifest["study"]
-    desc: dict[str, tuple[str, str]] = {c: (d, v) for c, d, v in _ID + _SESSION + _ITEM + _CONDITION}
+    desc: dict[str, tuple[str, str]] = {c: (d, v) for c, d, v in _ID + _SESSION + _ITEM + _CONDITION + _FACE}
     for f in study["factors"]:
         desc[factor_col(f["name"])] = (f"{f['design'].capitalize()}-subjects factor {f['name']}",
                                        ", ".join(map(str, f["levels"])))
@@ -521,7 +571,7 @@ def _item_values(it: dict) -> str:
 
 
 def export(study_dir: Path | str, data_dir: Path | str | None = None, out_dir: Path | str | None = None,
-           progress: Callable[[str], None] = lambda s: None) -> ExportResult:
+           progress: Callable[[str], None] = lambda s: None, faces: bool = True) -> ExportResult:
     """export_study with the study's folders from the settings (data folder, <data folder>/export)
     and each session's own build where it was kept at load time."""
     from .. import settings
@@ -530,7 +580,8 @@ def export(study_dir: Path | str, data_dir: Path | str | None = None, out_dir: P
     sid = study_id_of(study_dir)
     data = Path(data_dir) if data_dir else settings.data_dir(sid)
     out = Path(out_dir) if out_dir else (data / "export" if data_dir else settings.export_dir(sid))
-    return export_study(study_dir, data, out, build_for=snapshot_or_none(sid), progress=progress)
+    return export_study(study_dir, data, out, build_for=snapshot_or_none(sid), progress=progress,
+                        analysis_dir=settings.analysis_dir(sid), faces=faces)
 
 
 def snapshot_or_none(study_id: str) -> Callable[[Path], Optional[Path]]:

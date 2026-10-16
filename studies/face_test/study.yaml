@@ -1,0 +1,75 @@
+# Front camera test recording for the face analysis (face present, head pose, distance, looking
+# away; blurred copies). Run by the researcher on themselves, no glasses needed. The feed lasts
+# up to 2.5 minutes; the instructions say what to do during it so the video has every case.
+# Analyse with:  socialeyes face data/face_test/<participant>/<session>
+# Posts are copied from studies/example.
+id: face_test
+title: Front camera test recording (face analysis)
+version: 1
+seed: 20251001                 # change it and every plan changes; never change it mid-study
+
+platform:
+  name: Pictogram              # never use a real platform's name or logo
+  theme: light
+  participant_handle: you      # name the participant's own comments appear under
+
+labels:
+  edited:
+    text: "This image has been digitally altered"
+    style: banner
+
+factors:
+  - name: edit
+    design: within
+    levels: [original, retouched]
+    sets:
+      image_version: "{level}"           # picks the image whose version is original/retouched
+  - name: label
+    design: within
+    levels: [none, edited]
+    sets:
+      label: {none: null, edited: edited}
+  - name: comments
+    design: between
+    levels: [neutral, appearance]
+    # applies_to: all would also switch the comments of filler posts; every
+    # filler would then need a neutral and an appearance comment set.
+    applies_to: critical
+    sets:
+      comment_variant: "{level}"
+
+feed:
+  order: shuffle
+  lead_in_fillers: 2
+  max_run_same_cell: 2
+  min_fillers_between_critical: 1
+  done_button_after_s: 90
+  time_limit_s: 150
+  allow_likes: true
+  allow_comment_typing: true   # participants can comment and reply (text and draft edits are logged)
+
+logging:                       # besides gaze; see docs/EVENT_LOG.md
+  touches: true                # raw touch points
+  sensors: false               # accelerometer / gyroscope
+  screen_recording: false      # pilots only: Android asks permission every session
+  front_camera:                # face video for expression analysis; add a camera_check
+    enabled: true              # step before the recorded steps
+    resolution: 720p
+    fps: 30
+    steps: [feed]
+
+
+neon:
+  auto_record: false           # no glasses for this test
+
+procedure:
+  - {id: welcome, type: instructions, title: Face camera test,
+     text: "The front camera records your face during the feed. While you scroll, please:\n\n1. Browse normally for about 30 seconds.\n2. Look away from the phone (to the side, then up) for a few seconds, three or four times.\n3. Bring the phone close to your face (about 20 cm), then hold it at arm's length, then back to normal.\n4. Tilt and turn your head a little while still looking at the screen.\n5. Cover your face with your hand for a few seconds.\n6. Put the phone down flat on the table for a few seconds, then pick it up again.\n\nTap I'm done when it appears (after 90 seconds)."}
+  - {id: camcheck, type: camera_check}
+  - {id: feed, type: feed}
+  - {id: end, type: end, text: "Thank you!"}
+
+participants:
+  n_plans: 8
+  id_prefix: F
+  id_digits: 2

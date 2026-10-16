@@ -41,6 +41,9 @@ if (-not $SkipConda) {
     conda env create -p $EnvDir -f (Join-Path $Root 'environment.yml')
   }
   if ($LASTEXITCODE -ne 0) { throw "conda env create/update failed" }
+  # Face analysis (socialeyes face). --no-deps: see environment.yml.
+  & (Join-Path $EnvDir 'python.exe') -m pip install --no-deps 'mediapipe==0.10.14'
+  if ($LASTEXITCODE -ne 0) { throw "installing mediapipe failed" }
 }
 
 if (-not $SkipAndroid) {

@@ -49,6 +49,27 @@ private class FrontCameraInfo(val id: String, val chars: CameraCharacteristics) 
     val realtime: Boolean = chars.get(CameraCharacteristics.SENSOR_INFO_TIMESTAMP_SOURCE) ==
         CameraCharacteristics.SENSOR_INFO_TIMESTAMP_SOURCE_REALTIME
 
+    /**
+     * Focal length in pixels of a recording `width` px wide (the whole active array, scaled), for
+     * the face's distance from the phone: the lens calibration if the camera reports one, else
+     * the focal length over the sensor's physical width. Null if the camera reports neither.
+     */
+    fun focalPx(width: Int): Double? {
+        val active = chars.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE) ?: return null
+        val scale = width.toDouble() / active.width()
+        chars.get(CameraCharacteristics.LENS_INTRINSIC_CALIBRATION)?.let { k ->
+            if (k.size >= 2 && k[0] > 0f) return k[0] * scale
+        }
+        val focalMm = chars.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS)?.firstOrNull() ?: return null
+        val physical = chars.get(CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE) ?: return null
+        val pixels = chars.get(CameraCharacteristics.SENSOR_INFO_PIXEL_ARRAY_SIZE) ?: return null
+        if (physical.width <= 0f) return null
+        val pxPerMm = pixels.width / physical.width
+        return focalMm * pxPerMm * scale
+    }
+
+    val focalMm: Float? = chars.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS)?.firstOrNull()
+
     companion object {
         fun find(manager: CameraManager): FrontCameraInfo? = manager.cameraIdList
             .map { FrontCameraInfo(it, manager.getCameraCharacteristics(it)) }
@@ -148,6 +169,8 @@ class FrontCameraRecorder(context: Context, private val dir: File, private val l
                 put("fps", fpsRange.upper)
                 put("timestamp_source", if (cam.realtime) "realtime" else "unknown")
                 put("orientation", cam.orientation)
+                cam.focalMm?.let { put("focal_mm", it) }
+                cam.focalPx(size.width)?.let { put("focal_px", Math.round(it * 10) / 10.0) }
             })
             manager.openCamera(cam.id, object : CameraDevice.StateCallback() {
                 override fun onOpened(d: CameraDevice) {

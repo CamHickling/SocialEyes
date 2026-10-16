@@ -117,6 +117,37 @@ def cmd_session(args) -> int:
     return 0
 
 
+def cmd_face(args) -> int:
+    from .face.analyze import analyze_faces, write_face
+    from .session.analyze import default_out_dir
+    from .session.io import SessionFormatError
+
+    def progress(n, total):
+        if n % 500 == 0:
+            print(f"  frame {n} of {total}", flush=True)
+
+    try:
+        r = analyze_faces(args.session, progress=progress)
+    except (SessionFormatError, ValueError, FileNotFoundError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    out = Path(args.out) if args.out else default_out_dir(args.session, r.summary, _study_id(args.session))
+    write_face(r, out)
+    for step, st in r.summary["steps"].items():
+        looking = "" if st["looking_share"] is None else f", looking at the phone {100 * st['looking_share']:.0f}%"
+        dist = "" if st["distance_mm_median"] is None else f", {st['distance_mm_median'] / 10:.0f} cm away"
+        print(f"  {step}: face in {100 * st['face_share']:.0f}% of {st['frames']} frames{looking}{dist}")
+    for w in r.summary["warnings"]:
+        print(f"warning: {w}", file=sys.stderr)
+    if args.blur:
+        from .face.blur import blur_session
+
+        files = blur_session(args.session, r.frames, out / "camera_blurred", progress=progress)
+        print(f"  blurred copies: {len(files)} file(s) in {out / 'camera_blurred'}")
+    print(f"Wrote {out}")
+    return 0
+
+
 def cmd_gaze(args) -> int:
     from .gaze.mapping import map_gaze, summary
     from .gaze.neon import NeonFormatError, read_recording
@@ -300,7 +331,8 @@ def cmd_export(args) -> int:
     from .session.export import export
 
     try:
-        r = export(args.study, data_dir=args.data, out_dir=args.out, progress=lambda s: print(s, flush=True))
+        r = export(args.study, data_dir=args.data, out_dir=args.out, progress=lambda s: print(s, flush=True),
+                   faces=not args.no_faces)
     except ValueError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
@@ -379,6 +411,12 @@ def main(argv: list[str] | None = None) -> int:
                    help="AOIs this close to a touch count as covered by the finger (default 8)")
     s.set_defaults(func=cmd_session)
 
+    fc = sub.add_parser("face", help="analyse the front camera video: face present, head pose, distance, looking away")
+    fc.add_argument("session", help="session folder (with camera/front_*.mp4)")
+    fc.add_argument("-o", "--out", help="output folder (default: analysis_out/<study>/<participant>/<session>)")
+    fc.add_argument("--blur", action="store_true", help="also write copies of the video with the face blurred")
+    fc.set_defaults(func=cmd_face)
+
     g = sub.add_parser("gaze", help="track the phone in a Neon recording and map gaze onto the screen")
     g.add_argument("neon", help="Neon recording folder (native format, copied off the phone)")
     g.add_argument("session", help="the matching session folder written by the app")
@@ -432,6 +470,8 @@ def main(argv: list[str] | None = None) -> int:
     ex.add_argument("study", help="study folder (or its study.yaml)")
     ex.add_argument("--data", help="the sessions' folder (default: the study's data folder, see: socialeyes folders)")
     ex.add_argument("-o", "--out", help="output folder (default: export/ in the data folder)")
+    ex.add_argument("--no-faces", action="store_true",
+                    help="don't analyse front camera videos that haven't been analysed yet (their face columns stay blank)")
     ex.set_defaults(func=cmd_export)
 
     fo = sub.add_parser("folders", help="show or set where this computer keeps a study's data and second copy")

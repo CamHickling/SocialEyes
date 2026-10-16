@@ -96,8 +96,11 @@ The glasses are away for now, so work goes in this order (full descriptions in t
    icons while "I'm done" shows. Not yet in the experiment builder.
 2. ~~**Clean data export**~~: done 16 Oct (`socialeyes export`, Data tab **Make tables**). Gaze
    columns join by_item once gaze is mapped to AOIs.
-3. **Front (face) camera features**: face presence, head pose, distance, looking away; quality
-   report and exclusion flags; blurred exports.
+3. ~~**Front (face) camera features**~~: done 16 Oct (`socialeyes face`, MediaPipe 0.10.14
+   installed with --no-deps; face columns in by_session). Checked on a recording of known
+   actions (studies/face_test, data/face_test/F01). Not yet tested: looking up / down at the lap
+   (pitch-only look-aways), other people in view, other phones' cameras. Installer not rebuilt
+   with MediaPipe yet.
 4. **Image AOIs for face and body**, made automatically and reviewed by the researcher.
 5. **Gaze heatmaps** per image, pooled by condition, with difference maps.
 6. **Desktop app review** (making and loading experiments).

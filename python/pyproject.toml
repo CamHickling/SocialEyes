@@ -21,12 +21,19 @@ dependencies = [
 [project.optional-dependencies]
 test = ["pytest>=8"]
 desktop = ["pywebview>=5"]
+# socialeyes face. Install with --no-deps (pip install --no-deps mediapipe==0.10.14) plus
+# absl-py, attrs, flatbuffers, sounddevice and protobuf<5: MediaPipe's declared dependencies
+# bring a second OpenCV and JAX.
+face = ["mediapipe==0.10.14"]
 
 [project.scripts]
 socialeyes = "socialeyes.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"socialeyes.face" = ["models/*.task"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
