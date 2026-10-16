@@ -103,7 +103,10 @@ def _landmarker():
         output_face_blendshapes=True,
         output_facial_transformation_matrixes=True,
     )
-    return mp, vision.FaceLandmarker.create_from_options(opts)
+    from .model_files import quiet_native_stderr
+
+    with quiet_native_stderr():
+        return mp, vision.FaceLandmarker.create_from_options(opts)
 
 
 def head_angles(m: np.ndarray) -> tuple[float, float, float]:

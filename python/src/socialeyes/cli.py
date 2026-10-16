@@ -148,6 +148,32 @@ def cmd_face(args) -> int:
     return 0
 
 
+def cmd_aois(args) -> int:
+    from . import settings
+    from .face.body_aois import study_aois
+    from .phone.unload import study_id_of
+
+    try:
+        review = settings.analysis_dir(study_id_of(args.study)) / "aoi_review"
+        r = study_aois(args.study, all_images=args.all, overwrite=args.overwrite, review_dir=review,
+                       progress=lambda s: print(s, flush=True))
+    except (ValueError, FileNotFoundError, RuntimeError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    for img, aoi in r.written:
+        print(f"  wrote {aoi}")
+    if r.kept:
+        print(f"  kept {len(r.kept)} existing AOI file(s) (--overwrite replaces them)")
+    for img, why in r.empty:
+        print(f"  no AOIs for {img}: {why}")
+    for res in r.images:
+        for n in res.notes:
+            if res.aois:
+                print(f"  check {res.image}: {n}")
+    print(f"Review them: {r.review}")
+    return 0
+
+
 def cmd_gaze(args) -> int:
     from .gaze.mapping import map_gaze, summary
     from .gaze.neon import NeonFormatError, read_recording
@@ -416,6 +442,12 @@ def main(argv: list[str] | None = None) -> int:
     fc.add_argument("-o", "--out", help="output folder (default: analysis_out/<study>/<participant>/<session>)")
     fc.add_argument("--blur", action="store_true", help="also write copies of the video with the face blurred")
     fc.set_defaults(func=cmd_face)
+
+    ao = sub.add_parser("aois", help="draw face and body AOIs on the study's post images automatically")
+    ao.add_argument("study", help="study folder (or its study.yaml)")
+    ao.add_argument("--all", action="store_true", help="every image in images.csv, not only the critical posts'")
+    ao.add_argument("--overwrite", action="store_true", help="replace AOI files that exist already")
+    ao.set_defaults(func=cmd_aois)
 
     g = sub.add_parser("gaze", help="track the phone in a Neon recording and map gaze onto the screen")
     g.add_argument("neon", help="Neon recording folder (native format, copied off the phone)")

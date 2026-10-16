@@ -101,7 +101,9 @@ The glasses are away for now, so work goes in this order (full descriptions in t
    actions (studies/face_test, data/face_test/F01). Not yet tested: looking up / down at the lap
    (pitch-only look-aways), other people in view, other phones' cameras. Installer not rebuilt
    with MediaPipe yet.
-4. **Image AOIs for face and body**, made automatically and reviewed by the researcher.
+4. ~~**Image AOIs for face and body**~~: done 16 Oct (`socialeyes aois`, LabelMe files + review
+   page). Tested on three openly licensed photos (bending, standing, face hidden) and a head and
+   shoulders frame, not on a real study's images yet. Not in the desktop app yet.
 5. **Gaze heatmaps** per image, pooled by condition, with difference maps.
 6. **Desktop app review** (making and loading experiments).
 7. Later: **facial expression analysis** of the front camera video.

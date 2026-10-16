@@ -141,6 +141,7 @@ for mixed models in R.
 | Session analysis: gestures, time on screen, touch→AOI, finger occlusion, quality checks | ✅ | `python/src/socialeyes/session/` (tested on simulated sessions) |
 | Tables for analysis: by session, by item, by condition, with a codebook (`socialeyes export`, Data tab) | ✅ | `python/src/socialeyes/session/export.py` |
 | Face camera analysis: face present, head pose, distance, looking away, expression scores, blurred copies (`socialeyes face`) | ✅ | `python/src/socialeyes/face/` |
+| Automatic face and body AOIs on post images, with a review page (`socialeyes aois`) | ✅ | `python/src/socialeyes/face/body_aois.py` |
 | Experiment builder: guided form that writes study.yaml and CSV skeletons | ✅ | `builder/index.html` (open in a browser) |
 | Desktop app (Windows): Design tab edits study folders in place and runs the compiler's checks; Phone tab loads studies onto the phone; Data tab unloads sessions with a register; Studies tab lists studies with their status; Content tab lists the files each study still needs; edits that would break collected data need a new version; Windows installer (`packaging/build.py`, about 66 MB) | ✅ | `socialeyes app` (`python/src/socialeyes/desktop/`) |
 | CSV format reference | ✅ | `docs/STUDY_DESIGN.md` (version 1) |
@@ -591,6 +592,24 @@ AOIs are polygons or rectangles in the **image's own pixel coordinates**, so
 they don't depend on screen size or scroll position. Draw them once per image
 version.
 
+**Automatically, then check them.** For images of people, SocialEyes can draw face and body
+AOIs for you (on this computer; the images are not uploaded):
+
+```powershell
+socialeyes aois studies/my_study
+```
+
+For each image of a critical post (`--all`: every image) it writes `aois/<image>.json`, in
+LabelMe's format, with `face`, `hair`, `upper_body` (neck, chest, shoulders), `waist`
+(stomach, waist, hips), `legs` and `body` (the rest of the person), in that order. The bands
+are cut across the torso's own axis, so they follow a bending or leaning body; arms count in
+whichever band they are in. Existing AOI files are kept (`--overwrite` replaces them), and an
+image where no person is found gets none. It also writes a review page
+(`analysis_out/<study>/aoi_review/index.html`) with every image and its AOIs drawn on, and
+notes on what to check: a face found only by skin colour, several people, shoulders or hips
+hard to see. Correct the ones that are off in LabelMe (Option A below). It uses three MediaPipe
+models; the pose and segmentation models (25 MB) are downloaded the first time.
+
 **Option A: LabelMe (recommended).** [LabelMe](https://github.com/wkentaro/labelme)
 is a free annotation tool (`pip install labelme`). Open each image, draw
 polygons or rectangles, and give each one a name such as `face`, `waist` or
@@ -966,7 +985,7 @@ Roughly in order:
       screen, looking at the phone or away), a coverage report per step in `quality.json`,
       face-based exclusion flags in the export, and face blurring / anonymised exports for
       sharing
-- [ ] **Image AOIs for face and body**: automatic AOIs on every post image (face, hair,
+- [x] **Image AOIs for face and body** (`socialeyes aois`): automatic AOIs on every post image (face, hair,
       upper body, waist / stomach, legs, whole body) from local face, pose and
       segmentation models, written as AOI files the researcher reviews and edits (in
       LabelMe, or the AOI drawing tool below); the same AOI names on original and edited

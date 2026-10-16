@@ -112,6 +112,12 @@ def main() -> None:
         shutil.copy2(platform_tools / f, stage / "adb" / f)
     icon = make_icon(stage / "socialeyes.ico")
 
+    step("Fetching the face and body models")
+    sys.path.insert(0, str(ROOT / "python" / "src"))
+    from socialeyes.face.model_files import MODELS, ensure
+    for name in MODELS:
+        ensure(name)
+
     step("Bundling Python and the socialeyes package (PyInstaller)")
     sep = ";"
     run([sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--windowed", "--name", "SocialEyes",

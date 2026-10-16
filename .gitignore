@@ -33,3 +33,7 @@ android/keystore.properties
 
 # Desktop app installer builds (packaging/build.py)
 packaging/out/
+
+# Downloaded on first use (socialeyes.face.models.ensure); the face landmarker is committed
+python/src/socialeyes/face/models/pose_landmarker_full.task
+python/src/socialeyes/face/models/selfie_multiclass_256x256.tflite
