@@ -362,6 +362,10 @@ faces, head pose, distance, eye position, blink, looking at the phone), `face_ex
 (52 expression scores per frame), `face_summary.json` (per step, with warnings) and with
 `--blur` copies of the video with the face smeared; see the README (Face camera analysis).
 
+`socialeyes gaze <neon> <session>` writes `screen_tracking.csv`, `gaze_screen.csv` and
+`fixations.csv` (Neon's fixations on the screen, the post image under them in image pixels, and
+their AOI); `socialeyes heatmaps <study>` pools them into heatmaps per image and condition.
+
 `socialeyes export <study>` combines every session of a study into `by_session.csv`,
 `by_item.csv` (session x post), `by_condition.csv` (session x cell) and `codebook.csv`; see
 the README (Tables for analysis).

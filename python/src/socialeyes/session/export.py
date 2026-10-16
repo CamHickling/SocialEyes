@@ -161,7 +161,9 @@ def export_study(study_dir: Path | str, data_dir: Path | str, out_dir: Path | st
                 if key not in studies:
                     studies[key] = json.loads((build / "study.json").read_text(encoding="utf-8"))
                 face = _face_summary(folder, analysis_dir, faces, progress) if analysis_dir else None
-                srow, irows = _session_tables(folder, build, studies[key], reg, face)
+                fx = analysis_dir and Path(analysis_dir) / folder.parent.name / folder.name / "fixations.csv"
+                fixations = pd.read_csv(fx) if fx and fx.is_file() else None
+                srow, irows = _session_tables(folder, build, studies[key], reg, face, fixations, aoi_names(build))
             except Exception as e:  # one bad session never stops the export
                 r.skipped.append((str(folder), str(e)))
                 continue
@@ -170,13 +172,16 @@ def export_study(study_dir: Path | str, data_dir: Path | str, out_dir: Path | st
         # the columns come from the study as it compiles now (or the sessions' own build)
         try:
             manifest = json.loads((compiled() / "study.json").read_text(encoding="utf-8"))
+            names = aoi_names(compiled())
         except Exception:
             if not studies:
                 raise
             manifest = next(iter(studies.values()))
+            names = sorted({k[len("gaze_"):-len("_ms")] for row in items for k in row
+                            if k.startswith("gaze_") and k.endswith("_ms") and k != "gaze_image_ms"})
         out = Path(out_dir)
         out.mkdir(parents=True, exist_ok=True)
-        tables = _frames(manifest, sessions, items)
+        tables = _frames(manifest, sessions, items, names)
         for name, df in tables.items():
             path = out / f"{name}.csv"
             df.to_csv(path, index=False, encoding="utf-8-sig", lineterminator="\n")
@@ -226,8 +231,41 @@ def _front_camera(study: dict) -> bool:
     return bool(((study.get("logging") or {}).get("front_camera") or {}).get("enabled"))
 
 
+def aoi_names(build: Path) -> list[str]:
+    """Every AOI name in the study's AOI files, in order of first appearance."""
+    manifest = json.loads((build / "study.json").read_text(encoding="utf-8"))
+    names: list[str] = []
+    for img in manifest["images"].values():
+        if img.get("aoi"):
+            for a in json.loads((build / img["aoi"]).read_text(encoding="utf-8"))["aois"]:
+                if a["name"] not in names:
+                    names.append(a["name"])
+    return names
+
+
+def gaze_columns(names: list[str]) -> list[str]:
+    return ["gaze_fixations", "gaze_image_ms"] + [c for n in names for c in (f"gaze_{n}_ms", f"gaze_{n}_first_s")]
+
+
+def _gaze(fixations: Optional[pd.DataFrame], post_id: str, first_seen_ns, names: list[str]) -> dict:
+    """A post's gaze columns from fixations.csv (blank when the session has none)."""
+    if fixations is None:
+        return {}
+    f = fixations[(fixations["post_id"] == post_id) & (fixations["image_id"].fillna("") != "")]
+    out = {"gaze_fixations": len(f), "gaze_image_ms": round(float(f["duration_ms"].sum()), 1)}
+    for n in names:
+        g = f[f["aoi"].fillna("") == n]
+        out[f"gaze_{n}_ms"] = round(float(g["duration_ms"].sum()), 1)
+        first = g["t_start_ns"].min() if len(g) else None
+        out[f"gaze_{n}_first_s"] = (round((first - first_seen_ns) / 1e9, 3)
+                                    if first is not None and first_seen_ns is not None and first_seen_ns == first_seen_ns
+                                    else None)
+    return out
+
+
 def _session_tables(folder: Path, build: Path, manifest: dict, reg: dict,
-                    face: Optional[dict] = None) -> tuple[dict, list[dict]]:
+                    face: Optional[dict] = None, fixations: Optional[pd.DataFrame] = None,
+                    names: Optional[list[str]] = None) -> tuple[dict, list[dict]]:
     s = load_session(folder)
     plan = json.loads((build / "plans" / f"{s.participant_id}.json").read_text(encoding="utf-8"))
     res = analyze_session(folder, build)
@@ -298,6 +336,7 @@ def _session_tables(folder: Path, build: Path, manifest: dict, reg: dict,
         }
         row.update(ratings.get(pid, {}))
         row.update(recog["items"].get(pid, {}))
+        row.update(_gaze(fixations, pid, first_ns, names or []))
         items.append(row)
 
     steps = s.step_windows()
@@ -459,7 +498,7 @@ def _recognition(resp: pd.DataFrame, plan: dict, study: dict) -> dict:
 # ---------------------------------------------------------------- tables
 
 
-def _columns(manifest: dict) -> dict[str, list[str]]:
+def _columns(manifest: dict, names: Optional[list[str]] = None) -> dict[str, list[str]]:
     """Every table's columns in order, for this study."""
     study = manifest["study"]
     between = [factor_col(f["name"]) for f in study["factors"] if f["design"] == "between"]
@@ -472,15 +511,16 @@ def _columns(manifest: dict) -> dict[str, list[str]]:
         recog_item += [f"{pre}_{k}_{m}" for k in ("old", "alt") for m in ("response", "correct", "confidence", "rt_ms")]
         recog_session += [f"{pre}_hit_rate", f"{pre}_fa_alternate", f"{pre}_fa_foil"]
     item_cols = [c for c, _, _ in _ITEM]
-    by_item = ids + item_cols[:4] + within + item_cols[4:] + rating + recog_item
+    by_item = ids + item_cols[:4] + within + item_cols[4:] + rating + recog_item + gaze_columns(names or [])
     by_session = ids + [c for c, _, _ in _SESSION] + [c for c, _, _ in _questionnaire_columns(study)] + recog_session
     if _front_camera(study):
         by_session += [c for c, _, _ in _FACE]
     return {"by_session": by_session, "by_item": by_item, "between": between, "within": within, "ids": ids}
 
 
-def _frames(manifest: dict, sessions: list[dict], items: list[dict]) -> dict[str, pd.DataFrame]:
-    cols = _columns(manifest)
+def _frames(manifest: dict, sessions: list[dict], items: list[dict],
+            names: Optional[list[str]] = None) -> dict[str, pd.DataFrame]:
+    cols = _columns(manifest, names)
     by_session = pd.DataFrame(sessions).reindex(columns=cols["by_session"])
     by_item = pd.DataFrame(items).reindex(columns=cols["by_item"])
     return {"by_session": by_session, "by_item": by_item, "by_condition": _by_condition(by_item, cols)}
@@ -522,6 +562,16 @@ def _by_condition(items: pd.DataFrame, cols: dict) -> pd.DataFrame:
 def _write_codebook(path: Path, manifest: dict, tables: dict[str, pd.DataFrame]) -> None:
     study = manifest["study"]
     desc: dict[str, tuple[str, str]] = {c: (d, v) for c, d, v in _ID + _SESSION + _ITEM + _CONDITION + _FACE}
+    desc["gaze_fixations"] = ("Fixations on the post's image (from socialeyes gaze; blank: no eye tracking)", "count")
+    desc["gaze_image_ms"] = ("Time fixating the post's image", "milliseconds")
+    for c in tables["by_item"].columns:
+        if c.startswith("gaze_") and c.endswith("_first_s"):
+            n = c[len("gaze_"):-len("_first_s")]
+            desc[c] = (f"Time from the post first coming on screen to the first fixation in AOI {n} "
+                       "(blank: never fixated)", "seconds")
+        elif c.startswith("gaze_") and c.endswith("_ms") and c not in desc:
+            n = c[len("gaze_"):-len("_ms")]
+            desc[c] = (f"Time fixating AOI {n} of the post's image", "milliseconds")
     for f in study["factors"]:
         desc[factor_col(f["name"])] = (f"{f['design'].capitalize()}-subjects factor {f['name']}",
                                        ", ".join(map(str, f["levels"])))

@@ -198,6 +198,42 @@ def cmd_gaze(args) -> int:
     print(f"{session.participant_id}: phone tracked in {len(tracking)} scene frames")
     print(summary(tracking, gaze).to_string(index=False))
     print(f"Wrote {out / 'screen_tracking.csv'} and {out / 'gaze_screen.csv'}")
+
+    # Neon's fixations, on the screen and on the post images (with the build the session ran)
+    from .gaze.fixations import map_fixations, read_fixations
+
+    build = Path(args.build) if args.build else None
+    if build is None and session.package_sha256 and _study_id(args.session):
+        from . import settings
+
+        snap = settings.build_snapshot(_study_id(args.session), session.package_sha256)
+        build = snap if (snap / "study.json").is_file() else None
+    try:
+        fix = map_fixations(read_fixations(args.neon), gaze, session, clock_offset_ns(session), build)
+    except FileNotFoundError as e:
+        print(f"warning: no fixations: {e}", file=sys.stderr)
+        return 0
+    fix.to_csv(out / "fixations.csv", index=False)
+    on_img = fix[fix["image_id"].fillna("") != ""]
+    print(f"{len(fix)} fixations, {len(on_img)} on post images" + ("" if build else
+          " (no build found: give --build to place them on the images)"))
+    print(f"Wrote {out / 'fixations.csv'}")
+    return 0
+
+
+def cmd_heatmaps(args) -> int:
+    from .gaze.heatmap import study_heatmaps
+
+    try:
+        r, skipped = study_heatmaps(args.study, data_dir=args.data, out_dir=args.out, by=args.by,
+                                    sigma_deg=args.sigma_deg, progress=lambda s: print(s, flush=True))
+    except (ValueError, FileNotFoundError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    for folder, why in skipped:
+        print(f"  skipped {folder}: {why}")
+    print(f"{len(r.images)} image(s) with fixations")
+    print(f"Wrote {r.page}")
     return 0
 
 
@@ -453,9 +489,19 @@ def main(argv: list[str] | None = None) -> int:
     g.add_argument("neon", help="Neon recording folder (native format, copied off the phone)")
     g.add_argument("session", help="the matching session folder written by the app")
     g.add_argument("-o", "--out", help="output folder (default: analysis_out/<study>/<participant>/<session>)")
+    g.add_argument("--build", help="the compiled study the session ran, to place fixations on the images "
+                                   "(default: the copy kept when it was loaded)")
     g.add_argument("--max-bridge-ms", type=float, default=300.0,
                    help="longest stretch without readable tags bridged by optical flow (default 300)")
     g.set_defaults(func=cmd_gaze)
+
+    hm = sub.add_parser("heatmaps", help="fixation heatmaps over the post images, pooled by condition")
+    hm.add_argument("study", help="study folder (or its study.yaml)")
+    hm.add_argument("--by", default="cell", help="pool by the within-subjects cell (default) or one factor's levels, e.g. label")
+    hm.add_argument("--sigma-deg", type=float, default=1.0, help="each fixation's spread, degrees of visual angle (default 1)")
+    hm.add_argument("--data", help="the sessions' folder (default: the study's data folder)")
+    hm.add_argument("-o", "--out", help="output folder (default: analysis_out/<study>/heatmaps)")
+    hm.set_defaults(func=cmd_heatmaps)
 
     d = sub.add_parser("calibrate-display", help="during a display_calibration step: find the screen brightness and "
                                                  "Neon scene exposure at which the tags read best")

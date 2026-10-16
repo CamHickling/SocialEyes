@@ -142,6 +142,7 @@ for mixed models in R.
 | Tables for analysis: by session, by item, by condition, with a codebook (`socialeyes export`, Data tab) | ✅ | `python/src/socialeyes/session/export.py` |
 | Face camera analysis: face present, head pose, distance, looking away, expression scores, blurred copies (`socialeyes face`) | ✅ | `python/src/socialeyes/face/` |
 | Automatic face and body AOIs on post images, with a review page (`socialeyes aois`) | ✅ | `python/src/socialeyes/face/body_aois.py` |
+| Fixations on post images and AOIs (`socialeyes gaze`), heatmaps by condition with difference maps (`socialeyes heatmaps`), gaze columns in the export | ✅ (tested on one real session and simulated fixations) | `python/src/socialeyes/gaze/fixations.py`, `heatmap.py` |
 | Experiment builder: guided form that writes study.yaml and CSV skeletons | ✅ | `builder/index.html` (open in a browser) |
 | Desktop app (Windows): Design tab edits study folders in place and runs the compiler's checks; Phone tab loads studies onto the phone; Data tab unloads sessions with a register; Studies tab lists studies with their status; Content tab lists the files each study still needs; edits that would break collected data need a new version; Windows installer (`packaging/build.py`, about 66 MB) | ✅ | `socialeyes app` (`python/src/socialeyes/desktop/`) |
 | CSV format reference | ✅ | `docs/STUDY_DESIGN.md` (version 1) |
@@ -526,11 +527,15 @@ socialeyes export studies/my_study
 | `by_condition.csv` | session x within-subjects cell (and one row for the fillers) | the means of `by_item`'s measures over the cell's posts (shares for yes/no columns) |
 | `codebook.csv` | column | what each column means and its values, with the question wording from the study |
 
+With eye tracking, `by_item.csv` also gets the post's fixations, the time fixating its image and,
+for every AOI name in the study, the time fixating that AOI (`gaze_<aoi>_ms`) and the time from
+the post coming on screen to the first fixation in it (`gaze_<aoi>_first_s`), from each
+session's `fixations.csv`.
+
 They go to `export/` in the study's data folder (`--data` and `-o` choose others), so they
 stay on the same drive as the sessions. Files are UTF-8 with a byte-order mark, which Excel
 needs for accents. Each session is analysed with the exact build it ran, and a session that
-can't be read is listed and skipped. Gaze columns (dwell per AOI, time to first fixation)
-join `by_item` when the gaze pipeline maps fixations to AOIs.
+can't be read is listed and skipped. Gaze columns are blank for sessions without `fixations.csv`.
 
 ### Face camera analysis
 
@@ -571,7 +576,24 @@ optical flow for up to 300 ms (`--max-bridge-ms`). It writes
 empty, tags used, reprojection error, distance to the phone, and the scene ->
 screen mapping) and `gaze_screen.csv` (every gaze sample in screen pixels, on
 the session's clock, with `on_screen`), and prints the share of frames and gaze
-samples mapped per step.
+samples mapped per step. It also writes `fixations.csv`: every fixation Neon Companion
+detected, placed on the screen and, through the feed's scroll position at each moment, on the
+post image under it (in the image's own pixels) with the AOI it fell in. It places them with the
+exact build the session ran (kept when the study was loaded; `--build` gives another).
+
+**Heatmaps.** Once sessions have `fixations.csv`:
+
+```powershell
+socialeyes heatmaps studies/my_study            # or --by label: pool by one factor's levels
+```
+
+draws, for every post image, where participants' fixations fell (each fixation a Gaussian of
+1° of visual angle, `--sigma-deg`, weighted by its duration; each participant counts equally),
+pooled by condition, with the AOIs outlined; where an image was seen in two groups, a
+difference map (red: more looking in the first group, blue: in the second). The size of 1° on
+the image uses the participant's distance from the phone from their face video when it has been
+analysed, else 35 cm. It writes PNGs, `index.html` and `aoi_dwell.csv` (per image, group and
+AOI: the mean share of looking time) to `analysis_out/<study>/heatmaps/`.
 
 How the phone is tracked is still being settled (tag size and placement, and
 whether screen content and motion sensors should fill the gaps between tag
@@ -973,7 +995,7 @@ Roughly in order:
       10 mm tags drawn in the feed's own top bar and tab bar (`markers.on_screen` layout
       `bars`), kept visible over stories, reels and the comments sheet, plus a screenshot
       test of every screen with and without tags to check the app still looks like Instagram
-- [x] **Clean data export** (gaze columns to come with the gaze pipeline): tidy tables ready for Excel, SPSS or R, in three shapes:
+- [x] **Clean data export** (with gaze columns from `fixations.csv`): tidy tables ready for Excel, SPSS or R, in three shapes:
       **by session** (one row per participant: group, questionnaire answers, session length,
       quality flags for exclusions), **by item** (one row per participant x post: the post's
       conditions, time on screen, likes, comment opens, ratings, recognition answers, gaze
@@ -990,7 +1012,7 @@ Roughly in order:
       segmentation models, written as AOI files the researcher reviews and edits (in
       LabelMe, or the AOI drawing tool below); the same AOI names on original and edited
       versions so they compare directly
-- [ ] **Gaze heatmaps**: fixation heatmaps over each post image, per participant and pooled
+- [x] **Gaze heatmaps** (`socialeyes heatmaps`): fixation heatmaps over each post image, per participant and pooled
       by condition (e.g. retouched vs original, labelled vs not), with AOI outlines drawn on
       top; difference maps between conditions; PNGs plus an HTML report per study
 - [ ] **Desktop app review**: go back over the study builder and loader with fresh eyes
