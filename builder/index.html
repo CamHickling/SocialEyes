@@ -260,7 +260,7 @@ const Core = (() => {
       ],
     },
     display: { viewing_distance_cm: 35, brightness: null },
-    markers: { on_screen: { steps: [], size_mm: 12 } },
+    markers: { on_screen: { steps: [], layout: "bands", family: "tag36h11", size_mm: 12 } },
     participants: { n_plans: 120, id_prefix: "P", id_digits: 3 },
   };
 
@@ -360,6 +360,8 @@ const Core = (() => {
     },
     logging: { touches: true, sensors: false, screen_recording: false, front_camera: { enabled: false } },
     neon: { required: false },
+    // the screen tags chosen with the Neon (CAM-165): in the feed's own top bar and tab bar
+    markers: { on_screen: { steps: ["feed"], layout: "bars", family: "tag16h5", size_mm: 10 } },
     procedure: [
       { id: "welcome", type: "instructions", title: "Welcome", text: "Please browse the feed as you normally would." },
       { id: "cal1", type: "marker_calibration", duration_s: 4 },
@@ -544,6 +546,14 @@ const Core = (() => {
     const feedAt = steps.findIndex((s) => s.type === "feed");
     const onScreen = get(study, "markers.on_screen.steps") || [];
     for (const sid of onScreen) if (!ids.includes(sid)) add("error", "recording", `On-screen tags: there is no step "${sid}".`);
+    if (get(study, "markers.on_screen.layout") === "bars") {
+      const other = onScreen.filter((sid) => { const s = steps.find((x) => x.id === sid); return s && s.type !== "feed"; });
+      if (other.length) add("tip", "recording", `On-screen tags: only the feed has bars to put tags in; ${other.join(", ")} will show them in bands above and below.`);
+    }
+    const fam = get(study, "markers.on_screen.family") || "tag36h11";
+    const nIds = { tag36h11: 587, tag25h9: 35, tag16h5: 30 }[fam];
+    if (onScreen.length && nIds && (get(study, "markers.screen_tag_ids") || [0, 1, 2, 3]).some((t) => t >= nIds))
+      add("error", "recording", `On-screen tags: ${fam} only has tags 0 to ${nIds - 1}; change the screen tag ids.`);
     if (feedAt >= 0 && !onScreen.includes(steps[feedAt].id) && !steps.slice(0, feedAt).some((s) => s.type === "marker_calibration"))
       add("tip", "procedure", "Add a marker calibration before the feed: the gaze mapping uses it (and one after the feed to check for drift).");
     const dcal = steps.findIndex((s) => s.type === "display_calibration");
@@ -1375,7 +1385,13 @@ if (typeof module !== "undefined") module.exports = Core;
         <h4>On-screen tags</h4>
         ${help("AprilTags at the top and bottom of the screen during the chosen steps, so the scene camera can find the phone all the time (marker calibrations show their own). Pilot the size with a Tag size check step.")}
         ${stepChecks("tags-step", tagSteps)}
-        ${tagSteps.length ? `<div class="grid">${field({ path: "markers.on_screen.size_mm", label: "Tag size (mm)", kind: "float", min: 4, max: 20 })}</div>` : ""}
+        ${tagSteps.length ? `<div class="grid">
+          <div class="field"><label for="f_tags_layout">Where</label><select id="f_tags_layout" data-action-change="tags-layout" data-key="tags-layout">
+            ${[["bars", "In the feed's top bar and tab bar"], ["bands", "In bands above and below the step"]].map(([v, l]) => `<option value="${v}" ${val("markers.on_screen.layout", "bands") === v ? "selected" : ""}>${l}</option>`).join("")}</select>
+            ${help("The bars keep the app looking like Instagram; tested with the Neon at 10 mm (tag16h5). Other steps chosen get bands.")}</div>
+          ${field({ path: "markers.on_screen.family", label: "Tag family", kind: "select", options: [["tag16h5", "tag16h5 (smallest that reads)"], ["tag25h9", "tag25h9"], ["tag36h11", "tag36h11 (most robust)"]] })}
+          ${field({ path: "markers.on_screen.size_mm", label: "Tag size (mm)", kind: "float", min: 4, max: 20 })}
+        </div>` : ""}
       </div>
       <div class="card">
         <h4>Screen and scene camera</h4>
@@ -1394,7 +1410,7 @@ if (typeof module !== "undefined") module.exports = Core;
       </div>`;
     if (ui.advanced) return `<h3>Phone tracking</h3>${html}`;
     ui.hidden.push(
-      { label: "On-screen tags", changed: tagSteps.length > 0 || changed("markers.on_screen.size_mm") },
+      { label: "On-screen tags", changed: tagSteps.length > 0 || changed("markers.on_screen.size_mm") || changed("markers.on_screen.layout") },
       { label: "Screen brightness", changed: changed("display.brightness") },
       { label: "Scene camera exposure", changed: exp != null },
       { label: "Eye tracker checklist", changed: changed("neon.checklist") },
@@ -2253,6 +2269,12 @@ if (typeof module !== "undefined") module.exports = Core;
       const order = S.procedure.map((s) => s.id);
       steps.sort((x, y) => order.indexOf(x) - order.indexOf(y));
       setP(path, steps);
+    } else if (name === "tags-layout") {
+      // each layout with the tags it was tested with: bars 10 mm tag16h5, bands 12 mm tag36h11
+      const preset = el.value === "bars" ? { family: "tag16h5", size_mm: 10 } : { family: "tag36h11", size_mm: 12 };
+      setP("markers.on_screen.layout", el.value);
+      setP("markers.on_screen.family", preset.family);
+      setP("markers.on_screen.size_mm", preset.size_mm);
     } else if (name === "exposure-mode") {
       // schema: manual needs exposure_us; exposure_us and gain only go with manual
       const old = getP("neon.scene_exposure") || {};

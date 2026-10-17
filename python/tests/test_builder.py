@@ -115,6 +115,8 @@ def test_yaml_round_trip_keeps_every_value():
     (lambda s: s["factors"][2]["sets"].__setitem__("image_version", "{level}"), "controlled by both"),
     (lambda s: s.__setitem__("markers", {"on_screen": {"steps": ["nope"]}}), "On-screen tags: there is no step"),
     (lambda s: s.__setitem__("neon", {"scene_exposure": {"mode": "manual"}}), "needs an exposure time"),
+    (lambda s: s.__setitem__("markers", {"screen_tag_ids": [0, 1, 2, 30],
+                                         "on_screen": {"steps": ["feed"], "family": "tag16h5"}}), "only has tags 0 to 29"),
     (lambda s: (s.__setitem__("neon", {"auto_record": False}),
                 s["procedure"].insert(0, {"id": "dcal", "type": "display_calibration"})), "Display calibration sets"),
 ])
@@ -163,3 +165,12 @@ def test_blank_study_has_only_the_baseline_feed():
     assert not s["logging"]["front_camera"]["enabled"] and not s["neon"]["required"]
     assert c["stories"] == 0 and c["reels"] == 0
     assert {st["type"] for st in s["procedure"]} == {"instructions", "marker_calibration", "validation", "feed", "end"}
+
+
+def test_blank_study_has_the_tags_in_the_feeds_bars():
+    s = core("Core.newStudy('blank')")["study"]
+    assert s["markers"]["on_screen"] == {"steps": ["feed"], "layout": "bars", "family": "tag16h5", "size_mm": 10}
+    Study.model_validate(s)
+    s["markers"]["on_screen"]["steps"] = ["val1", "feed"]
+    tips = core("Core.checks(data, null).filter(c => c.level === 'tip').map(c => c.msg)", s)
+    assert any("only the feed has bars" in m and "val1" in m for m in tips), tips

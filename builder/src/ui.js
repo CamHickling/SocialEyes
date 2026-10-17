@@ -491,7 +491,13 @@
         <h4>On-screen tags</h4>
         ${help("AprilTags at the top and bottom of the screen during the chosen steps, so the scene camera can find the phone all the time (marker calibrations show their own). Pilot the size with a Tag size check step.")}
         ${stepChecks("tags-step", tagSteps)}
-        ${tagSteps.length ? `<div class="grid">${field({ path: "markers.on_screen.size_mm", label: "Tag size (mm)", kind: "float", min: 4, max: 20 })}</div>` : ""}
+        ${tagSteps.length ? `<div class="grid">
+          <div class="field"><label for="f_tags_layout">Where</label><select id="f_tags_layout" data-action-change="tags-layout" data-key="tags-layout">
+            ${[["bars", "In the feed's top bar and tab bar"], ["bands", "In bands above and below the step"]].map(([v, l]) => `<option value="${v}" ${val("markers.on_screen.layout", "bands") === v ? "selected" : ""}>${l}</option>`).join("")}</select>
+            ${help("The bars keep the app looking like Instagram; tested with the Neon at 10 mm (tag16h5). Other steps chosen get bands.")}</div>
+          ${field({ path: "markers.on_screen.family", label: "Tag family", kind: "select", options: [["tag16h5", "tag16h5 (smallest that reads)"], ["tag25h9", "tag25h9"], ["tag36h11", "tag36h11 (most robust)"]] })}
+          ${field({ path: "markers.on_screen.size_mm", label: "Tag size (mm)", kind: "float", min: 4, max: 20 })}
+        </div>` : ""}
       </div>
       <div class="card">
         <h4>Screen and scene camera</h4>
@@ -510,7 +516,7 @@
       </div>`;
     if (ui.advanced) return `<h3>Phone tracking</h3>${html}`;
     ui.hidden.push(
-      { label: "On-screen tags", changed: tagSteps.length > 0 || changed("markers.on_screen.size_mm") },
+      { label: "On-screen tags", changed: tagSteps.length > 0 || changed("markers.on_screen.size_mm") || changed("markers.on_screen.layout") },
       { label: "Screen brightness", changed: changed("display.brightness") },
       { label: "Scene camera exposure", changed: exp != null },
       { label: "Eye tracker checklist", changed: changed("neon.checklist") },
@@ -1369,6 +1375,12 @@
       const order = S.procedure.map((s) => s.id);
       steps.sort((x, y) => order.indexOf(x) - order.indexOf(y));
       setP(path, steps);
+    } else if (name === "tags-layout") {
+      // each layout with the tags it was tested with: bars 10 mm tag16h5, bands 12 mm tag36h11
+      const preset = el.value === "bars" ? { family: "tag16h5", size_mm: 10 } : { family: "tag36h11", size_mm: 12 };
+      setP("markers.on_screen.layout", el.value);
+      setP("markers.on_screen.family", preset.family);
+      setP("markers.on_screen.size_mm", preset.size_mm);
     } else if (name === "exposure-mode") {
       // schema: manual needs exposure_us; exposure_us and gain only go with manual
       const old = getP("neon.scene_exposure") || {};

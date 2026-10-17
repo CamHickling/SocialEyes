@@ -29,7 +29,7 @@ const Core = (() => {
       ],
     },
     display: { viewing_distance_cm: 35, brightness: null },
-    markers: { on_screen: { steps: [], size_mm: 12 } },
+    markers: { on_screen: { steps: [], layout: "bands", family: "tag36h11", size_mm: 12 } },
     participants: { n_plans: 120, id_prefix: "P", id_digits: 3 },
   };
 
@@ -129,6 +129,8 @@ const Core = (() => {
     },
     logging: { touches: true, sensors: false, screen_recording: false, front_camera: { enabled: false } },
     neon: { required: false },
+    // the screen tags chosen with the Neon (CAM-165): in the feed's own top bar and tab bar
+    markers: { on_screen: { steps: ["feed"], layout: "bars", family: "tag16h5", size_mm: 10 } },
     procedure: [
       { id: "welcome", type: "instructions", title: "Welcome", text: "Please browse the feed as you normally would." },
       { id: "cal1", type: "marker_calibration", duration_s: 4 },
@@ -313,6 +315,14 @@ const Core = (() => {
     const feedAt = steps.findIndex((s) => s.type === "feed");
     const onScreen = get(study, "markers.on_screen.steps") || [];
     for (const sid of onScreen) if (!ids.includes(sid)) add("error", "recording", `On-screen tags: there is no step "${sid}".`);
+    if (get(study, "markers.on_screen.layout") === "bars") {
+      const other = onScreen.filter((sid) => { const s = steps.find((x) => x.id === sid); return s && s.type !== "feed"; });
+      if (other.length) add("tip", "recording", `On-screen tags: only the feed has bars to put tags in; ${other.join(", ")} will show them in bands above and below.`);
+    }
+    const fam = get(study, "markers.on_screen.family") || "tag36h11";
+    const nIds = { tag36h11: 587, tag25h9: 35, tag16h5: 30 }[fam];
+    if (onScreen.length && nIds && (get(study, "markers.screen_tag_ids") || [0, 1, 2, 3]).some((t) => t >= nIds))
+      add("error", "recording", `On-screen tags: ${fam} only has tags 0 to ${nIds - 1}; change the screen tag ids.`);
     if (feedAt >= 0 && !onScreen.includes(steps[feedAt].id) && !steps.slice(0, feedAt).some((s) => s.type === "marker_calibration"))
       add("tip", "procedure", "Add a marker calibration before the feed: the gaze mapping uses it (and one after the feed to check for drift).");
     const dcal = steps.findIndex((s) => s.type === "display_calibration");
