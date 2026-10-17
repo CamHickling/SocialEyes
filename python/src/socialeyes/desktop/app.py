@@ -158,8 +158,16 @@ class Api:
             phone = {"name": device.model or device.serial, "sessions": len(phone_sessions(adb, sid))}
         except AdbError as e:
             phone = {"error": str(e)}
+        analysis = settings.analysis_dir(sid)
+        videos = [p.parent for p in data.glob("*/*/camera_frames.csv")]
+        analysed = sum((analysis / v.parent.name / v.name / "face_summary.json").is_file() for v in videos)
+        sessions = [p.parent for p in data.glob("*/*/session.json") if not p.parent.parent.name.startswith(".")]
+        gaze = sum((analysis / s.parent.name / s.name / "fixations.csv").is_file() for s in sessions)
+        heatmaps = analysis / "heatmaps" / "index.html"
         return {"study_id": sid, "data_dir": str(data), "second_copy_dir": str(second) if second else None,
-                "register": rows, "phone": phone}
+                "register": rows, "phone": phone,
+                "faces": {"videos": len(videos), "analysed": analysed},
+                "gaze": {"sessions": gaze, "heatmaps": str(heatmaps) if heatmaps.is_file() else None}}
 
     @_reply
     def data_set_folder(self, folder: str, which: str, path: str | None) -> bool:
@@ -184,8 +192,39 @@ class Api:
         return export(folder, progress=self._progress).to_json()
 
     @_reply
+    def data_faces(self, folder: str, blur: bool = False) -> dict:
+        """Analyses the face videos not analysed yet (and makes blurred copies, with ``blur``)."""
+        from ..face.analyze import study_faces
+
+        return study_faces(folder, blur=blur, progress=self._progress)
+
+    @_reply
+    def data_heatmaps(self, folder: str, by: str = "cell") -> dict:
+        """Gaze heatmaps over the post images from every session's fixations.csv."""
+        from ..gaze.heatmap import study_heatmaps
+
+        r, skipped = study_heatmaps(folder, by=by or "cell", progress=self._progress)
+        return {"page": r.page, "images": len(r.images), "skipped": [{"folder": f, "why": w} for f, w in skipped]}
+
+    # ---------------------------------------------------------- Design > Content
+
+    @_reply
+    def aois_draw(self, folder: str, overwrite: bool = False) -> dict:
+        """Face and body AOIs drawn on the critical posts' images (socialeyes aois)."""
+        from .. import settings
+        from ..face.body_aois import study_aois
+        from ..phone.unload import study_id_of
+
+        review = settings.analysis_dir(study_id_of(folder)) / "aoi_review"
+        r = study_aois(folder, overwrite=overwrite, review_dir=review, progress=self._progress)
+        return {"written": [a for _, a in r.written], "kept": len(r.kept),
+                "empty": [{"image": i, "why": w} for i, w in r.empty],
+                "check": [{"image": x.image, "note": n} for x in r.images if x.aois for n in x.notes],
+                "review": r.review}
+
+    @_reply
     def open_path(self, path: str) -> bool:
-        """Shows a folder in Explorer."""
+        """Shows a folder in Explorer, or opens a file (e.g. a report page) with its usual program."""
         import os
         import subprocess
 

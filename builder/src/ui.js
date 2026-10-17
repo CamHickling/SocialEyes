@@ -29,9 +29,10 @@
     // Phone tab: result of the last phone check / load, and the choices on the tab
     phone: { result: null, serial: "", devices: [], updateApp: false, progress: null, error: null },
     // Data tab: the study's folders and register, the phone's sessions, the last unload
-    data: { status: null, unload: null, export: null, error: null },
+    data: { status: null, unload: null, export: null, faces: null, heatmaps: null, blur: false, by: "cell", error: null },
     studies: { list: null, newId: "", error: null },
     files: { result: null, missingOnly: true, error: null },   // the study folder's files (Design > Content)
+    aois: { result: null, overwrite: false, error: null },     // the last automatic AOIs (Design > Content)
   };
 
   /** The open study's pages in the desktop app; Studies (the home page) comes first. */
@@ -741,7 +742,7 @@
 
   window.socialeyesProgress = (text) => {
     ui.phone.progress = text;
-    if (ui.tab === "phone" || ui.tab === "data") render();
+    if (ui.tab === "phone" || ui.tab === "data" || (ui.tab === "design" && ui.section === "content")) render();
   };
 
   // ------------------------------------------------------------ Studies tab (desktop app)
@@ -845,7 +846,39 @@
       rows.push(`<li class="${missing.length ? "error" : "ok"}"><div class="msg"><span class="ic">${missing.length ? "✕" : "✓"}</span><span>${label}: ${all.length - missing.length} of ${all.length}${missing.length
         ? `. Missing ${missing.slice(0, 6).map((i) => `<code>${esc(i.file)}</code>`).join(", ")}${missing.length > 6 ? ` and ${missing.length - 6} more` : ""}` : ""}</span></div></li>`);
     }
-    return html + `<ul class="checks">${rows.join("")}</ul>`;
+    return html + `<ul class="checks">${rows.join("")}</ul>` + autoAois();
+  }
+
+  /** Design > Content: draw face and body AOIs on the critical posts' images (socialeyes aois). */
+  function autoAois() {
+    const A = ui.aois, r = A.result, dis = ui.busy ? "disabled" : "";
+    let html = `<h3>Face and body AOIs</h3>
+      <p class="hint">Draws <i>face</i>, <i>hair</i>, <i>upper_body</i>, <i>waist</i>, <i>legs</i> and <i>body</i> on each critical post's image, on this
+      computer. Check them on the review page and correct any in LabelMe.</p>
+      <div class="row">${btn("aois-draw", ui.busy === "Drawing AOIs…" ? "Drawing…" : "Draw AOIs", "", dis)}
+        <label class="check"><input type="checkbox" id="aois-overwrite" ${A.overwrite ? "checked" : ""}> <span>Replace existing AOI files</span></label></div>
+      ${ui.busy === "Drawing AOIs…" && ui.phone.progress ? `<p class="hint">${esc(ui.phone.progress)}</p>` : ""}`;
+    if (A.error) html += `<p class="error-box">${esc(A.error)}</p>`;
+    if (!r) return html;
+    const parts = [`${r.written.length} AOI file${r.written.length === 1 ? "" : "s"} written`];
+    if (r.kept) parts.push(`${r.kept} existing kept`);
+    if (r.empty.length) parts.push(`no person found in ${r.empty.length} image${r.empty.length === 1 ? "" : "s"}`);
+    html += `<p>${parts.join(", ")}. ${r.review ? btn("open-path:" + r.review, "Open the review page", "link") : ""}</p>`;
+    if (r.check.length) {
+      html += `<ul class="checks">${r.check.slice(0, 8).map((c) => `<li class="warning"><div class="msg"><span class="ic">!</span><span><code>${esc(c.image)}</code>: ${esc(c.note)}</span></div></li>`).join("")}</ul>
+        ${r.check.length > 8 ? `<p class="hint">and ${r.check.length - 8} more on the review page.</p>` : ""}`;
+    }
+    return html;
+  }
+
+  async function aoisDraw() {
+    const A = ui.aois;
+    A.error = null;
+    ui.phone.progress = "Loading the models…";
+    try { A.result = await bridge("aois_draw", "Drawing AOIs…", ui.folder, A.overwrite); }
+    catch (e) { A.error = e.message; }
+    ui.phone.progress = null;
+    await filesRefresh();
   }
 
   async function filesRefresh() {
@@ -892,6 +925,7 @@
         <td title="${esc(r.warnings)}">${esc(r.n_warnings || "0")}</td><td>${esc(r.notes)}</td></tr>`).join("")}
       </tbody></table></div><p class="hint">Hover a warning count to read the warnings. Notes added to <code>sessions.csv</code> in Excel are kept.</p>`
       : `<p class="hint">No sessions yet.</p>`;
+    html += analysisSection(st);
     html += `
       <details class="folders"><summary>Folders</summary>
         <p>Sessions: <span class="folder">${esc(st.data_dir)}</span> ${btn("data-pick:data", "Change…", "link", dis)}</p>
@@ -900,6 +934,53 @@
         <p class="hint">A second copy of every session, e.g. on an encrypted or university drive. Set for this computer only.</p>
       </details>`;
     return html;
+  }
+
+  /** Data: face videos and eye tracking, for studies that have them. */
+  function analysisSection(st) {
+    const D = ui.data, f = st.faces || {}, g = st.gaze || {}, dis = ui.busy ? "disabled" : "";
+    if (!f.videos && !g.sessions) return "";
+    let html = `<h3>Analysis</h3>`;
+    if (f.videos) {
+      const left = f.videos - f.analysed;
+      html += `<div class="row">${btn("data-faces", "Analyse face videos", "", dis || (!left && !D.blur ? "disabled" : ""))}
+        <span class="hint">${f.analysed} of ${f.videos} analysed${left ? ` · about as long as the videos` : ""}</span>
+        <label class="check"><input type="checkbox" id="data-blur" ${D.blur ? "checked" : ""}> <span>Also make blurred copies for sharing</span></label></div>`;
+      const r = D.faces;
+      if (r) html += `<p class="hint">Analysed ${r.analysed}${r.blurred ? `, blurred ${r.blurred}` : ""}${r.skipped.length
+        ? `. Couldn't do ${r.skipped.length}: ${r.skipped.map((x) => esc(`${x.folder.split(/[\\/]/).slice(-2).join("/")} (${x.why})`)).join("; ")}` : ""}. Make tables to add the face columns.</p>`;
+    }
+    if (g.sessions) {
+      const factors = (ui.study && ui.study.factors || []).map((x) => x.name);
+      html += `<div class="row">${btn("data-heatmaps", "Make heatmaps", "", dis)}
+        <label class="hint" for="data-by">by</label>
+        <select id="data-by">${[["cell", "condition"], ...factors.map((n) => [n, n])].map(([v, l]) => `<option value="${esc(v)}" ${D.by === v ? "selected" : ""}>${esc(l)}</option>`).join("")}</select>
+        <span class="hint">${g.sessions} session${g.sessions === 1 ? "" : "s"} with eye tracking</span>
+        ${(D.heatmaps && D.heatmaps.page) || g.heatmaps ? btn("open-path:" + ((D.heatmaps && D.heatmaps.page) || g.heatmaps), "Open heatmaps", "link") : ""}</div>`;
+      const h = D.heatmaps;
+      if (h && h.skipped.length) html += `<p class="hint">Left out ${h.skipped.length} session(s) without fixations.</p>`;
+    }
+    return html + (ui.busy && ui.phone.progress && ["Analysing faces…", "Making heatmaps…"].includes(ui.busy) ? `<p class="hint">${esc(ui.phone.progress)}</p>` : "");
+  }
+
+  async function dataFaces() {
+    const D = ui.data;
+    D.error = null;
+    ui.phone.progress = "Starting…";
+    try { D.faces = await bridge("data_faces", "Analysing faces…", ui.folder, D.blur); }
+    catch (e) { D.error = e.message; }
+    ui.phone.progress = null;
+    await dataRefresh();
+  }
+
+  async function dataHeatmaps() {
+    const D = ui.data;
+    D.error = null;
+    ui.phone.progress = "Starting…";
+    try { D.heatmaps = await bridge("data_heatmaps", "Making heatmaps…", ui.folder, D.by); }
+    catch (e) { D.error = e.message; }
+    ui.phone.progress = null;
+    await dataRefresh();
   }
 
   async function dataRefresh() {
@@ -1043,8 +1124,9 @@
     ui.sessions = 0;
     ui.protect = null;
     ui.phone.result = null;
-    ui.data = { status: null, unload: null, export: null, error: null };
+    ui.data = { status: null, unload: null, export: null, faces: null, heatmaps: null, blur: false, by: "cell", error: null };
     ui.files.result = null;
+    ui.aois = { result: null, overwrite: false, error: null };
     if (!opened) C.syncFoils(ui.study, ui.content);
     ui.section = "basics";
     render();
@@ -1249,6 +1331,9 @@
       case "data-refresh": dataRefresh(); return;
       case "data-unload": dataUnload(); return;
       case "data-export": dataExport(); return;
+      case "data-faces": dataFaces(); return;
+      case "data-heatmaps": dataHeatmaps(); return;
+      case "aois-draw": aoisDraw(); return;
       case "data-open-export": bridge("open_path", null, ui.data.export.out_dir).catch((e) => { ui.data.error = e.message; render(); }); return;
       case "data-pick": dataPick(args[0]); return;
       case "data-clear": case "data-open": dataAct(name, args[0]); return;
@@ -1339,6 +1424,9 @@
     const el = e.target;
     if (el.id === "open-file" && el.files && el.files[0]) { openFile(el.files[0]); return; }
     if (el.id === "phone-update") { ui.phone.updateApp = el.checked; return; }
+    if (el.id === "aois-overwrite") { ui.aois.overwrite = el.checked; return; }
+    if (el.id === "data-blur") { ui.data.blur = el.checked; render(); return; }
+    if (el.id === "data-by") { ui.data.by = el.value; return; }
     if (el.id === "advanced-toggle") { setAdvanced(el.checked); render(); return; }
     if (el.id === "files-missing") { ui.files.missingOnly = el.checked; render(); return; }
     if (el.id === "phone-serial") { ui.phone.serial = el.value; ui.phone.result = null; phoneCheck(); return; }

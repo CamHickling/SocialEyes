@@ -282,3 +282,40 @@ def write_face(result: FaceResult, out_dir: Path | str) -> Path:
     result.expressions.to_csv(out / "face_expressions.csv", index=False)
     (out / "face_summary.json").write_text(json.dumps(result.summary, indent=2) + "\n", encoding="utf-8")
     return out
+
+
+def study_faces(study_dir: Path | str, blur: bool = False,
+                progress: Callable[[str], None] = lambda s: None) -> dict:
+    """Analyses the face video of every session of a study that has one and hasn't been analysed
+    (with ``blur``: also makes the blurred copies still missing). Results go where `socialeyes face`
+    puts them: <analysis folder>/<participant>/<session>/. Returns counts and the sessions skipped."""
+    from .. import settings
+    from ..phone.unload import study_id_of
+
+    sid = study_id_of(study_dir)
+    data, root = settings.data_dir(sid), settings.analysis_dir(sid)
+    folders = sorted(p.parent for p in data.glob("*/*/camera_frames.csv") if not p.parent.parent.name.startswith("."))
+    out = {"videos": len(folders), "analysed": 0, "blurred": 0, "skipped": []}
+    for n, folder in enumerate(folders, 1):
+        res = root / folder.parent.name / folder.name
+        done = (res / "face_summary.json").is_file()
+        need_blur = blur and not (res / "camera_blurred").is_dir()
+        if done and not need_blur:
+            continue
+        progress(f"Face video {n} of {len(folders)}: {folder.parent.name}; about as long as the video…")
+        try:
+            if done:
+                frames = pd.read_csv(res / "face.csv")
+            else:
+                r = analyze_faces(folder)
+                write_face(r, res)
+                frames = r.frames
+                out["analysed"] += 1
+            if need_blur:
+                from .blur import blur_session
+
+                blur_session(folder, frames, res / "camera_blurred")
+                out["blurred"] += 1
+        except Exception as e:  # one bad video never stops the others
+            out["skipped"].append({"folder": str(folder), "why": str(e)})
+    return out

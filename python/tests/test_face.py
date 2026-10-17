@@ -170,3 +170,26 @@ def test_blur_leaves_no_detail_in_the_face_box():
     # neighbouring pixels differ by at most a few levels: a smooth smear, nothing to recognise
     assert np.abs(np.diff(box, axis=0)).max() <= 3 and np.abs(np.diff(box, axis=1)).max() <= 3
     assert np.abs(np.diff(img[:50].astype(float), axis=1)).mean() > 50  # outside the box: untouched
+
+
+def test_study_faces_and_the_app_calls(camera_session, tmp_path, monkeypatch):
+    from socialeyes import settings
+    from socialeyes.desktop.app import Api
+
+    study, build, session, root = camera_session
+    monkeypatch.setenv("SOCIALEYES_SETTINGS", str(tmp_path / "settings.json"))
+    monkeypatch.setattr(settings, "workspace", lambda: tmp_path / "ws")
+    settings.set_study("example", data_dir=str(root / "data"))
+    api = Api()
+    st = api.data_status(str(study))["ok"]
+    assert st["faces"] == {"videos": 1, "analysed": 0} and st["gaze"]["sessions"] == 0
+    r = api.data_faces(str(study), True)["ok"]
+    assert r == {"videos": 1, "analysed": 1, "blurred": 1, "skipped": []}
+    res = tmp_path / "ws" / "analysis_out" / "example" / "P001" / "P001-sim"
+    assert (res / "face_summary.json").is_file() and (res / "camera_blurred").is_dir()
+    assert api.data_status(str(study))["ok"]["faces"]["analysed"] == 1
+    assert api.data_faces(str(study), True)["ok"]["analysed"] == 0  # nothing left to do
+    h = api.data_heatmaps(str(study), "label")["ok"]
+    assert h["images"] == 0 and len(h["skipped"]) == 1 and h["page"].endswith("index.html")
+    a = api.aois_draw(str(study), False)["ok"]
+    assert a["written"] == [] and len(a["empty"]) == 16 and a["review"].endswith("index.html")

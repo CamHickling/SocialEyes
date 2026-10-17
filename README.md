@@ -275,11 +275,14 @@ its name appears in the top bar with its three pages:
   never overwritten. Each save (and **Check study**) also runs the compiler's checks, the
   same as `socialeyes validate`, shown next to the design checks. The **Content** step also
   lists which of the images, avatars, story images, videos and AOI files the CSVs name are in
-  the folder ("61 of 61 files ready").
+  the folder ("61 of 61 files ready"), and **Draw AOIs** draws face and body AOIs on the
+  critical posts' images ([`socialeyes aois`](#defining-areas-of-interest-aois)).
 - **Phone**: checks the phone and loads the study onto it (see [Running the app](#running-the-app)).
 - **Data**: unloads sessions from the phone, lists them, and makes the
   [tables for analysis](#tables-for-analysis); the data and second-copy folders are under
-  **Folders**.
+  **Folders**. Under **Analysis**, for studies that have them: **Analyse face videos** (with
+  blurred copies if ticked; [`socialeyes face`](#face-camera-analysis)) and **Make heatmaps**
+  by condition or by one factor (`socialeyes heatmaps`).
 
 **Studies with data are protected.** Once a study has sessions, saving an edit that would
 change what participants get, or what the analysis relies on, is refused until you save it
