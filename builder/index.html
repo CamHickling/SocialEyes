@@ -178,6 +178,27 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .hero p { margin: 0; color: var(--muted); max-width: 62ch; }
 table.register { border-radius: 12px; overflow: hidden; }
 .card > .check:first-child { margin-top: 0; }
+/* ---------------------------------------------------------- desktop app: header and pages */
+#apptabs { align-items: center; }
+#apptabs button:disabled { opacity: .4; cursor: default; }
+#apptabs .crumb { padding: 6px 10px 6px 14px; margin-left: 4px; border-left: 1px solid var(--line); font-weight: 600; max-width: 32ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#apptabs .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--warn); vertical-align: 2px; }
+#tabpage { max-width: 820px; }
+#tabpage h2 { margin-bottom: 4px; }
+#tabpage .lead { margin-bottom: 12px; }
+#tabpage > .row:first-of-type { margin: 16px 0; }
+#tabpage .table-wrap { margin: 20px 0 6px; }
+table.register.studies td { vertical-align: middle; padding: 10px 12px; }
+table.register td.end { text-align: right; }
+.status { font-size: 13px; padding: 2px 10px; border-radius: 999px; white-space: nowrap; }
+.status.ok { background: var(--ok-soft); color: var(--ok); }
+.status.info { background: var(--tip-soft); color: var(--tip); }
+.status.warning { background: var(--warn-soft); color: var(--warn); }
+.new-study { margin-top: 20px; }
+.new-study input { flex: 0 1 180px; min-width: 120px; }
+details.folders { margin-top: 28px; border-top: 1px solid var(--line); padding-top: 12px; }
+details.folders summary { cursor: pointer; color: var(--muted); font-weight: 600; }
+details.folders p { margin: 8px 0; }
 @media (max-width: 1000px) {
   #nav, #side { top: auto; }
   header #app-sub { display: none; }
@@ -875,7 +896,7 @@ if (typeof module !== "undefined") module.exports = Core;
     // inside the desktop app (socialeyes app) only
     desktop: false,         // the Python bridge is available
     appInfo: null,          // {version, studies_dir}
-    tab: "design",          // app tab: studies, design, content, phone, data
+    tab: "studies",         // app page: studies (home), or the open study's design, phone, data
     folder: null,           // the study folder this study is saved in
     savedYaml: null,        // study.yaml as last saved or opened, to spot unsaved changes
     hadComments: false,     // the opened study.yaml had comments, which saving drops
@@ -886,20 +907,15 @@ if (typeof module !== "undefined") module.exports = Core;
     sessions: 0,            // sessions already collected with this study (from its register)
     protect: null,          // a save refused because it would break them: {reasons, sessions, version}
     // Phone tab: result of the last phone check / load, and the choices on the tab
-    phone: { result: null, folder: null, serial: "", devices: [], updateApp: false, progress: null, error: null },
+    phone: { result: null, serial: "", devices: [], updateApp: false, progress: null, error: null },
     // Data tab: the study's folders and register, the phone's sessions, the last unload
-    data: { status: null, folder: null, unload: null, export: null, error: null },
+    data: { status: null, unload: null, export: null, error: null },
     studies: { list: null, newId: "", error: null },
-    files: { result: null, folder: null, missingOnly: true, error: null },   // Content tab
+    files: { result: null, missingOnly: true, error: null },   // the study folder's files (Design > Content)
   };
 
-  const APP_TABS = [
-    ["studies", "Studies", "A list of your study folders and their status (designing, ready, collecting data, sessions so far), and new studies from blank or from the example. For now, open or start a study in the Design tab."],
-    ["design", "Design", ""],
-    ["content", "Content", "A checklist of every image, avatar, video and AOI file the design needs, found or missing."],
-    ["phone", "Phone", "Check, compile and load a study onto the phone in one step, install or update the app, and check the phone is ready (storage, battery, Do Not Disturb, camera)."],
-    ["data", "Data", "Copy sessions off the phone, check every file arrived intact, delete them from the phone, run the quality checks and keep a register of who took part."],
-  ];
+  /** The open study's pages in the desktop app; Studies (the home page) comes first. */
+  const APP_TABS = [["design", "Design"], ["phone", "Phone"], ["data", "Data"]];
 
   /** Call a method of the desktop app's Python bridge; returns its result or throws its message. */
   async function bridge(name, busy, ...args) {
@@ -1203,7 +1219,8 @@ if (typeof module !== "undefined") module.exports = Core;
         ${rec ? field({ path: "content.foils", label: "Recognition foils", kind: "int", min: 0, help: "Never-shown images for the recognition test." }) : ""}
       </div>
       ${field({ path: "content.comments", label: "Posts have comments (when no factor sets them)", kind: "bool" })}
-      <div class="summary">You'll need <b>${nImages}</b> image${nImages === 1 ? "" : "s"}${nv > 1 ? ` (${nv} versions of each critical post)` : ""}, ${ui.content.accounts} avatar${ui.content.accounts === 1 ? "" : "s"}${ui.content.stories ? `, ${ui.content.stories} story image(s)` : ""}${ui.content.reels ? `, ${ui.content.reels} video(s)` : ""}, and an AOI file for every critical image.</div>`;
+      <div class="summary">You'll need <b>${nImages}</b> image${nImages === 1 ? "" : "s"}${nv > 1 ? ` (${nv} versions of each critical post)` : ""}, ${ui.content.accounts} avatar${ui.content.accounts === 1 ? "" : "s"}${ui.content.stories ? `, ${ui.content.stories} story image(s)` : ""}${ui.content.reels ? `, ${ui.content.reels} video(s)` : ""}, and an AOI file for every critical image.</div>
+      ${ui.desktop ? folderFiles() : ""}`;
   }
 
   function sectionFeed() {
@@ -1477,7 +1494,7 @@ if (typeof module !== "undefined") module.exports = Core;
     const order = { error: 0, warning: 1, tip: 2 };
     list.sort((a, b) => order[a.level] - order[b.level]);
     side.innerHTML = `
-      <h3>${esc(ui.study.title || ui.study.id || "Untitled")}</h3>
+      ${ui.desktop ? "" : `<h3>${esc(ui.study.title || ui.study.id || "Untitled")}</h3>`}
       <p class="design-line">${esc(C.designSummary(ui.study))}</p>
       ${ui.advanced ? `<dl class="stats"><dt>Cells</dt><dd>${C.cells(ui.study)}</dd><dt>Groups</dt><dd>${C.groups(ui.study)}</dd><dt>Block</dt><dd>${C.blockSize(ui.study)}</dd><dt>Steps</dt><dd>${(ui.study.procedure || []).length}</dd></dl>` : ""}
       <h3>Checks</h3>
@@ -1508,11 +1525,16 @@ if (typeof module !== "undefined") module.exports = Core;
   // ------------------------------------------------------------ render
 
   const sectionLabel = (k, label) => (k === "download" && ui.desktop ? "Save" : label);
+  const sections = () => (ui.desktop ? SECTIONS.filter(([k]) => k !== "start") : SECTIONS);
 
-  /** The desktop app's tabs; every tab but Design is a placeholder until it is built. */
+  /**
+   * The desktop app's header and pages: Studies, then, with a study open, its name and its
+   * Design, Phone and Data pages. Returns whether the Design pages (the builder) are showing.
+   */
   function renderApp() {
     const tabs = document.getElementById("apptabs");
     tabs.hidden = !ui.desktop;
+    if (ui.desktop && !ui.study) ui.tab = "studies";
     const onDesign = !ui.desktop || ui.tab === "design";
     document.querySelector(".layout").hidden = !onDesign;
     const page = document.getElementById("tabpage");
@@ -1520,19 +1542,15 @@ if (typeof module !== "undefined") module.exports = Core;
     if (!ui.desktop) return true;
     document.getElementById("app-title").textContent = "SocialEyes";
     document.getElementById("app-sub").hidden = true;
-    tabs.innerHTML = APP_TABS.map(([k, label]) => `<button type="button" data-action="tab:${k}" class="${ui.tab === k ? "on" : ""}">${label}</button>`).join("");
-    if (ui.tab === "phone") {
-      page.innerHTML = renderPhone();
-    } else if (ui.tab === "data") {
-      page.innerHTML = renderData();
-    } else if (ui.tab === "studies") {
-      page.innerHTML = renderStudies();
-    } else if (ui.tab === "content") {
-      page.innerHTML = renderFiles();
-    } else if (!onDesign) {
-      const [, label, text] = APP_TABS.find(([k]) => k === ui.tab);
-      page.innerHTML = `<h2>${label}</h2><p class="lead">${text}</p><p class="hint">Coming in a later version of the desktop app.</p>`;
-    }
+    const tab = (k, label, off) => `<button type="button" data-action="tab:${k}" class="${ui.tab === k ? "on" : ""}" ${off ? `disabled title="${esc(off)}"` : ""}>${label}</button>`;
+    const name = ui.study ? ui.study.title || ui.study.id || "Untitled study" : "";
+    tabs.innerHTML = tab("studies", "Studies") + (ui.study
+      ? `<span class="crumb" title="${esc(ui.folder || "Not saved yet")}">${esc(name)}${unsaved() ? ` <span class="dot" title="Unsaved changes"></span>` : ""}</span>`
+        + APP_TABS.map(([k, label]) => tab(k, label, k !== "design" && !ui.folder ? "Save the study first" : "")).join("")
+      : "");
+    if (ui.tab === "phone") page.innerHTML = renderPhone();
+    else if (ui.tab === "data") page.innerHTML = renderData();
+    else if (ui.tab === "studies") page.innerHTML = renderStudies();
     return onDesign;
   }
 
@@ -1540,17 +1558,10 @@ if (typeof module !== "undefined") module.exports = Core;
 
   const CHECK_CLASS = { block: ["error", "✕"], warn: ["warning", "!"], info: ["info", "→"], ok: ["ok", "✓"] };
 
-  /** The study the Phone tab loads: one chosen on the tab, else the one open in Design. */
-  const phoneFolder = () => ui.phone.folder || ui.folder;
-
   function renderPhone() {
-    const P = ui.phone, r = P.result, folder = phoneFolder();
+    const P = ui.phone, r = P.result;
     const busy = !!ui.busy;
     const blockedNow = r && r.checks.some((c) => c.level === "block");
-    const study = folder
-      ? `<p>Study: <b class="folder">${esc(folder)}</b> ${btn("phone-folder", "Choose another…", "link", busy ? "disabled" : "")}</p>
-         ${folder === ui.folder && unsaved() ? `<p class="hint"><span class="pill">unsaved changes</span> The phone gets the study as saved. ${btn("save", "Save it first", "link", busy ? "disabled" : "")}</p>` : ""}`
-      : `<p>No study chosen. Open one in the Design tab, or ${btn("phone-folder", "choose a study folder…", "link", busy ? "disabled" : "")}</p>`;
     const devices = P.devices.length > 1
       ? `<div class="row"><label for="phone-serial" class="hint">Phone</label><select id="phone-serial">${P.devices.map((d) =>
           `<option value="${esc(d.serial)}" ${d.serial === P.serial ? "selected" : ""}>${esc(d.model || d.serial)} (${esc(d.serial)}${d.state !== "device" ? `, ${esc(d.state)}` : ""})</option>`).join("")}</select></div>` : "";
@@ -1565,20 +1576,18 @@ if (typeof module !== "undefined") module.exports = Core;
       body += `<ol class="steps">${r.steps.map((s) => `<li>${esc(s)}</li>`).join("")}</ol>`;
     }
     if (r && r.loaded) body += `<p class="ok-box">Loaded ${esc(r.study_id)} onto the phone.</p>`;
-    const canLoad = folder && r && r.phone && !blockedNow && !busy;
-    const confirm = folder && r && r.needs_confirmation;   // only warnings stand in the way
-    const loadLabel = confirm ? "Load anyway" : "Load study";
+    const canLoad = r && r.phone && !blockedNow && !busy;
+    const confirm = r && r.needs_confirmation;   // only warnings stand in the way
     return `
       <h2>Phone</h2>
-      <p class="lead">Checks the study and the phone, installs the SocialEyes app if it's missing, and copies
-      the study onto the phone, checking that every file arrived intact.</p>
-      <div class="card">${study}${devices}
-        <div class="row">${btn("phone-check", ui.busy === "Checking the phone…" ? "Checking…" : "Check phone", "", busy ? "disabled" : "")}
-        ${btn("phone-load", loadLabel, "primary", canLoad ? "" : "disabled")}</div>
-        ${r && r.update_available ? `<label class="check"><input type="checkbox" id="phone-update" ${P.updateApp ? "checked" : ""}> <span>Also update the SocialEyes app on the phone (keeps its data)</span></label>` : ""}
-        ${confirm && !r.loaded ? `<p class="hint">Only warnings remain: you can load now and sort them out before the session.</p>` : ""}
-        ${busy && P.progress ? `<p class="hint">${esc(P.progress)}</p>` : ""}
-      </div>
+      <p class="lead">Copies the study onto the phone, installing the SocialEyes app if it's missing.</p>
+      ${unsaved() ? `<p class="hint"><span class="pill">unsaved changes</span> The phone gets the study as saved. ${btn("save", "Save it first", "link", busy ? "disabled" : "")}</p>` : ""}
+      ${devices}
+      <div class="row">${btn("phone-load", confirm ? "Load anyway" : "Load onto phone", "primary", canLoad ? "" : "disabled")}
+        ${btn("phone-check", ui.busy === "Checking the phone…" ? "Checking…" : "Check again", "", busy ? "disabled" : "")}</div>
+      ${r && r.update_available ? `<label class="check"><input type="checkbox" id="phone-update" ${P.updateApp ? "checked" : ""}> <span>Also update the SocialEyes app on the phone (keeps its data)</span></label>` : ""}
+      ${confirm && !r.loaded ? `<p class="hint">Only warnings remain: you can load now and sort them out before the session.</p>` : ""}
+      ${busy && P.progress ? `<p class="hint">${esc(P.progress)}</p>` : ""}
       ${body}`;
   }
 
@@ -1588,7 +1597,7 @@ if (typeof module !== "undefined") module.exports = Core;
     try {
       P.devices = (await bridge("phone_devices", null)) || [];
       if (P.devices.length && !P.devices.some((d) => d.serial === P.serial)) P.serial = P.devices[0].serial;
-      const r = await bridge("phone_check", "Checking the phone…", phoneFolder(), P.devices.length > 1 ? P.serial : null);
+      const r = await bridge("phone_check", "Checking the phone…", ui.folder, P.devices.length > 1 ? P.serial : null);
       if (r.error) { P.error = r.error; P.result = null; } else P.result = r;
     } catch (e) { P.error = e.message; }
     render();
@@ -1599,7 +1608,7 @@ if (typeof module !== "undefined") module.exports = Core;
     P.error = null;
     P.progress = "Starting…";
     try {
-      const r = await bridge("phone_load", "Loading…", phoneFolder(), P.updateApp && r0 && r0.update_available,
+      const r = await bridge("phone_load", "Loading…", ui.folder, P.updateApp && r0 && r0.update_available,
         !!(r0 && r0.needs_confirmation), P.devices.length > 1 ? P.serial : null);
       if (r.error) P.error = r.error;
       // without a phone reading (e.g. unplugged), keep the last check on screen with what was done
@@ -1608,17 +1617,6 @@ if (typeof module !== "undefined") module.exports = Core;
     } catch (e) { P.error = e.message; }
     P.progress = null;
     render();
-  }
-
-  async function phoneChooseFolder() {
-    try {
-      const folder = await bridge("pick_folder", null, phoneFolder() || (ui.appInfo && ui.appInfo.studies_dir));
-      if (!folder) return;
-      ui.phone.folder = folder;
-      ui.phone.result = null;
-    } catch (e) { ui.phone.error = e.message; }
-    render();
-    phoneCheck();
   }
 
   window.socialeyesProgress = (text) => {
@@ -1632,27 +1630,24 @@ if (typeof module !== "undefined") module.exports = Core;
 
   function renderStudies() {
     const S = ui.studies, L = S.list, dis = ui.busy ? "disabled" : "";
-    let html = `
-      <h2>Studies</h2>
-      <p class="lead">Every study in ${L ? `<b class="folder">${esc(L.root)}</b>` : "your studies folder"}.
-      ${L ? btn("open-path:" + L.root, "Open", "link") : ""}${btn("studies-refresh", "Refresh", "link", dis)}</p>`;
+    let html = `<h2>Studies</h2>`;
+    if (ui.desktopError) html += `<p class="error-box">${esc(ui.desktopError)}</p>`;
     if (S.error) html += `<p class="error-box">${esc(S.error)}</p>`;
     if (!L) return html + `<p class="hint">${esc(ui.busy || "Loading…")}</p>`;
-    html += L.studies.length ? `<div class="table-wrap"><table class="register"><thead><tr><th>Study</th><th>Status</th><th>Sessions</th><th></th></tr></thead><tbody>
+    html += L.studies.length ? `<div class="table-wrap"><table class="register studies"><thead><tr><th>Study</th><th>Status</th><th>Sessions</th><th></th></tr></thead><tbody>
       ${L.studies.map((s, i) => `<tr>
         <td><b>${esc(s.title || s.id)}</b><br><span class="hint">${esc(s.id)} · version ${esc(s.version)}</span></td>
-        <td><ul class="checks"><li class="${STATUS[s.status]}"><div class="msg"><span>${esc(s.status)}${s.status === "designing" ? `: ${s.n_errors} problem${s.n_errors === 1 ? "" : "s"}` : ""}</span></div></li></ul></td>
-        <td>${s.n_sessions}${s.last_session ? `<br><span class="hint">last ${esc(s.last_session.replace("T", " ").slice(0, 16))}</span>` : ""}</td>
-        <td>${btn(`study-open:${i}`, "Design", "link", dis)}${btn(`study-goto:${i}:content`, "Content", "link", dis)}${btn(`study-goto:${i}:phone`, "Phone", "link", dis)}${btn(`study-goto:${i}:data`, "Data", "link", dis)}</td>
+        <td><span class="status ${STATUS[s.status]}">${esc(s.status)}${s.status === "designing" ? ` · ${s.n_errors} problem${s.n_errors === 1 ? "" : "s"}` : ""}</span></td>
+        <td>${s.n_sessions || "–"}${s.last_session ? `<br><span class="hint">last ${esc(s.last_session.slice(0, 10))}</span>` : ""}</td>
+        <td class="end">${btn(`study-open:${i}`, "Open", "", dis)}</td>
       </tr>`).join("")}</tbody></table></div>`
       : `<p class="hint">No studies yet.</p>`;
     html += `
-      <h3>New study</h3>
-      <div class="cards">
-        <div class="card"><h3>Blank</h3><p>Design it step by step in the Design tab; saving makes its folder.</p>${btn("studies-new-blank", "Start blank", "primary", dis)}</div>
-        <div class="card"><h3>Copy of the example</h3><p>A complete, working study (placeholder images, AOIs and CSVs) to adapt.</p>
-          <div class="row"><input type="text" id="new-study-id" placeholder="new study id" value="${esc(S.newId)}">${btn("studies-copy", "Copy", "", dis)}</div></div>
-      </div>`;
+      <div class="row new-study">${btn("studies-new-blank", "New study", "primary", dis)}
+        <span class="hint">or copy the example as</span>
+        <input type="text" id="new-study-id" placeholder="study id" value="${esc(S.newId)}">${btn("studies-copy", "Copy", "", dis)}
+        ${btn("open-folder", "Open a folder…", "link", dis)}</div>
+      <p class="hint">${btn("open-path:" + L.root, esc(L.root), "link")} ${btn("studies-refresh", "Refresh", "link", dis)}</p>`;
     return html;
   }
 
@@ -1666,7 +1661,7 @@ if (typeof module !== "undefined") module.exports = Core;
 
   /** Open a study folder in the Design tab (asks first if the current study has unsaved changes). */
   async function openStudyAt(folder) {
-    if (unsaved() && !confirm("The study in the Design tab has unsaved changes. Open another study anyway?")) return false;
+    if (unsaved() && !confirm("The open study has unsaved changes. Open another study anyway?")) return false;
     try {
       const r = await bridge("open_folder", "Opening…", folder);
       const study = parseStudy(r.study.yaml);
@@ -1674,6 +1669,7 @@ if (typeof module !== "undefined") module.exports = Core;
       ui.hadComments = /^\s*#/m.test(r.study.yaml);
       ui.compiler = { ...r.check, at: new Date() };
       ui.sessions = r.sessions || 0;
+      ui.tab = "design";
       return true;
     } catch (e) {
       ui.desktopError = `Couldn't open the study: ${e.message}`;
@@ -1687,14 +1683,12 @@ if (typeof module !== "undefined") module.exports = Core;
     if (name === "study-open") {
       if (await openStudyAt(L.studies[Number(args[0])].folder)) ui.tab = "design";
       render();
-    } else if (name === "study-goto") {
-      const folder = L.studies[Number(args[0])].folder, tab = args[1];
-      if (tab === "phone") { ui.phone.folder = folder; ui.phone.result = null; }
-      if (tab === "data") { ui.data.folder = folder; ui.data.unload = null; }
-      if (tab === "content") ui.files.folder = folder;
-      act(`tab:${tab}`);
+    } else if (name === "study-goto") {   // open it on one of its pages
+      if (!(await openStudyAt(L.studies[Number(args[0])].folder))) return;
+      if (args[1] === "content") { ui.tab = "design"; ui.section = "content"; render(); filesRefresh(); return; }
+      act(`tab:${args[1]}`);
     } else if (name === "studies-new-blank") {
-      if (unsaved() && !confirm("The study in the Design tab has unsaved changes. Start a new one anyway?")) return;
+      if (unsaved() && !confirm("The open study has unsaved changes. Start a new one anyway?")) return;
       ui.tab = "design";
       act("new-blank");
     } else if (name === "studies-copy") {
@@ -1712,92 +1706,59 @@ if (typeof module !== "undefined") module.exports = Core;
   // ------------------------------------------------------------ Content tab (desktop app)
 
   const KINDS = [["image", "Images"], ["aoi", "AOI files (critical posts)"], ["avatar", "Avatars"], ["story", "Story images"], ["video", "Reel videos"]];
-  const filesFolder = () => ui.files.folder || ui.folder;
 
-  function renderFiles() {
-    const F = ui.files, r = F.result, folder = filesFolder(), dis = ui.busy ? "disabled" : "";
-    let html = `
-      <h2>Content</h2>
-      <p class="lead">Every file the study's CSVs point to, and whether it is in the study folder yet. Add files with
-      these names, then refresh. How to make AOI files: README, "Defining areas of interest".</p>
-      <div class="card">${folder
-        ? `<p>Study: <b class="folder">${esc(folder)}</b> ${btn("files-folder", "Choose another…", "link", dis)}${btn("open-path:" + folder, "Open folder", "link")}${btn("files-refresh", "Refresh", "link", dis)}</p>`
-        : `<p>No study chosen. Open one in the Design tab, or ${btn("files-folder", "choose a study folder…", "link", dis)}</p>`}</div>`;
+  /** Design > Content in the desktop app: which of the files the CSVs name are in the study folder. */
+  function folderFiles() {
+    const F = ui.files, r = F.result, dis = ui.busy ? "disabled" : "";
+    let html = `<h3>Files in the study folder</h3>`;
+    if (!ui.folder) return html + `<p class="hint">Save the study, then add its images, avatars and AOI files to its folder.</p>`;
     if (F.error) html += `<p class="error-box">${esc(F.error)}</p>`;
-    if (!r) return html + (ui.busy ? `<p class="hint">${esc(ui.busy)}</p>` : "");
+    if (!r) return html + `<p class="hint">${esc(ui.busy || "Looking at the files…")}</p>`;
     const missingTables = r.tables.filter((t) => !t.found);
-    if (missingTables.length) html += `<p class="error-box">Missing ${missingTables.map((t) => `<code>${esc(t.file)}</code>`).join(", ")}: save the study from the Design tab to create ${missingTables.length === 1 ? "it" : "them"}.</p>`;
-    const pct = r.n_needed ? Math.round((100 * r.n_found) / r.n_needed) : 100;
-    html += `<div class="summary"><b>${r.n_found} of ${r.n_needed}</b> files ready (${pct}%)</div>
-      <label class="check"><input type="checkbox" id="files-missing" ${F.missingOnly ? "checked" : ""}> <span>Show only missing files</span></label>`;
+    if (missingTables.length) html += `<p class="error-box">Missing ${missingTables.map((t) => `<code>${esc(t.file)}</code>`).join(", ")}: save the study to create ${missingTables.length === 1 ? "it" : "them"}.</p>`;
+    html += `<p><b>${r.n_found} of ${r.n_needed}</b> files ready ${btn("open-path:" + ui.folder, "Open folder", "link")}${btn("files-refresh", "Refresh", "link", dis)}</p>`;
+    const rows = [];
     for (const [kind, label] of KINDS) {
       const all = r.items.filter((i) => i.kind === kind);
       if (!all.length) continue;
-      const shown = F.missingOnly ? all.filter((i) => !i.found) : all;
-      const nFound = all.filter((i) => i.found).length;
-      html += `<h3>${label} <span class="hint">${nFound} of ${all.length}</span></h3>`;
-      html += shown.length ? `<ul class="checks">${shown.map((i) => `<li class="${i.found ? "ok" : "error"}"><div class="msg"><span class="ic">${i.found ? "✓" : "✕"}</span><span><code>${esc(i.file)}</code> ${esc(i.what)}</span></div></li>`).join("")}</ul>`
-        : `<p class="hint">All there.</p>`;
+      const missing = all.filter((i) => !i.found);
+      rows.push(`<li class="${missing.length ? "error" : "ok"}"><div class="msg"><span class="ic">${missing.length ? "✕" : "✓"}</span><span>${label}: ${all.length - missing.length} of ${all.length}${missing.length
+        ? `. Missing ${missing.slice(0, 6).map((i) => `<code>${esc(i.file)}</code>`).join(", ")}${missing.length > 6 ? ` and ${missing.length - 6} more` : ""}` : ""}</span></div></li>`);
     }
-    return html;
+    return html + `<ul class="checks">${rows.join("")}</ul>`;
   }
 
   async function filesRefresh() {
-    const F = ui.files, folder = filesFolder();
+    const F = ui.files;
     F.error = null;
-    if (!folder) { F.result = null; render(); return; }
-    try { F.result = await bridge("content", "Looking at the study's files…", folder); }
+    if (!ui.folder) { F.result = null; render(); return; }
+    try { F.result = await bridge("content", "Looking at the study's files…", ui.folder); }
     catch (e) { F.error = e.message; F.result = null; }
     render();
   }
 
-  async function filesChooseFolder() {
-    try {
-      const f = await bridge("pick_folder", null, filesFolder() || (ui.appInfo && ui.appInfo.studies_dir));
-      if (!f) return;
-      ui.files.folder = f;
-    } catch (e) { ui.files.error = e.message; }
-    await filesRefresh();
-  }
-
   // ------------------------------------------------------------ Data tab (desktop app)
 
-  const dataFolder = () => ui.data.folder || ui.folder;
-
   function renderData() {
-    const D = ui.data, st = D.status, folder = dataFolder(), busy = !!ui.busy;
+    const D = ui.data, st = D.status, busy = !!ui.busy;
     const dis = busy ? "disabled" : "";
-    const study = folder
-      ? `<p>Study: <b class="folder">${esc(folder)}</b> ${btn("data-folder", "Choose another…", "link", dis)}</p>`
-      : `<p>No study chosen. Open one in the Design tab, or ${btn("data-folder", "choose a study folder…", "link", dis)}</p>`;
-    let html = `
-      <h2>Data</h2>
-      <p class="lead">Copies the study's sessions off the phone, checks every file against the phone, makes the
-      second copy if you set one, runs the quality checks and records each session in <code>sessions.csv</code>.
-      Only then is the session deleted from the phone.</p>
-      <div class="card">${study}</div>`;
+    let html = `<h2>Data</h2>`;
     if (D.error) html += `<p class="error-box">${esc(D.error)}</p>`;
-    if (!st) return html + (folder && busy ? `<p class="hint">${esc(ui.busy)}</p>` : "");
-    const ph = st.phone || {};
+    if (!st) return html + `<p class="hint">${esc(ui.busy || "Loading…")}</p>`;
+    const ph = st.phone || {}, rows = st.register || [], x = D.export;
     html += `
-      <div class="card">
-        <h3>Folders on this computer</h3>
-        <p>Sessions: <b class="folder">${esc(st.data_dir)}</b> ${btn("data-open:data", "Open", "link", dis)}${btn("data-pick:data", "Change…", "link", dis)}</p>
-        <p>Second copy: ${st.second_copy_dir ? `<b class="folder">${esc(st.second_copy_dir)}</b> ${btn("data-pick:second", "Change…", "link", dis)}${btn("data-clear:second", "Stop making a second copy", "link danger", dis)}`
-          : `none ${btn("data-pick:second", "Choose a folder…", "link", dis)}`}</p>
-        <p class="hint">For example an encrypted or university drive. These folders are set for this computer only, not in the study.</p>
-      </div>
-      <div class="card">
-        <h3>Phone</h3>
-        ${ph.error ? `<p class="hint">${esc(ph.error)}</p>`
-          : `<p>${esc(ph.name)}: <b>${ph.sessions}</b> session${ph.sessions === 1 ? "" : "s"} of ${esc(st.study_id)} on the phone.</p>`}
-        <div class="row">${btn("data-refresh", "Refresh", "", dis)}${btn("data-unload", "Unload from phone", "primary", busy || ph.error || !ph.sessions ? "disabled" : "")}</div>
-        ${busy && ui.phone.progress ? `<p class="hint">${esc(ui.phone.progress)}</p>` : ""}
-      </div>`;
+      <p class="lead">${rows.length} session${rows.length === 1 ? "" : "s"} on this computer${ph.error ? "" : ` · ${ph.sessions} on ${esc(ph.name)}`}</p>
+      <div class="row">${btn("data-unload", ph.sessions ? `Unload ${ph.sessions} from the phone` : "Unload from phone", "primary", busy || ph.error || !ph.sessions ? "disabled" : "")}
+        ${btn("data-export", "Make tables", "", busy || !rows.length ? "disabled" : "")}
+        ${btn("data-open:data", "Open data folder", "link", dis)}${btn("data-refresh", "Refresh", "link", dis)}</div>
+      ${ph.error ? `<p class="hint">${esc(ph.error)}</p>` : ""}
+      ${busy && ui.phone.progress ? `<p class="hint">${esc(ui.phone.progress)}</p>` : ""}
+      ${x && x.out_dir ? `<p class="hint">Tables (by session, by item, by condition, and a codebook) for ${x.sessions} session${x.sessions === 1 ? "" : "s"} in ${btn("data-open-export", esc(x.out_dir), "link")}${x.skipped.length
+        ? `. Skipped ${x.skipped.length}: ${x.skipped.map((s) => esc(`${s.folder.split(/[\\/]/).slice(-2).join("/")} (${s.why})`)).join("; ")}` : ""}</p>` : ""}`;
     const u = D.unload;
     if (u && u.error) html += `<p class="error-box">${esc(u.error)}</p>`;
     if (u && u.sessions && u.sessions.length) {
-      html += `<h3>Last unload</h3><ul class="checks">${u.sessions.map((s) => {
+      html += `<ul class="checks">${u.sessions.map((s) => {
         const [cls, ic, msg] = s.error ? ["error", "✕", `not unloaded: ${s.error}`]
           : s.deleted ? [s.warnings.length ? "warning" : "ok", s.warnings.length ? "!" : "✓",
             `copied and checked${s.second_copy ? ", second copy checked" : ""}, deleted from the phone${s.warnings.length ? `. ${s.warnings.length} warning(s): ${s.warnings.join("; ")}` : ""}`]
@@ -1805,36 +1766,27 @@ if (typeof module !== "undefined") module.exports = Core;
         return `<li class="${cls}"><div class="msg"><span class="ic">${ic}</span><span><b>${esc(s.participant_id)}</b> ${esc(s.session_uid)}: ${esc(msg)}</span></div></li>`;
       }).join("")}</ul>`;
     }
-    const rows = st.register || [];
-    const x = D.export;
-    html += `
-      <div class="card">
-        <h3>Tables for analysis</h3>
-        <p>One file per view of the data, ready for Excel, SPSS or R: <b>by session</b> (one row per session: group,
-        questionnaire answers, totals, quality flags), <b>by item</b> (one row per post a participant saw: its
-        conditions, time on screen, likes, comments, ratings, recognition) and <b>by condition</b> (one row per
-        participant and condition: the averages over its posts), with a <b>codebook</b> explaining every column.</p>
-        <div class="row">${btn("data-export", "Make tables", "primary", busy || !rows.length ? "disabled" : "")}
-          ${x && x.out_dir ? btn("data-open-export", "Open folder", "", dis) : ""}</div>
-        ${x && x.out_dir ? `<p class="hint">${x.sessions} session${x.sessions === 1 ? "" : "s"} written to <b class="folder">${esc(x.out_dir)}</b>${x.skipped.length
-          ? `. Skipped ${x.skipped.length}: ${x.skipped.map((s) => esc(`${s.folder.split(/[\\/]/).slice(-2).join("/")} (${s.why})`)).join("; ")}` : ""}</p>` : ""}
-        ${!rows.length ? `<p class="hint">Unload some sessions first.</p>` : ""}
-      </div>`;
-    html += `<h3>Sessions (${rows.length})</h3>`;
-    html += rows.length ? `<div class="table-wrap"><table class="register"><thead><tr><th>Participant</th><th>Started</th><th>Completed</th><th>Warnings</th><th>Phone</th><th>Notes</th></tr></thead><tbody>
+    html += rows.length ? `<div class="table-wrap"><table class="register"><thead><tr><th>Participant</th><th>Started</th><th>Completed</th><th>Warnings</th><th>Notes</th></tr></thead><tbody>
       ${rows.map((r) => `<tr><td>${esc(r.participant_id)}${r.duplicate_id ? ` <span class="pill">ID used twice</span>` : ""}${r.on_phone ? ` <span class="pill">still on phone</span>` : ""}</td>
         <td>${esc((r.started || "").replace("T", " ").slice(0, 16))}</td><td>${r.completed === "yes" ? "yes" : `<b>${esc(r.completed || "?")}</b> ${esc(r.end_reason || "")}`}</td>
-        <td title="${esc(r.warnings)}">${esc(r.n_warnings || "0")}</td><td>${esc(r.phone)}</td><td>${esc(r.notes)}</td></tr>`).join("")}
-      </tbody></table></div><p class="hint">From <code>sessions.csv</code> in the sessions folder; hover a warning count to read the warnings. Add notes in Excel: the app keeps them.</p>`
-      : `<p class="hint">No sessions unloaded yet.</p>`;
+        <td title="${esc(r.warnings)}">${esc(r.n_warnings || "0")}</td><td>${esc(r.notes)}</td></tr>`).join("")}
+      </tbody></table></div><p class="hint">Hover a warning count to read the warnings. Notes added to <code>sessions.csv</code> in Excel are kept.</p>`
+      : `<p class="hint">No sessions yet.</p>`;
+    html += `
+      <details class="folders"><summary>Folders</summary>
+        <p>Sessions: <span class="folder">${esc(st.data_dir)}</span> ${btn("data-pick:data", "Change…", "link", dis)}</p>
+        <p>Second copy: ${st.second_copy_dir ? `<span class="folder">${esc(st.second_copy_dir)}</span> ${btn("data-pick:second", "Change…", "link", dis)}${btn("data-clear:second", "Stop", "link danger", dis)}`
+          : `none ${btn("data-pick:second", "Choose a folder…", "link", dis)}`}</p>
+        <p class="hint">A second copy of every session, e.g. on an encrypted or university drive. Set for this computer only.</p>
+      </details>`;
     return html;
   }
 
   async function dataRefresh() {
-    const D = ui.data, folder = dataFolder();
+    const D = ui.data;
     D.error = null;
-    if (!folder) { D.status = null; render(); return; }
-    try { D.status = await bridge("data_status", "Looking at the phone…", folder, ui.phone.serial || null); }
+    if (!ui.folder) { D.status = null; render(); return; }
+    try { D.status = await bridge("data_status", "Looking at the phone…", ui.folder, ui.phone.serial || null); }
     catch (e) { D.error = e.message; D.status = null; }
     render();
   }
@@ -1843,7 +1795,7 @@ if (typeof module !== "undefined") module.exports = Core;
     const D = ui.data;
     D.error = null;
     ui.phone.progress = "Starting…";
-    try { D.unload = await bridge("data_unload", "Unloading…", dataFolder(), ui.phone.serial || null); }
+    try { D.unload = await bridge("data_unload", "Unloading…", ui.folder, ui.phone.serial || null); }
     catch (e) { D.error = e.message; }
     ui.phone.progress = null;
     await dataRefresh();
@@ -1853,7 +1805,7 @@ if (typeof module !== "undefined") module.exports = Core;
     const D = ui.data;
     D.error = null;
     ui.phone.progress = "Starting…";
-    try { D.export = await bridge("data_export", "Making tables…", dataFolder()); }
+    try { D.export = await bridge("data_export", "Making tables…", ui.folder); }
     catch (e) { D.error = e.message; }
     ui.phone.progress = null;
     render();
@@ -1864,21 +1816,15 @@ if (typeof module !== "undefined") module.exports = Core;
       const start = which === "data" ? ui.data.status && ui.data.status.data_dir : ui.data.status && ui.data.status.second_copy_dir;
       const path = await bridge("pick_folder", null, start || null);
       if (!path) return;
-      await bridge("data_set_folder", null, dataFolder(), which, path);
+      await bridge("data_set_folder", null, ui.folder, which, path);
     } catch (e) { ui.data.error = e.message; }
     await dataRefresh();
   }
 
   async function dataAct(name, arg) {
     try {
-      if (name === "data-clear") await bridge("data_set_folder", null, dataFolder(), arg, null);
+      if (name === "data-clear") await bridge("data_set_folder", null, ui.folder, arg, null);
       if (name === "data-open") { await bridge("open_path", null, ui.data.status.data_dir); return; }
-      if (name === "data-folder") {
-        const f = await bridge("pick_folder", null, dataFolder() || (ui.appInfo && ui.appInfo.studies_dir));
-        if (!f) return;
-        ui.data.folder = f;
-        ui.data.unload = null;
-      }
     } catch (e) { ui.data.error = e.message; render(); return; }
     await dataRefresh();
   }
@@ -1888,7 +1834,7 @@ if (typeof module !== "undefined") module.exports = Core;
     const focused = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.key : null;
     let sel = null;
     try { sel = focused ? [document.activeElement.selectionStart, document.activeElement.selectionEnd] : null; } catch (e) { sel = null; }
-    document.getElementById("nav").innerHTML = SECTIONS.map(([k, label]) =>
+    document.getElementById("nav").innerHTML = sections().map(([k, label]) =>
       `<button type="button" data-section="${k}" class="${ui.section === k ? "on" : ""}" ${!ui.study && k !== "start" ? "disabled" : ""}>${sectionLabel(k, label)}<span class="count"></span></button>`).join("")
       + `<label class="check adv-toggle" title="Show every setting, for researchers who know the study design and their eye-tracking setup"><input type="checkbox" id="advanced-toggle" ${ui.advanced ? "checked" : ""}> <span>Advanced settings</span></label>`;
     const main = document.getElementById("main");
@@ -1905,8 +1851,9 @@ if (typeof module !== "undefined") module.exports = Core;
 
   function navButtons() {
     if (!ui.study) return "";
-    const i = SECTIONS.findIndex(([k]) => k === ui.section);
-    const prev = SECTIONS[i - 1], next = SECTIONS[i + 1];
+    const list = sections();
+    const i = list.findIndex(([k]) => k === ui.section);
+    const prev = list[i - 1], next = list[i + 1];
     return `<div class="pager">${prev ? btn(`goto:${prev[0]}`, `← ${sectionLabel(...prev)}`) : "<span></span>"}${next ? btn(`goto:${next[0]}`, `${sectionLabel(...next)} →`, "primary") : ""}</div>`;
   }
 
@@ -1975,6 +1922,9 @@ if (typeof module !== "undefined") module.exports = Core;
     ui.desktopError = null;
     ui.sessions = 0;
     ui.protect = null;
+    ui.phone.result = null;
+    ui.data = { status: null, unload: null, export: null, error: null };
+    ui.files.result = null;
     if (!opened) C.syncFoils(ui.study, ui.content);
     ui.section = "basics";
     render();
@@ -2027,6 +1977,7 @@ if (typeof module !== "undefined") module.exports = Core;
       ui.sessions = r.sessions || 0;
       ui.protect = null;
       ui.desktopError = null;
+      ui.files.result = null;
     } catch (e) {
       ui.desktopError = `Couldn't save: ${e.message}`;
     }
@@ -2087,7 +2038,11 @@ if (typeof module !== "undefined") module.exports = Core;
         return;
       }
       case "go-basics": ui.section = "basics"; break;
-      case "goto": ui.section = args[0]; window.scrollTo(0, 0); break;
+      case "goto":
+        ui.section = args[0];
+        window.scrollTo(0, 0);
+        if (ui.desktop && ui.section === "content" && !ui.files.result && !ui.busy) { render(); filesRefresh(); return; }
+        break;
       case "random-seed": S.seed = Math.floor(Math.random() * 1e8); break;
       case "add-factor": {
         S.factors = S.factors || [];
@@ -2165,22 +2120,20 @@ if (typeof module !== "undefined") module.exports = Core;
         if (ui.tab === "phone" && !ui.phone.result && !ui.busy) { render(); phoneCheck(); return; }
         if (ui.tab === "data" && !ui.busy) { render(); dataRefresh(); return; }
         if (ui.tab === "studies" && !ui.busy) { render(); studiesRefresh(); return; }
-        if (ui.tab === "content" && !ui.busy) { render(); filesRefresh(); return; }
+        if (ui.tab === "design" && ui.section === "content" && !ui.files.result && !ui.busy) { render(); filesRefresh(); return; }
         break;
       case "studies-refresh": studiesRefresh(); return;
       case "study-open": case "study-goto": case "studies-new-blank": case "studies-copy": studiesAct(name, args); return;
       case "files-refresh": filesRefresh(); return;
-      case "files-folder": filesChooseFolder(); return;
       case "open-path": bridge("open_path", null, args.join(":")).catch((e) => { ui.desktopError = e.message; render(); }); return;
       case "data-refresh": dataRefresh(); return;
       case "data-unload": dataUnload(); return;
       case "data-export": dataExport(); return;
       case "data-open-export": bridge("open_path", null, ui.data.export.out_dir).catch((e) => { ui.data.error = e.message; render(); }); return;
       case "data-pick": dataPick(args[0]); return;
-      case "data-clear": case "data-open": case "data-folder": dataAct(name, args[0]); return;
+      case "data-clear": case "data-open": dataAct(name, args[0]); return;
       case "phone-check": phoneCheck(); return;
       case "phone-load": phoneLoad(); return;
-      case "phone-folder": phoneChooseFolder(); return;
       case "open-folder": openFolder(); return;
       case "save": saveStudy(false); return;
       case "save-new-version": S.version = Number(ui.protect.version) + 1; ui.protect = null; saveStudy(false); return;
@@ -2248,7 +2201,7 @@ if (typeof module !== "undefined") module.exports = Core;
 
   document.addEventListener("click", (e) => {
     const nav = e.target.closest("#nav button");
-    if (nav && !nav.disabled) { ui.section = nav.dataset.section; render(); window.scrollTo(0, 0); return; }
+    if (nav && !nav.disabled) { act(`goto:${nav.dataset.section}`); return; }
     const b = e.target.closest("[data-action]");
     if (b) act(b.dataset.action, b);
   });
@@ -2288,7 +2241,8 @@ if (typeof module !== "undefined") module.exports = Core;
     if (ui.desktop || !(window.pywebview && window.pywebview.api)) return;
     ui.desktop = true;
     try { ui.appInfo = await bridge("app_info", null); } catch (e) { ui.desktopError = e.message; }
-    render();
+    if (ui.section === "start") ui.section = "basics";
+    act("tab:studies");
   }
   window.addEventListener("pywebviewready", enterDesktop);
 

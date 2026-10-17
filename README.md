@@ -264,19 +264,22 @@ The same builder also runs as a desktop app that works on study folders directly
 socialeyes app
 ```
 
-Its **Design** tab opens a study folder (or starts a new one and saves it to
-`studies/<study id>`), and **Save to study folder** writes `study.yaml` there. The
-previous `study.yaml` is kept as `study.yaml.bak`. CSV files and `NEXT_STEPS.txt`
-are created only if they don't exist yet, so your filled-in CSVs are never
-overwritten. Each save (and the **Check study** button) also runs the compiler's
-checks, the same as `socialeyes validate`: missing images, AOI sizes and mistakes
-in the CSVs. They appear next to the design checks. The **Phone** tab loads the
-study onto the phone and the **Data** tab copies sessions back off it (see [Running the
-app](#running-the-app)) and makes the [tables for analysis](#tables-for-analysis). **Studies** lists every study in `studies/` as designing
-(with its number of problems), ready, or collecting data (with its number of sessions),
-and starts new ones, blank or as a copy of the example. **Content** lists every image,
-avatar, story image, video and AOI file the study's CSVs point to, found or missing
-("54 of 61 files ready").
+It opens on **Studies**: every study in `studies/` as designing (with its number of
+problems), ready, or collecting data (with its number of sessions), and buttons to start a
+new one, blank or as a copy of the example, or open a folder elsewhere. **Open** a study and
+its name appears in the top bar with its three pages:
+
+- **Design**: the builder's steps, editing the study folder in place. **Save** writes
+  `study.yaml` there (the previous one is kept as `study.yaml.bak`); CSV files and
+  `NEXT_STEPS.txt` are created only if they don't exist yet, so your filled-in CSVs are
+  never overwritten. Each save (and **Check study**) also runs the compiler's checks, the
+  same as `socialeyes validate`, shown next to the design checks. The **Content** step also
+  lists which of the images, avatars, story images, videos and AOI files the CSVs name are in
+  the folder ("61 of 61 files ready").
+- **Phone**: checks the phone and loads the study onto it (see [Running the app](#running-the-app)).
+- **Data**: unloads sessions from the phone, lists them, and makes the
+  [tables for analysis](#tables-for-analysis); the data and second-copy folders are under
+  **Folders**.
 
 **Studies with data are protected.** Once a study has sessions, saving an edit that would
 change what participants get, or what the analysis relies on, is refused until you save it

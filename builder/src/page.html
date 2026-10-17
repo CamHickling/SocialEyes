@@ -177,6 +177,27 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .hero p { margin: 0; color: var(--muted); max-width: 62ch; }
 table.register { border-radius: 12px; overflow: hidden; }
 .card > .check:first-child { margin-top: 0; }
+/* ---------------------------------------------------------- desktop app: header and pages */
+#apptabs { align-items: center; }
+#apptabs button:disabled { opacity: .4; cursor: default; }
+#apptabs .crumb { padding: 6px 10px 6px 14px; margin-left: 4px; border-left: 1px solid var(--line); font-weight: 600; max-width: 32ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#apptabs .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--warn); vertical-align: 2px; }
+#tabpage { max-width: 820px; }
+#tabpage h2 { margin-bottom: 4px; }
+#tabpage .lead { margin-bottom: 12px; }
+#tabpage > .row:first-of-type { margin: 16px 0; }
+#tabpage .table-wrap { margin: 20px 0 6px; }
+table.register.studies td { vertical-align: middle; padding: 10px 12px; }
+table.register td.end { text-align: right; }
+.status { font-size: 13px; padding: 2px 10px; border-radius: 999px; white-space: nowrap; }
+.status.ok { background: var(--ok-soft); color: var(--ok); }
+.status.info { background: var(--tip-soft); color: var(--tip); }
+.status.warning { background: var(--warn-soft); color: var(--warn); }
+.new-study { margin-top: 20px; }
+.new-study input { flex: 0 1 180px; min-width: 120px; }
+details.folders { margin-top: 28px; border-top: 1px solid var(--line); padding-top: 12px; }
+details.folders summary { cursor: pointer; color: var(--muted); font-weight: 600; }
+details.folders p { margin: 8px 0; }
 @media (max-width: 1000px) {
   #nav, #side { top: auto; }
   header #app-sub { display: none; }
