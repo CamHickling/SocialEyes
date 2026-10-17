@@ -38,6 +38,34 @@ def selftest(report: Path) -> None:
     check("workspace", lambda: str(settings.workspace()))
     # the Windows backend loads .NET through pythonnet: importing it is what fails when a part is missing
     check("webview", lambda: __import__("webview.platforms.winforms").__name__)
+
+    # face analysis, automatic AOIs and heatmaps: MediaPipe, its bundled models, matplotlib
+    def face_model():
+        import numpy as np
+        from socialeyes.face.analyze import _landmarker
+
+        mp, lm = _landmarker()
+        try:
+            img = mp.Image(image_format=mp.ImageFormat.SRGB, data=np.zeros((480, 640, 3), np.uint8))
+            return f"{len(lm.detect_for_video(img, 1).face_landmarks)} faces in a blank frame"
+        finally:
+            lm.close()
+
+    def body_models():
+        import numpy as np
+        from socialeyes.face.body_aois import Detector, image_aois
+
+        with Detector() as det:
+            return image_aois(np.full((400, 300, 3), 200, np.uint8), det).notes
+
+    def colormap():
+        from matplotlib import colormaps
+
+        return [round(float(v), 3) for v in colormaps["inferno"](0.5)]
+
+    check("face_model", face_model)
+    check("body_models", body_models)
+    check("heatmap_colours", colormap)
     report.write_text(json.dumps(results, indent=2), encoding="utf-8")
 
 
