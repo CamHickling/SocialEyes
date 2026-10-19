@@ -4,6 +4,8 @@ import org.socialeyes.pictogram.log.InterruptionMonitor
 import kotlinx.coroutines.delay
 import androidx.compose.runtime.LaunchedEffect
 import android.provider.Settings
+import android.os.BatteryManager
+import android.os.StatFs
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -23,6 +25,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -73,6 +76,8 @@ fun SetupScreen(
     hasData: (studyId: String, participantId: String) -> Boolean,
     error: String?,
     onStart: (StudyPackage, String) -> Unit,
+    pinSessions: Boolean = false,
+    onPinSessions: (Boolean) -> Unit = {},
 ) {
     var studies by remember { mutableStateOf(StudyPackage.findAll(studiesDir)) }
     var selectedDir by remember { mutableStateOf(studies.firstOrNull { it.second.isSuccess }?.first) }
@@ -140,23 +145,47 @@ fun SetupScreen(
                             OutlinedButton(onClick = { ask.launch(Manifest.permission.CAMERA) }) { Text("Allow camera") }
                         }
                     }
+                    ReadyCheck()
                     DndHint()
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Pin the app during sessions", modifier = Modifier.weight(1f), fontSize = 14.sp)
+                        Switch(checked = pinSessions, onCheckedChange = onPinSessions)
+                    }
+                    Text("Pinned, a participant can't leave the app by accident. Android asks to confirm at the start " +
+                        "of each session, and may lock the phone when the session ends (Settings > Security > App " +
+                        "pinning > Ask for PIN before unpinning).", fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.height(4.dp))
-                    Text("Participant (✓ = has data already)", fontWeight = FontWeight.SemiBold)
+                    // ids with data on this phone, or that the computer's register has seen; withdrawn ones can't be chosen
+                    val (used, withdrawn) = remember(pkg) { pkg.usedIds() }
+                    val ids = pkg.participantIds()
+                    val taken = { pid: String -> pid in used || hasData(pkg.study.id, pid) }
+                    val next = ids.firstOrNull { !taken(it) && it !in withdrawn }
+                    if (next != null) {
+                        Button(onClick = { onStart(pkg, next) }, modifier = Modifier.fillMaxWidth()) {
+                            Text("Start the next participant: $next", fontSize = 16.sp)
+                        }
+                    } else {
+                        Text("Every participant id of this study has been used. Make more plans on the computer and load the study again.",
+                            color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
+                    }
+                    Text("Or choose (✓ = used already)", fontWeight = FontWeight.SemiBold)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        pkg.participantIds().forEach { pid ->
-                            val done = hasData(pkg.study.id, pid)
+                        ids.forEach { pid ->
+                            val gone = pid in withdrawn
                             FilterChip(
                                 selected = pid == participant,
                                 onClick = { participant = pid },
-                                label = { Text(if (done) "$pid ✓" else pid) },
+                                enabled = !gone,
+                                label = { Text(if (gone) "$pid withdrawn" else if (taken(pid)) "$pid ✓" else pid) },
                             )
                         }
                     }
                     Button(
                         onClick = {
                             val pid = participant ?: return@Button
-                            if (hasData(pkg.study.id, pid)) confirmRepeat = true else onStart(pkg, pid)
+                            val (used, _) = pkg.usedIds()
+                            if (pid in used || hasData(pkg.study.id, pid)) confirmRepeat = true else onStart(pkg, pid)
                         },
                         enabled = participant != null,
                         modifier = Modifier.fillMaxWidth(),
@@ -181,8 +210,9 @@ fun SetupScreen(
             if (confirmRepeat && pkg != null && participant != null) {
                 AlertDialog(
                     onDismissRequest = { confirmRepeat = false },
-                    title = { Text("$participant already has data") },
-                    text = { Text("Start another session for this participant? The earlier session is kept.") },
+                    title = { Text("$participant has been used already") },
+                    text = { Text("This id has a session on this phone or on the computer. Start another session for it? " +
+                        "The earlier session is kept; giving each participant a new id is usually better.") },
                     confirmButton = {
                         TextButton(onClick = { confirmRepeat = false; onStart(pkg, participant!!) }) { Text("Start") }
                     },
@@ -190,6 +220,34 @@ fun SetupScreen(
                 )
             }
         }
+    }
+}
+
+/** Battery and free storage before a session: warns when either is low. */
+@Composable
+private fun ReadyCheck() {
+    val context = LocalContext.current
+    var battery by remember { mutableStateOf<Pair<Int, Boolean>?>(null) }
+    var freeGb by remember { mutableStateOf<Double?>(null) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            val bm = context.getSystemService(BatteryManager::class.java)
+            battery = bm?.let { it.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY) to it.isCharging }
+            freeGb = context.getExternalFilesDir(null)?.let { StatFs(it.path).availableBytes / 1e9 }
+            delay(5000)
+        }
+    }
+    val warn = MaterialTheme.colorScheme.error
+    val ok = MaterialTheme.colorScheme.onSurfaceVariant
+    battery?.let { (pct, charging) ->
+        val low = pct < 50 && !charging
+        Text("Battery ${pct}%${if (charging) " (charging)" else ""}${if (low) ": charge it before the session" else ""}",
+            fontSize = 13.sp, color = if (low) warn else ok)
+    }
+    freeGb?.let { gb ->
+        val low = gb < 2.0
+        Text("Storage ${"%.1f".format(gb)} GB free${if (low) ": copy and clear sessions on the computer first" else ""}",
+            fontSize = 13.sp, color = if (low) warn else ok)
     }
 }
 

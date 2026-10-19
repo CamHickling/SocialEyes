@@ -220,6 +220,9 @@ def delete_permanently(study_dir: Path | str, participant_id: str, serial: Optio
                 adb.shell(f"rm -r {APP_FILES}/data/{sid}/{pid}", check=True)
                 r.deleted.append(f"phone: {len(mine)} session(s)")
                 r.sessions = sorted(set(r.sessions) | set(mine))
+            from ..phone.loader import sync_used_ids
+
+            sync_used_ids(adb, sid)
         except AdbError as e:
             r.notes.append(f"the phone wasn't reachable ({e}): delete again with the phone connected if it "
                            "still holds their sessions")

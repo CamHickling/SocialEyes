@@ -33,7 +33,7 @@ from .. import settings
 from ..session import register
 from .adb import APP_FILES, PACKAGE, Adb, AdbError
 from ..study.compiler import CHECKSUM_FILE
-from .loader import build_study, discard, parse_sha256sum
+from .loader import build_study, discard, parse_sha256sum, sync_used_ids
 
 SAFE = re.compile(r"[A-Za-z0-9_.-]+")
 
@@ -172,6 +172,7 @@ def unload(study_dir: Path | str, serial: Optional[str] = None,
             s = _unload_one(adb, sid, pid, uid, data, second, build, app_running, device.id, clear)
             r.sessions.append(s)
         _tidy_phone(adb, sid)
+        sync_used_ids(adb, sid)
         return r
     except (AdbError, ValueError) as e:
         r.error = str(e)
@@ -305,6 +306,7 @@ def clear_phone(study_dir: Path | str, serial: Optional[str] = None,
             if second is not None and (data / register.REGISTER).is_file():
                 shutil.copy2(data / register.REGISTER, second / register.REGISTER)
         _tidy_phone(adb, sid)
+        sync_used_ids(adb, sid)
         return r
     except (AdbError, ValueError) as e:
         r.error = str(e)

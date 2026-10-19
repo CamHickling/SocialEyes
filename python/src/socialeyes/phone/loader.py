@@ -18,6 +18,7 @@ import shutil
 import sys
 import tempfile
 from dataclasses import asdict, dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -375,6 +376,7 @@ def load(study_dir: Path | str, serial: Optional[str] = None, update_app: bool =
             step(f"Copied and checked {_count(study)} files.")
             if r.phone.app_running:
                 step("SocialEyes is open on the phone: close it and open it again to see the study.")
+        sync_used_ids(adb, study.id)  # the ids already taken, for the phone's "Next participant"
         r.loaded = True
         keep_snapshot(study)
         return r
@@ -441,6 +443,36 @@ def _push_verified(adb: Adb, study: StudyInfo, progress: Callable[[str], None]) 
     # not in that group and can't open them, so make the study readable. Folders the app made
     # itself aren't ours to chmod (and don't need it), hence the ignored errors.
     adb.shell(f"chmod a+rx {APP_FILES} {APP_FILES}/studies 2>/dev/null; chmod -R a+rX {final}", check=True)
+
+
+USED_IDS = "used_ids.json"
+
+
+def used_ids(study_id: str) -> dict:
+    """The participant ids the study's register has seen (any status), and those withdrawn: the
+    phone's setup screen skips them when it offers the next participant."""
+    from .. import settings
+    from ..session import register
+
+    rows = register.read(settings.data_dir(study_id) / register.REGISTER)[1]
+    used = sorted({r["participant_id"] for r in rows if r.get("participant_id")})
+    withdrawn = sorted({r["participant_id"] for r in rows if r.get("status") in ("withdrawn", "deleted")})
+    return {"used": used, "withdrawn": withdrawn, "updated": datetime.now().isoformat(timespec="seconds")}
+
+
+def sync_used_ids(adb: Adb, study_id: str) -> bool:
+    """Writes used_ids.json into the study's folder on the phone, if the study is loaded there."""
+    import tempfile
+
+    final = f"{APP_FILES}/studies/{study_id}"
+    if "yes" not in adb.shell(f"test -d {final} && echo yes"):
+        return False
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / USED_IDS
+        path.write_text(json.dumps(used_ids(study_id)), encoding="utf-8")
+        adb.run("push", str(path), f"{final}/{USED_IDS}", timeout=60)
+    adb.shell(f"chmod a+r {final}/{USED_IDS}")
+    return True
 
 
 def expected_hashes(build: Path) -> dict:

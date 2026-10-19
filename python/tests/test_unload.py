@@ -46,9 +46,18 @@ class FakePhone:
             return ""
         if cmd.startswith("cd ") and "rmdir" in cmd:  # tidying empty folders
             return ""
+        if m := re.fullmatch(r"test -d (\S+) && echo yes", cmd):
+            return "yes\n" if self.local(m.group(1)).is_dir() else ""
+        if cmd.startswith("chmod "):
+            return ""
         raise AssertionError(f"unexpected command: {cmd}")
 
     def run(self, *args, timeout=60, check=True) -> str:
+        if args[0] == "push":  # a single file (used_ids.json)
+            dest = self.local(args[2])
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(args[1], dest)
+            return ""
         assert args[0] == "pull", args
         src = self.local(args[1])
         dest = Path(args[2]) / src.name
@@ -207,3 +216,14 @@ def test_study_id_of(example, tmp_path):
     assert U.study_id_of(example) == "example"
     with pytest.raises(ValueError):
         U.study_id_of(tmp_path)
+
+
+def test_the_phone_learns_the_ids_already_used(setup, monkeypatch):
+    example, phone_root, tmp = setup
+    (phone_root / "studies" / "example").mkdir(parents=True)  # the study is loaded there
+    data = tmp / "ws" / "data" / "example"
+    run(monkeypatch, example, FakePhone(phone_root))
+    register.set_status(data / "sessions.csv", "P009", "withdrawn", "2026-10-18T10:00:00")
+    U.clear_phone(example)
+    used = json.loads((phone_root / "studies" / "example" / "used_ids.json").read_text(encoding="utf-8"))
+    assert used["used"] == ["P001", "P002", "P009"] and used["withdrawn"] == ["P009"]

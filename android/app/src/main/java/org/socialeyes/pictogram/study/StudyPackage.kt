@@ -242,6 +242,21 @@ class StudyPackage(val dir: File, val manifest: StudyManifest) {
         return MessageDigest.getInstance("SHA-256").digest(sums.readBytes()).joinToString("") { "%02x".format(it) }
     }
 
+    /**
+     * The participant ids the computer's register has seen (any status) and those withdrawn, from
+     * used_ids.json, which the computer writes whenever it loads the study, clears the phone or
+     * deletes a withdrawn participant. Empty sets if it isn't there (an older SocialEyes).
+     */
+    fun usedIds(): Pair<Set<String>, Set<String>> {
+        val f = File(dir, "used_ids.json")
+        if (!f.isFile) return emptySet<String>() to emptySet()
+        return runCatching {
+            val o = StudyJson.parseToJsonElement(f.readText()) as JsonObject
+            fun set(key: String) = (o[key] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.content }?.toSet().orEmpty()
+            set("used") to set("withdrawn")
+        }.getOrDefault(emptySet<String>() to emptySet())
+    }
+
     fun participantIds(): List<String> =
         File(dir, "plans").listFiles { f -> f.isFile && f.name.endsWith(".json") }
             ?.map { it.name.removeSuffix(".json") }

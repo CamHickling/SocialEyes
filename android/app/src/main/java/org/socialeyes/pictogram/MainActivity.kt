@@ -1,5 +1,6 @@
 package org.socialeyes.pictogram
 
+import android.app.ActivityManager
 import android.os.Bundle
 import android.view.MotionEvent
 import android.view.WindowManager
@@ -44,10 +45,13 @@ class MainActivity : ComponentActivity() {
     private var setupError by mutableStateOf<String?>(null)
     private var monitor: DeviceMonitor? = null
     private var interruptions: InterruptionMonitor? = null
+    /** Pin the app (Android's screen pinning) for each session; remembered on this phone. */
+    private var pinSessions by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        pinSessions = getPreferences(MODE_PRIVATE).getBoolean(PIN_SESSIONS, false)
         val studiesDir = File(getExternalFilesDir(null), "studies").apply { mkdirs() }
         setContent {
             val s = session
@@ -77,6 +81,11 @@ class MainActivity : ComponentActivity() {
                     hasData = { study, pid -> Session.hasData(this, study, pid) },
                     error = setupError,
                     onStart = ::startSession,
+                    pinSessions = pinSessions,
+                    onPinSessions = { on ->
+                        pinSessions = on
+                        getPreferences(MODE_PRIVATE).edit().putBoolean(PIN_SESSIONS, on).apply()
+                    },
                 )
             } else {
                 SessionScreen(s, onExit = ::endSession)
@@ -139,6 +148,7 @@ class MainActivity : ComponentActivity() {
         interruptions = InterruptionMonitor(this, s.log).also { it.start() }
         session = s
         s.begin()
+        if (pinSessions) runCatching { startLockTask() }  // Android asks the researcher to confirm
     }
 
     private fun endSession() {
@@ -149,6 +159,12 @@ class MainActivity : ComponentActivity() {
         session?.let { if (!it.log.finished) it.abort() }
         session = null
         hideSystemBars(false)
+        val am = getSystemService(ActivityManager::class.java)
+        if (am != null && am.lockTaskModeState != ActivityManager.LOCK_TASK_MODE_NONE) runCatching { stopLockTask() }
+    }
+
+    companion object {
+        private const val PIN_SESSIONS = "pin_sessions"
     }
 
     /** Hides the status and navigation bars during a session; a swipe shows them briefly. */

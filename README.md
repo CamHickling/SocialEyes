@@ -823,6 +823,16 @@ notice; tap **Got it** during a test run so participants never see it.
 To unlock a test phone from the computer, put its PIN in `phone-pin.local` in the project
 root (git-ignored; never commit it) and run `.\scripts\unlock-phone.ps1`.
 
+**On the day.** The phone's setup screen offers **Start the next participant: P004**: the first
+participant id that has no session on the phone and that the computer's register hasn't seen
+(the computer writes the ids it has seen, `used_ids.json`, into the study on the phone whenever it
+loads the study, clears the phone or deletes a withdrawn participant). Withdrawn ids are shown
+crossed out and can't be chosen; picking a used id asks first. The screen also shows the battery
+and free storage (in red when low) and whether Do Not Disturb is on. **Pin the app during
+sessions** (a switch, remembered on the phone) uses Android's app pinning, so a participant can't
+leave the app by accident; Android asks to confirm at the start of each session, and may lock the
+phone when the session ends (Settings > Security > App pinning).
+
 Sessions are saved on the phone. Copy them off with `socialeyes unload` (or the desktop
 app's **Data** tab, which does the same):
 
@@ -1130,7 +1140,7 @@ Roughly in order:
         in the app or sent to the phone, before running anyone
   - [ ] **"Fix it" buttons** on the checks that can be fixed automatically ("Use 12 plans",
         "Add a camera check step", "Add a marker calibration before the feed")
-  - [ ] **Session-day mode**: a "Next participant" button with the next unused ID from the
+  - [x] **Session-day mode** (no locking without the researcher's confirmation; unload stays on the computer's Data page): a "Next participant" button with the next unused ID from the
         session register; a pre-flight checklist (battery, storage, Do Not Disturb, glasses
         connected); locks the phone into the app (Android screen pinning) during a session;
         unload at the end of the day
