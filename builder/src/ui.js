@@ -149,10 +149,8 @@
     if (ui.advanced || !h.length) return "";
     const names = [...new Set(h.map((x) => x.label))];
     const ch = [...new Set(h.filter((x) => x.changed).map((x) => x.label))];
-    return `<div class="more-settings">
-      <p><b>${names.length} advanced setting${names.length === 1 ? "" : "s"}</b> on this page: ${names.map(esc).join(", ")}.
-      ${ch.length ? `<br><span class="pill">changed</span> This study doesn't use the usual value for ${ch.map(esc).join(", ")}.` : "The usual values suit most studies."}</p>
-      ${btn("advanced-on", "Show advanced settings", "link")}</div>`;
+    return `<p class="more-settings" title="${esc(names.join(", "))}">${names.length} more setting${names.length === 1 ? "" : "s"} under Advanced${ch.length
+      ? ` <span class="pill">changed</span> ${ch.map(esc).join(", ")}` : ""} ${btn("advanced-on", "Show", "link")}</p>`;
   }
 
   /**
@@ -235,9 +233,8 @@
     return `
       <h2>Basics</h2>
       ${sessionsNote()}
-      ${help("The study id names the folder and the data (<code>build/&lt;id&gt;</code>, <code>data/&lt;id&gt;/…</code>); keep it short and don't change it once you collect data.")}
       <div class="grid">
-        ${field({ path: "id", label: "Study id", kind: "text", placeholder: "my_study", help: "Letters, digits, - and _." })}
+        ${field({ path: "id", label: "Study id", kind: "text", placeholder: "my_study", help: "Names the study's folder and data. Letters, digits, - and _; don't change it once you collect data." })}
         ${field({ path: "title", label: "Title", kind: "text", wide: true })}
         ${field({ path: "version", label: "Version", kind: "int", def: 1, min: 1, adv: true, help: "Raise it when you change the study after piloting. Saving asks for a new version when it's needed." })}
         ${advanced("Seed", false, `<div class="field"><label for="f_seed">Seed</label><div class="row"><input type="number" id="f_seed" data-path="seed" data-kind="int" data-key="seed" value="${esc(val("seed", 1))}">${btn("random-seed", "Random")}</div>
@@ -262,7 +259,7 @@
       <div class="grid">
         ${field({ path: `${p}.name`, label: "Name", kind: "text", placeholder: "e.g. edit", help: "Used in the data; letters, digits and _." })}
         ${field({ path: `${p}.design`, label: "Design", kind: "select", options: [["within", "Within subjects"], ["between", "Between subjects"]], help: f.design === "between" ? "Each participant gets one level." : "Every participant sees every level." })}
-        ${field({ path: `${p}.levels`, label: "Levels", kind: "list", placeholder: "e.g. original, retouched", wide: true, help: "At least 2. These names appear in the data and, for images, comments and captions, in the CSV files." })}
+        ${field({ path: `${p}.levels`, label: "Levels", kind: "list", placeholder: "e.g. original, retouched", wide: true, help: "At least 2, separated by commas. They name the conditions in the data and the CSV files." })}
         ${f.design === "between" ? field({ path: `${p}.applies_to`, label: "Applies to", kind: "select", def: "critical", adv: true, options: [["critical", "Critical posts only"], ["all", "All posts (fillers too)"]], help: "With all posts, every filler needs the content for each level too." }) : ""}
       </div>
       <h4>What it changes</h4>
@@ -300,12 +297,7 @@
     const c = C.cells(ui.study), g = C.groups(ui.study);
     return `
       <h2>Design</h2>
-      <p class="lead">Each <b>factor</b> manipulates something about the <b>critical posts</b> (the posts your
-      hypotheses are about; the other posts are fillers).</p>
-      <ul class="tips">
-        <li><b>Within subjects</b>: every participant sees every level, on different posts. More power with fewer people; use it unless seeing one level would change how people react to the other.</li>
-        <li><b>Between subjects</b>: each participant gets one level. Use it when levels would contaminate each other (e.g. a whole comment climate).</li>
-      </ul>
+      <p class="lead">Each <b>factor</b> changes something about the <b>critical posts</b>; the other posts are fillers.</p>
       ${fs.map(factorCard).join("")}
       ${btn("add-factor", "+ Add factor", "primary")}
       <div class="summary"><b>${c}</b> within-subject cell${c === 1 ? "" : "s"} · <b>${g}</b> between-subject group${g === 1 ? "" : "s"} · balanced block of <b>${c * g}</b> participant${c * g === 1 ? "" : "s"}</div>
@@ -329,8 +321,7 @@
     const nImages = ui.content.critical * nv + ui.content.fillers * nvf + (rec ? ui.content.foils : 0);
     return `
       <h2>Content</h2>
-      <p class="lead">How much content the study has. This only decides how many rows the CSV skeletons get; it isn't stored in study.yaml.</p>
-      ${ui.opened ? `<p class="hint">You opened an existing study: its CSV files already exist. ${ui.desktop ? "These numbers matter only for CSV files that don't exist yet; saving never overwrites the others." : "These numbers matter only if you download CSV skeletons."}</p>` : ""}
+      <p class="lead">How many of each the CSV files get rows for${ui.opened ? (ui.desktop ? " (only CSV files that don't exist yet)" : " (only if you download CSV skeletons)") : ""}.</p>
       <div class="grid">
         ${field({ path: "content.critical", label: "Critical posts", kind: "int", min: 0, help: c > 1 ? `A multiple of ${c} (the number of within-subject cells), so everyone sees each cell equally often.` : "Posts that carry the manipulation." })}
         ${field({ path: "content.fillers", label: "Filler posts", kind: "int", min: 0, help: "Unmanipulated posts around the critical ones. More fillers make the manipulation less obvious." })}
@@ -442,8 +433,7 @@
     const camSteps = val("logging.front_camera.steps", ["feed"]);
     return `
       <h2>Recording</h2>
-      <p class="lead">Gaze (from the Neon glasses), where every post is on screen, interactions, answers and
-      session-quality events are always recorded. These are the optional extras.</p>
+      <p class="lead">Gaze, what is on screen, interactions, answers and session quality are always recorded. Optional extras:</p>
       <div class="card">
         ${field({ path: L + "touches", label: "Touch points", kind: "bool", help: "Every finger down / move / up. Needed for gestures and for spotting a finger covering part of an image. Cheap; keep it on." })}
       </div>
@@ -532,9 +522,7 @@
     const lo = Math.max(b, Math.floor(n / b) * b), hi = Math.ceil(n / b) * b;
     return `
       <h2>Participants</h2>
-      <p class="lead">The compiler writes one plan per participant id. Participants are balanced in blocks of
-      <b>${b}</b> (${C.groups(ui.study)} group(s) x ${C.cells(ui.study)} cell(s)): every complete block sees every
-      combination equally often. Recruit in multiples of the block too.</p>
+      <p class="lead">One plan per participant id, balanced in blocks of <b>${b}</b>: recruit in multiples of ${b}.</p>
       <div class="grid">
         ${field({ path: "participants.n_plans", label: "Number of plans", kind: "int", min: 1, max: 5000, help: "Make more plans than you expect to need; unused ones do no harm." })}
         ${field({ path: "participants.id_prefix", label: "Id prefix", kind: "text", adv: true })}
@@ -548,7 +536,7 @@
   function sessionsNote() {
     if (!ui.desktop || !ui.sessions || ui.protect) return "";
     return `<p class="hint"><span class="pill">${ui.sessions} session${ui.sessions === 1 ? "" : "s"} collected</span>
-      Text changes save as usual. Changes to the design, content or procedure need a new version number; saving will tell you.</p>`;
+      Changes to the design, content or procedure need a new version; saving tells you.</p>`;
   }
 
   /** The Download section as it is in the desktop app: save into the study folder. */
@@ -568,19 +556,15 @@
       </div>` : ""}
       ${sessionsNote()}
       ${errors.length ? `<p class="error-box">The design has ${errors.length === 1 ? "1 problem" : `${errors.length} problems`} (see the list on the right). You can still save and fix ${errors.length === 1 ? "it" : "them"} later.</p>` : ""}
-      <div class="card">
-        ${ui.folder
-          ? `<p>Study folder: <b class="folder">${esc(ui.folder)}</b> ${unsaved() ? `<span class="pill">unsaved changes</span>` : ""}</p>
-             <div class="row">${btn("save", "Save to study folder", "primary", ui.busy ? "disabled" : "")}${btn("check-folder", "Check study", "", ui.busy ? "disabled" : "")}${btn("save-new", "Save as a new study…", "link", ui.busy ? "disabled" : "")}</div>`
-          : `<p>This study isn't saved yet. Choose the folder to put it in (usually <code>studies</code>); a new folder named <code>${esc(ui.study.id || "…")}</code> is made inside it.</p>
-             <div class="row">${btn("save-new", "Save to a new folder…", "primary", ui.busy ? "disabled" : "")}</div>`}
-        ${ui.busy ? `<p class="hint">${esc(ui.busy)}</p>` : ""}
-        ${s ? `<p class="hint">Saved at ${clock(s.at)}: wrote ${s.written.map((f) => `<code>${esc(f)}</code>`).join(", ")}${s.kept.length ? `; kept your existing ${s.kept.map((f) => `<code>${esc(f)}</code>`).join(", ")}` : ""}${s.backup ? `. The previous study.yaml is in <code>study.yaml.bak</code>` : ""}.</p>` : ""}
-      </div>
-      <p class="hint">Saving writes <code>study.yaml</code> and creates the CSV files and NEXT_STEPS.txt only if they don't exist yet:
-      your CSV files are never overwritten. The previous study.yaml is kept as <code>study.yaml.bak</code>.
-      ${ui.hadComments ? "<b>Your study.yaml has comments (# …); they are not kept when you save.</b>" : ""}
-      After saving, the study is checked like <code>socialeyes validate</code> does: images, AOIs and CSV contents (list on the right).</p>
+      ${ui.folder
+        ? `<div class="row">${btn("save", "Save", "primary", ui.busy ? "disabled" : "")}${btn("check-folder", "Check study", "", ui.busy ? "disabled" : "")}${btn("save-new", "Save as a new study…", "link", ui.busy ? "disabled" : "")}
+             ${unsaved() ? `<span class="pill">unsaved changes</span>` : ""}</div>`
+        : `<p>Not saved yet: choose where (usually <code>studies</code>); a folder named <code>${esc(ui.study.id || "…")}</code> is made there.</p>
+           <div class="row">${btn("save-new", "Save to a new folder…", "primary", ui.busy ? "disabled" : "")}</div>`}
+      ${ui.busy ? `<p class="hint">${esc(ui.busy)}</p>` : ""}
+      ${s ? `<p class="hint">Saved at ${clock(s.at)}: wrote ${s.written.map((f) => `<code>${esc(f)}</code>`).join(", ")}${s.kept.length ? `; kept your existing ${s.kept.map((f) => `<code>${esc(f)}</code>`).join(", ")}` : ""}.</p>` : ""}
+      ${ui.hadComments ? `<p class="hint"><b>This study.yaml has comments (# …); saving doesn't keep them</b> (the old file stays as <code>study.yaml.bak</code>).</p>` : ""}
+      <p class="hint">Your CSV files are never overwritten: saving only creates the ones that don't exist yet.</p>
       ${filePreview(files)}`;
   }
 
@@ -625,8 +609,9 @@
       <p class="design-line">${esc(C.designSummary(ui.study))}</p>
       ${ui.advanced ? `<dl class="stats"><dt>Cells</dt><dd>${C.cells(ui.study)}</dd><dt>Groups</dt><dd>${C.groups(ui.study)}</dd><dt>Block</dt><dd>${C.blockSize(ui.study)}</dd><dt>Steps</dt><dd>${(ui.study.procedure || []).length}</dd></dl>` : ""}
       <h3>Checks</h3>
-      ${list.length ? `<ul class="checks">${list.map((c) => `<li class="${c.level}"><button type="button" data-action="goto:${c.section}"><span class="ic">${icon[c.level]}</span><span>${esc(c.msg)}</span></button></li>`).join("")}</ul>` : `<p class="ok-box">All good.</p>`}
-      ${ui.desktop ? folderChecks() : ""}`;
+      ${list.length ? `<ul class="checks">${list.map((c) => `<li class="${c.level}"><button type="button" data-action="goto:${c.section}"><span class="ic">${icon[c.level]}</span><span>${esc(c.msg)}</span></button></li>`).join("")}</ul>`
+        : ui.desktop && folderClean() ? "" : `<p class="ok-box">All good.</p>`}
+      ${ui.desktop ? folderChecks(!list.length) : ""}`;
     const counts = {};
     for (const c of list) if (c.level === "error") counts[c.section] = (counts[c.section] || 0) + 1;
     document.querySelectorAll("#nav button").forEach((b) => {
@@ -635,8 +620,15 @@
     });
   }
 
-  /** The compiler's checks of the saved folder (desktop app only). */
-  function folderChecks() {
+  /** The saved folder checked, with nothing to report and nothing unsaved. */
+  const folderClean = () => !!(ui.folder && ui.compiler && !ui.compiler.errors.length && !ui.compiler.warnings.length && !unsaved() && !ui.desktopError);
+
+  /** The compiler's checks of the saved folder (desktop app only); with ``designOk``, one line for both when all is well. */
+  function folderChecks(designOk) {
+    if (designOk && folderClean()) {
+      return `<p class="ok-box">All good: the design, images, AOIs and CSV files check out.</p>
+        <p class="hint">Checked at ${clock(ui.compiler.at)}. ${btn("check-folder", ui.busy === "Checking…" ? "Checking…" : "Check again", "link", ui.busy ? "disabled" : "")}</p>`;
+    }
     const head = `<h3>Study folder</h3>${ui.desktopError ? `<p class="error-box">${esc(ui.desktopError)}</p>` : ""}`;
     if (!ui.folder) return `${head}<p class="hint">Save the study to a folder to check its images, AOIs and CSV files too.</p>`;
     const k = ui.compiler;
