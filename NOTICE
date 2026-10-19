@@ -1,0 +1,14 @@
+SocialEyes
+Copyright 2026 Cam Hickling
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This software includes or downloads third-party components under their own licences:
+
+- MediaPipe and its face landmarker, pose landmarker and selfie multiclass segmentation
+  models (Google LLC), Apache License 2.0.
+- The Windows installer bundles adb from the Android SDK Platform-Tools (The Android Open
+  Source Project), Apache License 2.0; its own NOTICE.txt is installed alongside it.
+- The Windows installer bundles Python (Python Software Foundation License) and the Python
+  packages listed in python/pyproject.toml, each under its own licence (BSD, MIT, Apache 2.0
+  or similar permissive terms).

@@ -124,6 +124,7 @@ def main() -> None:
          "--icon", icon, "--distpath", OUT / "pyinstaller", "--workpath", OUT / "work", "--specpath", OUT,
          "--paths", ROOT / "python" / "src",
          "--add-data", f"{ROOT / 'builder' / 'index.html'}{sep}builder",
+         *[a for f in ("LICENSE", "NOTICE") for a in ("--add-data", f"{ROOT / f}{sep}.")],
          "--add-data", f"{stage / 'example'}{sep}example",
          "--add-data", f"{stage / 'app'}{sep}app",
          "--add-binary", f"{stage / 'adb'}{sep}adb",

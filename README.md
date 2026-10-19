@@ -11,6 +11,7 @@
 ![status](https://img.shields.io/badge/status-work%20in%20progress-6750A4?style=flat-square)
 ![version](https://img.shields.io/badge/version-0.1-21005D?style=flat-square)
 ![python](https://img.shields.io/badge/python-3.10%2B-21005D?style=flat-square&logo=python&logoColor=white)
+![license](https://img.shields.io/badge/license-Apache%202.0-21005D?style=flat-square)
 ![platform](https://img.shields.io/badge/app-Android-21005D?style=flat-square&logo=android&logoColor=white)
 ![eye tracker](https://img.shields.io/badge/eye%20tracker-Pupil%20Labs%20Neon-21005D?style=flat-square)
 ![stats](https://img.shields.io/badge/stats-R%20%C2%B7%20lme4-21005D?style=flat-square&logo=r&logoColor=white)
@@ -957,6 +958,8 @@ print(aois.label_points([500, 540], [200, 780]))   # ['face' 'waist']
 ## Repository layout
 
 ```
+LICENSE, NOTICE          Apache License 2.0; third-party components
+CITATION.cff             how to cite SocialEyes
 environment.yml          conda env: Python stack, JDK 17, R + lme4
 scripts/
   setup-toolchain.ps1    installs .toolchain\ (conda env + Android SDK)
@@ -1195,7 +1198,9 @@ before large changes so we can agree on the design.
 
 Maintainer: [Cam Hickling](https://github.com/CamHickling).
 
-*License: to be decided. Please ask before reusing this code in published work.*
+Licensed under the [Apache License 2.0](LICENSE); see [NOTICE](NOTICE) for third-party
+components. If you use SocialEyes in published work, please cite it ([CITATION.cff](CITATION.cff);
+GitHub's **Cite this repository** button gives APA and BibTeX).
 
 <br>
 

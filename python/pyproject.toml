@@ -7,6 +7,7 @@ name = "socialeyes"
 version = "0.1.0"
 description = "Study compiler, device tools and gaze analysis for the SocialEyes mock social media feed."
 requires-python = ">=3.10"
+license = {text = "Apache-2.0"}
 dependencies = [
   "numpy>=1.26",
   "pandas>=2.2",
