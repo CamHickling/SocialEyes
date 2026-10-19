@@ -79,4 +79,4 @@ def test_bridge_returns_results_or_messages(example, tmp_path):
 
 def test_builder_page_is_built():
     page = builder_page().read_text(encoding="utf-8")
-    assert "pywebviewready" in page and "Save to study folder" in page
+    assert "pywebviewready" in page and "Save as a new study" in page
