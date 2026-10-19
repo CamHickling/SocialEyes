@@ -23,6 +23,25 @@ fitted axes now 7° from it, were 23.5°). The phone's gyroscope predicts ~86% o
 rotation, but the hand also shifts the phone a few mm sideways, which no gyroscope measures. Flow
 bridges gaps ~10x better (0.06 vs 0.6 mm after 267 ms), so the sensors aren't used for tracking.
 
+## 18 Oct: the older analyses rerun with frames in order
+
+`analysis_out/rerun_18oct/` (ladder_A, ladder_B, accuracy_v4). No decision changes.
+
+- **tag_ladder B was scrambled before**: frames had been matched to the wrong holds (the old
+  "arm's length" hold measured 36 cm, the old "lap" hold 52 cm). Now each hold's distance fits its
+  instruction (arm's length 50 cm, lap 41 cm), and B gives tag36h11 readable (>= 85%) from ~30 px
+  wide: 10 mm to ~30 cm, 12 mm to ~35 cm, 14 mm to ~41 cm.
+- **tag_ladder A reads better than reported**: e.g. 14 mm held normally 76% -> 99%, 12 mm while
+  tilting the phone 29% -> 51%, and 5x more arm's-length frames with a pose (16 -> 88). Readable
+  from ~32 px (10 mm to ~28 cm, 14 mm to ~39 cm).
+- **accuracy_check v4**: gaze accuracy unchanged (PnP, all 4 tags: 1.68 deg raw, 0.38 deg after the
+  per-session shift). Optical flow bridges gaps better than reported: the 90th-percentile drift
+  after 60 frames (2 s) without tags is 4.2 mm, was 11.6 mm (after 15 frames 1.7, was 2.3 mm).
+  One top + one bottom tag is a little worse at the 90th percentile (0.89 mm, was 0.67 mm).
+
+These ladders used tag36h11. The chosen tag16h5 10 mm comes from tag_bars, which was already
+re-analysed on 13 Oct.
+
 ## Results: tag_bars, share of frames with a top AND a bottom tag read (smart detection; plain in brackets)
 
 | Variant | Feed lost | Run 1 normal 36 cm | Run 1 arm's 53 cm | Run 1 lap 37 cm | Run 2 normal 32 cm | Run 2 arm's 45 cm | Run 2 lap 35 cm |
@@ -69,8 +88,7 @@ Test report (summary, method, charts plain vs smart, tables, Tests, screenshots;
 
 ## Next, in order
 
-1. **Rerun the older analyses** with frames in order: tag_ladder A/B (`python -m socialeyes.gaze.ladder`)
-   and accuracy_check v4 (`scripts/tracking_pnp_test.py`).
+1. ~~**Rerun the older analyses**~~: done 18 Oct, see "18 Oct: the older analyses rerun" above.
 2. **Real layout: 16h5 10 mm tags in the feed's own bars.** A `markers.on_screen` layout option
    (e.g. `layout: bars`, `family: tag16h5`, `size_mm: 10`) drawn by FeedScreen's top bar and tab bar,
    reusing `ui/TagBars.kt`'s geometry; keep the bars visible over stories, reels and the comment
