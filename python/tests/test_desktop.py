@@ -80,3 +80,15 @@ def test_bridge_returns_results_or_messages(example, tmp_path):
 def test_builder_page_is_built():
     page = builder_page().read_text(encoding="utf-8")
     assert "pywebviewready" in page and "Save as a new study" in page
+
+
+def test_feed_preview(example):
+    from socialeyes.desktop.preview import feed_preview
+
+    r = feed_preview(example, "P002")
+    assert r["participant"] == "P002" and len(r["participants"]) == 16 and r["platform"] == "Pictogram"
+    assert len(r["posts"]) == 20 and all(p["image"] and p["image"].startswith("data:image/jpeg") for p in r["posts"])
+    labelled = [p for p in r["posts"] if p["role"] == "critical" and "label=edited" in p["cell"]]
+    assert labelled and all(p["label"]["text"] == "This image has been digitally altered" for p in labelled)
+    assert all(len(p["comments"]) <= 2 for p in r["posts"])
+    assert feed_preview(example, "nope")["participant"] == "P001"  # an unknown id falls back to the first

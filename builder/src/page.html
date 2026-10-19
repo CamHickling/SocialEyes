@@ -198,6 +198,25 @@ details.folders { margin-top: 28px; border-top: 1px solid var(--line); padding-t
 details.folders summary { cursor: pointer; color: var(--muted); font-weight: 600; }
 details.folders p { margin: 8px 0; }
 table.register tr.withdrawn td { color: var(--muted); }
+/* ---------------------------------------------------------- Design > Preview: the feed in a phone */
+select.narrow { width: auto; flex: 0 0 auto; min-width: 0; }
+.pv-phone { width: 380px; max-width: 100%; margin: 16px 0; border: 8px solid #222; border-radius: 32px; overflow: hidden;
+  background: #fff; color: #111; font: 14px/1.4 system-ui, sans-serif; box-shadow: var(--shadow); }
+.pv-phone.dark { background: #000; color: #f5f5f5; }
+.pv-top { padding: 10px 14px; font: italic 600 24px/1.2 "Brush Script MT", "Segoe Script", cursive; border-bottom: 1px solid #8884; }
+.pv-post { border-bottom: 1px solid #8883; padding-bottom: 6px; }
+.pv-head { display: flex; align-items: center; gap: 8px; padding: 8px 12px; }
+.pv-av { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; background: #ccc; display: inline-block; }
+.pv-img { position: relative; }
+.pv-img img { width: 100%; display: block; }
+.pv-missing { padding: 60px 12px; text-align: center; background: #8882; color: #a33; }
+.pv-banner { position: absolute; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,.7); color: #fff; padding: 8px 12px; font-size: 13px; }
+.pv-post p { margin: 2px 12px; }
+.pv-labelcap { font-size: 12px; opacity: .7; padding: 4px 0; }
+.pv-actions { font-size: 20px; padding: 4px 0; }
+.pv-muted { opacity: .6; } .pv-small { font-size: 11px; }
+.pv-cond { margin-left: auto; font-size: 11px; padding: 1px 8px; border-radius: 999px; background: #e8e1f7; color: #4a3a7a; }
+.pv-cond.filler { background: #eee; color: #666; }
 #tabpage p.hint .status { margin-right: 6px; }
 .row input[type=checkbox] { flex: none; width: auto; min-width: 0; }
 .row .check { margin: 0 0 0 8px; align-items: center; font-size: 14px; }

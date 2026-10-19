@@ -280,7 +280,10 @@ its name appears in the top bar with its three pages:
   same as `socialeyes validate`, shown next to the design checks. The **Content** step also
   lists which of the images, avatars, story images, videos and AOI files the CSVs name are in
   the folder ("61 of 61 files ready"), and **Draw AOIs** draws face and body AOIs on the
-  critical posts' images ([`socialeyes aois`](#defining-areas-of-interest-aois)).
+  critical posts' images ([`socialeyes aois`](#defining-areas-of-interest-aois)). **Preview**
+  shows one participant's feed as the phone will show it (their post order, images, labels,
+  likes, captions and first comments), from the study as saved; pick any participant, and tick
+  **Show each post's condition** to check the counterbalancing.
 - **Phone**: checks the phone and loads the study onto it (see [Running the app](#running-the-app)).
 - **Data**: unloads sessions from the phone, lists them, and makes the
   [tables for analysis](#tables-for-analysis); the data and second-copy folders are under
@@ -1140,8 +1143,9 @@ Roughly in order:
   - [ ] **Phone setup wizard**: a one-time guide with pictures for turning on developer
         mode and USB debugging, installing the app and allowing the camera; it detects the
         phone's state and shows the next step
-  - [ ] **Feed preview**: see posts, labels, comments and stories as the participant will,
-        in the app or sent to the phone, before running anyone
+  - [x] **Feed preview**: each participant's feed (posts, labels, likes, captions, comments) in
+        the desktop app's Design > Preview, before running anyone. Stories and reels aren't
+        previewed yet; load the study and use the phone for those
   - [ ] **"Fix it" buttons** on the checks that can be fixed automatically ("Use 12 plans",
         "Add a camera check step", "Add a marker calibration before the feed")
   - [x] **Session-day mode** (no locking without the researcher's confirmation; unload stays on the computer's Data page): a "Next participant" button with the next unused ID from the

@@ -33,6 +33,7 @@
     studies: { list: null, newId: "", error: null },
     files: { result: null, missingOnly: true, error: null },   // the study folder's files (Design > Content)
     aois: { result: null, overwrite: false, error: null },     // the last automatic AOIs (Design > Content)
+    preview: { result: null, pid: null, conditions: false, error: null },   // Design > Preview (desktop)
   };
 
   /** The open study's pages in the desktop app; Studies (the home page) comes first. */
@@ -593,7 +594,48 @@
   const RENDER = {
     start: sectionStart, basics: sectionBasics, design: sectionDesign, content: sectionContent, feed: sectionFeed,
     procedure: sectionProcedure, recording: sectionRecording, participants: sectionParticipants, download: sectionDownload,
+    preview: sectionPreview,
   };
+
+  /** Design > Preview (desktop): one participant's feed as the phone shows it, from the saved study. */
+  function sectionPreview() {
+    const P = ui.preview, r = P.result, dis = ui.busy ? "disabled" : "";
+    let html = `<h2>Preview</h2>
+      <p class="lead">One participant's feed as the phone will show it: their post order, images, labels and comments.</p>`;
+    if (!ui.folder) return html + `<p class="hint">Save the study first: the preview is made from the saved study.</p>`;
+    if (unsaved()) html += `<p class="hint"><span class="pill">unsaved changes</span> The preview shows the study as saved. ${btn("save", "Save", "link", dis)}</p>`;
+    if (P.error) html += `<p class="error-box">${esc(P.error)}</p>`;
+    if (!r) return html + `<p class="hint">${esc(ui.busy || "Making the preview…")}</p>`;
+    html += `<div class="row"><label class="hint" for="preview-pid">Participant</label>
+      <select id="preview-pid" class="narrow">${r.participants.map((p) => `<option ${p === r.participant ? "selected" : ""}>${esc(p)}</option>`).join("")}</select>
+      ${btn("preview-refresh", "Refresh", "link", dis)}
+      <label class="check"><input type="checkbox" id="preview-conditions" ${P.conditions ? "checked" : ""}> <span>Show each post's condition</span></label></div>
+      ${r.group ? `<p class="hint">Group: ${esc(r.group)}</p>` : ""}`;
+    const posts = r.posts.map((p) => `
+      <article class="pv-post">
+        <div class="pv-head">${p.avatar ? `<img class="pv-av" src="${p.avatar}" alt="">` : `<span class="pv-av"></span>`}<b>${esc(p.handle)}</b>${p.verified ? " ✓" : ""}
+          ${P.conditions ? `<span class="pv-cond ${p.role}">${esc(p.role === "critical" ? p.cell : "filler")}</span>` : ""}</div>
+        <div class="pv-img">${p.image ? `<img src="${p.image}" alt="${esc(p.image_id)}">` : `<div class="pv-missing">${esc(p.image_id)}: image missing</div>`}
+          ${p.label && p.label.style === "banner" ? `<div class="pv-banner">ⓘ ${esc(p.label.text)}</div>` : ""}</div>
+        ${p.label && p.label.style === "caption" ? `<p class="pv-labelcap">${esc(p.label.text)}</p>` : ""}
+        <p class="pv-actions">♡ &nbsp;💬&nbsp; ➤</p>
+        ${p.likes != null ? `<p><b>${Number(p.likes).toLocaleString()} likes</b></p>` : ""}
+        ${p.caption ? `<p><b>${esc(p.handle)}</b> ${esc(p.caption)}</p>` : ""}
+        ${p.n_comments > 2 ? `<p class="pv-muted">View all ${p.n_comments} comments</p>` : ""}
+        ${p.comments.map((c) => `<p><b>${esc(c.handle)}</b> ${esc(c.text)}</p>`).join("")}
+        ${p.posted_ago ? `<p class="pv-muted pv-small">${esc(p.posted_ago)} ago</p>` : ""}
+      </article>`).join("");
+    return html + `<div class="pv-phone ${r.theme === "dark" ? "dark" : ""}"><div class="pv-top">${esc(r.platform)}</div>${posts}</div>`;
+  }
+
+  async function previewRefresh() {
+    const P = ui.preview;
+    P.error = null;
+    if (!ui.folder) { render(); return; }
+    try { P.result = await bridge("preview", "Making the preview…", ui.folder, P.pid); }
+    catch (e) { P.error = e.message; P.result = null; }
+    render();
+  }
 
   // ------------------------------------------------------------ side panel
 
@@ -644,7 +686,10 @@
   // ------------------------------------------------------------ render
 
   const sectionLabel = (k, label) => (k === "download" && ui.desktop ? "Save" : label);
-  const sections = () => (ui.desktop ? SECTIONS.filter(([k]) => k !== "start") : SECTIONS);
+  // the desktop app has no Start step (the Studies page starts studies) and a Preview before Save
+  const sections = () => (ui.desktop
+    ? SECTIONS.filter(([k]) => k !== "start").flatMap((s) => (s[0] === "download" ? [["preview", "Preview"], s] : [s]))
+    : SECTIONS);
 
   /**
    * The desktop app's header and pages: Studies, then, with a study open, its name and its
@@ -1191,6 +1236,7 @@
     ui.data = { status: null, unload: null, export: null, faces: null, heatmaps: null, blur: false, by: "cell", unblind: false, error: null };
     ui.files.result = null;
     ui.aois = { result: null, overwrite: false, error: null };
+    ui.preview = { result: null, pid: null, conditions: false, error: null };
     if (!opened) C.syncFoils(ui.study, ui.content);
     ui.section = "basics";
     render();
@@ -1244,6 +1290,7 @@
       ui.protect = null;
       ui.desktopError = null;
       ui.files.result = null;
+      ui.preview.result = null;
     } catch (e) {
       ui.desktopError = `Couldn't save: ${e.message}`;
     }
@@ -1308,6 +1355,7 @@
         ui.section = args[0];
         window.scrollTo(0, 0);
         if (ui.desktop && ui.section === "content" && !ui.files.result && !ui.busy) { render(); filesRefresh(); return; }
+        if (ui.desktop && ui.section === "preview" && !ui.preview.result && !ui.busy) { render(); previewRefresh(); return; }
         break;
       case "random-seed": S.seed = Math.floor(Math.random() * 1e8); break;
       case "add-factor": {
@@ -1406,6 +1454,7 @@
         return;
       case "data-heatmaps": dataHeatmaps(); return;
       case "aois-draw": aoisDraw(); return;
+      case "preview-refresh": previewRefresh(); return;
       case "data-open-export": bridge("open_path", null, ui.data.export.out_dir).catch((e) => { ui.data.error = e.message; render(); }); return;
       case "data-pick": dataPick(args[0]); return;
       case "data-clear": case "data-open": dataAct(name, args[0]); return;
@@ -1503,6 +1552,8 @@
     if (el.id === "open-file" && el.files && el.files[0]) { openFile(el.files[0]); return; }
     if (el.id === "phone-update") { ui.phone.updateApp = el.checked; return; }
     if (el.id === "aois-overwrite") { ui.aois.overwrite = el.checked; return; }
+    if (el.id === "preview-pid") { ui.preview.pid = el.value; previewRefresh(); return; }
+    if (el.id === "preview-conditions") { ui.preview.conditions = el.checked; render(); return; }
     if (el.id === "data-blur") { ui.data.blur = el.checked; render(); return; }
     if (el.id === "data-unblind") {
       if (el.checked && !confirm("Unblinding shows which condition is which. Do it only once your analysis plan is fixed. Unblind the next exploration page?")) { el.checked = false; return; }

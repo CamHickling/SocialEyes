@@ -254,6 +254,13 @@ class Api:
         r, skipped = study_heatmaps(folder, by=by or "cell", progress=self._progress)
         return {"page": r.page, "images": len(r.images), "skipped": [{"folder": f, "why": w} for f, w in skipped]}
 
+    @_reply
+    def preview(self, folder: str, participant_id: str | None = None) -> dict:
+        """A participant's feed as the phone will show it, from the study as saved."""
+        from .preview import feed_preview
+
+        return feed_preview(folder, participant_id or None)
+
     # ---------------------------------------------------------- Design > Content
 
     @_reply
