@@ -1,0 +1,139 @@
+table,column,description,values
+by_session,participant_id,Participant id,
+by_session,session_uid,"The session (a participant can have more than one, see duplicate_id)",
+by_session,group,Between-subjects group number (1-based),
+by_session,group_key,"The group's levels, factor=level joined by |",
+by_session,list,Counterbalancing list of the within-subjects design (0-based),
+by_session,comments,Between-subjects factor comments,"neutral, appearance"
+by_session,started,When the session started (phone's local time),ISO 8601
+by_session,completed,The session ran to its end,"1 = yes, 0 = no"
+by_session,end_reason,How it ended,"completed, aborted, ..."
+by_session,duration_s,Length of the whole session,seconds
+by_session,feed_s,Time on the feed step,seconds
+by_session,feed_end_reason,How the feed ended,"done_button, time_limit, continue"
+by_session,posts_seen,Feed posts that came on screen,count
+by_session,critical_seen,Critical posts that came on screen,count
+by_session,likes,Posts liked at the end of the feed,count
+by_session,saves,Posts saved at the end of the feed,count
+by_session,shares,Times the send button was used,count
+by_session,comments_opened,Times its comments sheet was opened,count
+by_session,comments_posted,Comments and replies the participant posted on it,count
+by_session,stories_viewed,Different stories shown,count
+by_session,stories_s,Time stories were shown,seconds
+by_session,reels_viewed,Different reels played,count
+by_session,reels_s,Time reels were watched,seconds
+by_session,background_s,Time the app was in the background,seconds
+by_session,interruptions,"Notifications, calls, alarms and covered screens",count
+by_session,dnd_at_start,Do Not Disturb at the start,"off, priority, alarms, total_silence"
+by_session,n_warnings,Quality warnings (see warnings),count
+by_session,warnings,"Quality warnings, joined by ;",
+by_session,duplicate_id,The participant id has more than one session (from sessions.csv),"1 = yes, 0 = no"
+by_session,notes,The researcher's notes in sessions.csv,
+by_session,body_sat_pre,Questionnaire pre: How satisfied are you with your body right now?,0-1 (Not at all to Extremely)
+by_session,body_sat_post,Questionnaire post: How satisfied are you with your body right now?,0-1 (Not at all to Extremely)
+by_session,recog_hit_rate,Recognition (recog): share of seen images called old,0-1
+by_session,recog_fa_alternate,Recognition (recog): share of unseen versions of seen posts called old,0-1
+by_session,recog_fa_foil,Recognition (recog): share of never-shown foil images called old,0-1
+by_item,participant_id,Participant id,
+by_item,session_uid,"The session (a participant can have more than one, see duplicate_id)",
+by_item,group,Between-subjects group number (1-based),
+by_item,group_key,"The group's levels, factor=level joined by |",
+by_item,list,Counterbalancing list of the within-subjects design (0-based),
+by_item,comments,Between-subjects factor comments,"neutral, appearance"
+by_item,position,Position in the participant's feed (0 = top),
+by_item,post_id,The post (posts.csv),
+by_item,role,critical (manipulated) or filler,"critical, filler"
+by_item,cell,Within-subjects cell (filler: all filler posts),
+by_item,edit,Within-subjects factor edit,"original, retouched"
+by_item,label,Within-subjects factor label,"none, edited"
+by_item,image_id,The image shown (images.csv),
+by_item,account_id,Account that posted it (accounts.csv),
+by_item,label_shown,Label shown on the post (blank: none),
+by_item,comment_variant,Comment set shown (comments.csv variant),
+by_item,seen,Came on screen at all,"1 = yes, 0 = no"
+by_item,post_visible_s,Any part of the post on screen,seconds
+by_item,post_weighted_s,Post time on screen x share of it visible,seconds
+by_item,image_visible_s,Any part of the image on screen,seconds
+by_item,image_full_s,The whole image on screen,seconds
+by_item,image_weighted_s,Image time on screen x share of it visible,seconds
+by_item,first_seen_s,"When the post first came on screen, from the start of the feed",seconds
+by_item,entries,Times the post scrolled into view,count
+by_item,comments_sheet_s,Time its comments sheet was on screen,seconds
+by_item,liked,Liked at the end of the feed,"1 = yes, 0 = no"
+by_item,like_via,How it was first liked,"button, double_tap"
+by_item,saved,Saved at the end of the feed,"1 = yes, 0 = no"
+by_item,shares,Times the send button was used,count
+by_item,comments_opened,Times its comments sheet was opened,count
+by_item,comments_posted,Comments and replies the participant posted on it,count
+by_item,comment_likes,Comments the participant liked on it,count
+by_item,caption_expanded,"The caption's ""more"" was tapped","1 = yes, 0 = no"
+by_item,label_tapped,The label was tapped,"1 = yes, 0 = no"
+by_item,profile_tapped,The account's name or picture was tapped,"1 = yes, 0 = no"
+by_item,image_taps,Single taps on the image that did nothing else,count
+by_item,attractive,Image rating (ratings) of this post's image: How attractive is this person?,1-7
+by_item,attractive_rt_ms,"Time to the last change of attractive, from the rating page appearing",milliseconds
+by_item,realistic,Image rating (ratings) of this post's image: How realistic is this image?,1-7
+by_item,realistic_rt_ms,"Time to the last change of realistic, from the rating page appearing",milliseconds
+by_item,recog_old_response,Recognition (recog): answer to the version of this post's image the participant saw,"old, new"
+by_item,recog_old_correct,Recognition (recog): the answer to the version of this post's image the participant saw was right,"1 = yes, 0 = no"
+by_item,recog_old_confidence,Recognition (recog): confidence for the version of this post's image the participant saw,1-4
+by_item,recog_old_rt_ms,Recognition (recog): time to answer for the version of this post's image the participant saw,milliseconds
+by_item,recog_alt_response,Recognition (recog): answer to the other version of this post's image (not seen),"old, new"
+by_item,recog_alt_correct,Recognition (recog): the answer to the other version of this post's image (not seen) was right,"1 = yes, 0 = no"
+by_item,recog_alt_confidence,Recognition (recog): confidence for the other version of this post's image (not seen),1-4
+by_item,recog_alt_rt_ms,Recognition (recog): time to answer for the other version of this post's image (not seen),milliseconds
+by_item,gaze_fixations,Fixations on the post's image (from socialeyes gaze; blank: no eye tracking),count
+by_item,gaze_image_ms,Time fixating the post's image,milliseconds
+by_item,gaze_face_ms,Time fixating AOI face of the post's image,milliseconds
+by_item,gaze_face_first_s,Time from the post first coming on screen to the first fixation in AOI face (blank: never fixated),seconds
+by_item,gaze_waist_ms,Time fixating AOI waist of the post's image,milliseconds
+by_item,gaze_waist_first_s,Time from the post first coming on screen to the first fixation in AOI waist (blank: never fixated),seconds
+by_item,gaze_legs_ms,Time fixating AOI legs of the post's image,milliseconds
+by_item,gaze_legs_first_s,Time from the post first coming on screen to the first fixation in AOI legs (blank: never fixated),seconds
+by_condition,participant_id,Participant id,
+by_condition,session_uid,"The session (a participant can have more than one, see duplicate_id)",
+by_condition,group,Between-subjects group number (1-based),
+by_condition,group_key,"The group's levels, factor=level joined by |",
+by_condition,list,Counterbalancing list of the within-subjects design (0-based),
+by_condition,comments,Between-subjects factor comments,"neutral, appearance"
+by_condition,cell,Within-subjects cell (filler: all filler posts),
+by_condition,edit,Within-subjects factor edit,"original, retouched"
+by_condition,label,Within-subjects factor label,"none, edited"
+by_condition,n_posts,Posts of this cell in the participant's feed,count
+by_condition,seen,Share of the cell's posts with by_item seen = 1,0-1
+by_condition,post_visible_s,Mean over the cell's posts of by_item post_visible_s,seconds
+by_condition,post_weighted_s,Mean over the cell's posts of by_item post_weighted_s,seconds
+by_condition,image_visible_s,Mean over the cell's posts of by_item image_visible_s,seconds
+by_condition,image_full_s,Mean over the cell's posts of by_item image_full_s,seconds
+by_condition,image_weighted_s,Mean over the cell's posts of by_item image_weighted_s,seconds
+by_condition,first_seen_s,Mean over the cell's posts of by_item first_seen_s,seconds
+by_condition,entries,Mean over the cell's posts of by_item entries,count
+by_condition,comments_sheet_s,Mean over the cell's posts of by_item comments_sheet_s,seconds
+by_condition,liked,Share of the cell's posts with by_item liked = 1,0-1
+by_condition,saved,Share of the cell's posts with by_item saved = 1,0-1
+by_condition,shares,Mean over the cell's posts of by_item shares,count
+by_condition,comments_opened,Mean over the cell's posts of by_item comments_opened,count
+by_condition,comments_posted,Mean over the cell's posts of by_item comments_posted,count
+by_condition,comment_likes,Mean over the cell's posts of by_item comment_likes,count
+by_condition,caption_expanded,Share of the cell's posts with by_item caption_expanded = 1,0-1
+by_condition,label_tapped,Share of the cell's posts with by_item label_tapped = 1,0-1
+by_condition,profile_tapped,Share of the cell's posts with by_item profile_tapped = 1,0-1
+by_condition,image_taps,Mean over the cell's posts of by_item image_taps,count
+by_condition,attractive,Mean over the cell's posts of by_item attractive,1-7
+by_condition,attractive_rt_ms,Mean over the cell's posts of by_item attractive_rt_ms,milliseconds
+by_condition,realistic,Mean over the cell's posts of by_item realistic,1-7
+by_condition,realistic_rt_ms,Mean over the cell's posts of by_item realistic_rt_ms,milliseconds
+by_condition,recog_old_correct,Share of the cell's posts with by_item recog_old_correct = 1,0-1
+by_condition,recog_old_confidence,Mean over the cell's posts of by_item recog_old_confidence,1-4
+by_condition,recog_old_rt_ms,Mean over the cell's posts of by_item recog_old_rt_ms,milliseconds
+by_condition,recog_alt_correct,Share of the cell's posts with by_item recog_alt_correct = 1,0-1
+by_condition,recog_alt_confidence,Mean over the cell's posts of by_item recog_alt_confidence,1-4
+by_condition,recog_alt_rt_ms,Mean over the cell's posts of by_item recog_alt_rt_ms,milliseconds
+by_condition,gaze_fixations,Mean over the cell's posts of by_item gaze_fixations,count
+by_condition,gaze_image_ms,Mean over the cell's posts of by_item gaze_image_ms,milliseconds
+by_condition,gaze_face_ms,Mean over the cell's posts of by_item gaze_face_ms,milliseconds
+by_condition,gaze_face_first_s,Mean over the cell's posts of by_item gaze_face_first_s,seconds
+by_condition,gaze_waist_ms,Mean over the cell's posts of by_item gaze_waist_ms,milliseconds
+by_condition,gaze_waist_first_s,Mean over the cell's posts of by_item gaze_waist_first_s,seconds
+by_condition,gaze_legs_ms,Mean over the cell's posts of by_item gaze_legs_ms,milliseconds
+by_condition,gaze_legs_first_s,Mean over the cell's posts of by_item gaze_legs_first_s,seconds

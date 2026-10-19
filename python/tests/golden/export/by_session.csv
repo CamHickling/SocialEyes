@@ -1,0 +1,5 @@
+participant_id,session_uid,group,group_key,list,comments,started,completed,end_reason,duration_s,feed_s,feed_end_reason,posts_seen,critical_seen,likes,saves,shares,comments_opened,comments_posted,stories_viewed,stories_s,reels_viewed,reels_s,background_s,interruptions,dnd_at_start,n_warnings,warnings,duplicate_id,notes,body_sat_pre,body_sat_post,recog_hit_rate,recog_fa_alternate,recog_fa_foil
+P001,P001-golden,1,comments=appearance,0,appearance,2026-10-02T10:00:00.000+00:00,1,completed,242.447,86.818,done_button,20,8,3,0,0,0,0,0,0.0,0,0.0,0.0,0,,0,,0,,0.797,0.752,0.5,0.5,0.5
+P002,P002-golden,1,comments=appearance,2,appearance,2026-10-02T10:00:00.000+00:00,1,completed,248.698,91.792,done_button,20,8,3,0,0,1,0,0,0.0,0,0.0,0.0,0,,0,,0,,0.561,0.683,0.375,0.5,1.0
+P003,P003-golden,1,comments=appearance,3,appearance,2026-10-02T10:00:00.000+00:00,1,completed,262.064,96.266,done_button,20,8,2,0,0,1,0,0,0.0,0,0.0,0.0,0,,0,,0,,0.888,0.858,0.375,0.5,0.5
+P004,P004-golden,0,comments=neutral,2,neutral,2026-10-02T10:00:00.000+00:00,1,completed,250.183,96.812,done_button,20,8,3,0,0,1,0,0,0.0,0,0.0,0.0,0,,0,,0,,0.684,0.912,0.5,0.625,0.5

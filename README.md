@@ -1084,7 +1084,8 @@ Roughly in order:
       and fold in the export, AOI and heatmap features above
 - [ ] *Later:* **Facial expression analysis** of the front camera video (expressions / action
       units over time, aligned to the posts on screen), once the face camera features are in
-- [ ] More tests and docs, macOS/Linux setup
+- [ ] More tests and docs, macOS/Linux setup (golden sessions done: `python/tests/test_golden.py`
+      checks four fixed simulated sessions' analysis and export against saved results)
 - [x] **Experiment builder**: a form that walks you through the study's decisions
       (factors, procedure, feed, logging) and writes `study.yaml` and CSV skeletons for you
 - [x] Commenting and replying in the comments sheet
