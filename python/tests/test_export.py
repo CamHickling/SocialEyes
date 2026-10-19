@@ -49,7 +49,7 @@ def test_export_writes_every_table_and_skips_broken_sessions(exported):
     assert r.sessions == 3
     assert len(r.skipped) == 1 and "P009-x" in r.skipped[0][0]
     assert sorted(p.name for p in (root / "out").iterdir()) == ["by_condition.csv", "by_item.csv", "by_session.csv",
-                                                                "codebook.csv"]
+                                                                "codebook.csv", "exploration", "exploration.html"]
     assert (root / "out" / "by_item.csv").read_bytes().startswith(b"\xef\xbb\xbf")  # Excel reads UTF-8 with a BOM
     assert len(t["by_session"]) == 3
     assert len(t["by_item"]) == 3 * 20
@@ -161,3 +161,39 @@ def test_desktop_export_uses_the_study_folders(exported, tmp_path, monkeypatch):
     r = Api().data_export(str(EXAMPLE))["ok"]
     assert r["sessions"] == 3 and r["out_dir"] == str(copy / "export")
     assert settings.export_dir("example") == copy / "export"
+
+
+def test_exploration_is_blinded_until_unblinded(exported, tmp_path):
+    build, data, r, _, root = exported
+    page = (root / "out" / "exploration.html").read_text(encoding="utf-8")
+    assert r.exploration.endswith("exploration.html") and not r.unblinded
+    assert "Blinded." in page and "condition A" in page and "group X" in page
+    levels = ["original", "retouched", "edited", "neutral", "appearance", "edit=", "label=", "comments="]
+    assert not [w for w in levels if w in page.replace("by_session", "")]  # no condition name gives anything away
+    assert "Image time on screen" in page and "Rating: attractive" in page and "Questionnaire: body_sat_pre" in page
+    assert len(list((root / "out" / "exploration").glob("*.png"))) >= 10
+    # the same codes every time
+    again = export_study(EXAMPLE, data, tmp_path / "again", build_for=lambda _f: build)
+    assert (tmp_path / "again" / "exploration.html").read_text(encoding="utf-8").split("<h2>Per post</h2>")[1] \
+        .count("condition") == page.split("<h2>Per post</h2>")[1].count("condition")
+    open_ = export_study(EXAMPLE, data, tmp_path / "open", build_for=lambda _f: build, unblind=True)
+    shown = (tmp_path / "open" / "exploration.html").read_text(encoding="utf-8")
+    assert open_.unblinded and "Unblinded:" in shown and "edit=original|label=none" in shown
+
+
+def test_exploration_outliers_skip_yes_no_measures():
+    import pandas as pd
+    from socialeyes.session.explore import _outliers
+
+    assert _outliers(pd.Series([0, 1, 0, 0, 1, 1, 0, 1])) is None
+    assert _outliers(pd.Series([1, 2, 3, 2, 3, 2, 50.0])) == 1
+
+
+def test_cli_unblind_flag(exported, tmp_path, capsys):
+    _, data, _, _, _ = exported
+    copy = tmp_path / "data"
+    shutil.copytree(data, copy, ignore=shutil.ignore_patterns("P009"))
+    assert main(["export", str(EXAMPLE), "--data", str(copy)]) == 0
+    assert "blinded: conditions as codes" in capsys.readouterr().out
+    assert main(["export", str(EXAMPLE), "--data", str(copy), "--unblind"]) == 0
+    assert "UNBLINDED" in capsys.readouterr().out

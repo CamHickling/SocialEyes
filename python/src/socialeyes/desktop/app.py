@@ -185,11 +185,12 @@ class Api:
         return unload(folder, serial=serial or None, progress=self._progress).to_json()
 
     @_reply
-    def data_export(self, folder: str) -> dict:
-        """Tables of every unloaded session (by session, by item, by condition) and their codebook."""
+    def data_export(self, folder: str, unblind: bool = False) -> dict:
+        """Tables of every unloaded session (by session, by item, by condition), their codebook and
+        the blinded exploration page (``unblind``: with the real condition names)."""
         from ..session.export import export
 
-        return export(folder, progress=self._progress).to_json()
+        return export(folder, progress=self._progress, unblind=bool(unblind)).to_json()
 
     @_reply
     def data_faces(self, folder: str, blur: bool = False) -> dict:

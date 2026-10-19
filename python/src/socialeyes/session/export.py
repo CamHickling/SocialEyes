@@ -9,7 +9,8 @@ Every session in the study's data folder becomes rows in three tables:
 - ``by_condition.csv``: one row per session x cell of the within-subjects design (and one for
   the fillers): the means of by_item's numeric columns over that cell's posts
 
-and ``codebook.csv`` describes every column. Files are UTF-8 with a byte-order mark, so Excel
+and ``codebook.csv`` describes every column. ``exploration.html`` is a blinded first look at them
+(session flags, missing values, distributions, conditions behind codes; no tests; see explore.py). Files are UTF-8 with a byte-order mark, so Excel
 shows accents correctly. Gaze columns join by_item once the gaze pipeline maps fixations to AOIs.
 """
 from __future__ import annotations
@@ -114,19 +115,22 @@ _CONDITION = [
 @dataclass
 class ExportResult:
     out_dir: Optional[str] = None
+    exploration: Optional[str] = None
+    unblinded: bool = False
     sessions: int = 0
     skipped: list = field(default_factory=list)   # (session folder, why)
     files: list = field(default_factory=list)
 
     def to_json(self) -> dict:
-        return {"out_dir": self.out_dir, "sessions": self.sessions, "files": self.files,
+        return {"out_dir": self.out_dir, "exploration": self.exploration, "unblinded": self.unblinded,
+                "sessions": self.sessions, "files": self.files,
                 "skipped": [{"folder": f, "why": w} for f, w in self.skipped]}
 
 
 def export_study(study_dir: Path | str, data_dir: Path | str, out_dir: Path | str,
                  build_for: Optional[Callable[[Path], Optional[Path]]] = None,
                  progress: Callable[[str], None] = lambda s: None,
-                 analysis_dir: Optional[Path | str] = None, faces: bool = True) -> ExportResult:
+                 analysis_dir: Optional[Path | str] = None, faces: bool = True, unblind: bool = False) -> ExportResult:
     """Writes the tables for every session under ``data_dir`` (<participant>/<session>/) to ``out_dir``.
 
     ``build_for(session folder)`` returns the compiled package the session ran, or None for the
@@ -189,6 +193,14 @@ def export_study(study_dir: Path | str, data_dir: Path | str, out_dir: Path | st
         path = out / "codebook.csv"
         _write_codebook(path, manifest, tables)
         r.files.append(str(path))
+        from .explore import write_exploration
+
+        study = manifest["study"]
+        r.exploration = str(write_exploration(
+            out, tables, manifest, {"ratings": [c for c, _, _ in _rating_columns(study)],
+                                    "questionnaire": [c for c, _, _ in _questionnaire_columns(study)]}, unblind))
+        r.unblinded = unblind
+        r.files.append(r.exploration)
         r.sessions = len(sessions)
         return r
     finally:
@@ -621,7 +633,7 @@ def _item_values(it: dict) -> str:
 
 
 def export(study_dir: Path | str, data_dir: Path | str | None = None, out_dir: Path | str | None = None,
-           progress: Callable[[str], None] = lambda s: None, faces: bool = True) -> ExportResult:
+           progress: Callable[[str], None] = lambda s: None, faces: bool = True, unblind: bool = False) -> ExportResult:
     """export_study with the study's folders from the settings (data folder, <data folder>/export)
     and each session's own build where it was kept at load time."""
     from .. import settings
@@ -631,7 +643,7 @@ def export(study_dir: Path | str, data_dir: Path | str | None = None, out_dir: P
     data = Path(data_dir) if data_dir else settings.data_dir(sid)
     out = Path(out_dir) if out_dir else (data / "export" if data_dir else settings.export_dir(sid))
     return export_study(study_dir, data, out, build_for=snapshot_or_none(sid), progress=progress,
-                        analysis_dir=settings.analysis_dir(sid), faces=faces)
+                        analysis_dir=settings.analysis_dir(sid), faces=faces, unblind=unblind)
 
 
 def snapshot_or_none(study_id: str) -> Callable[[Path], Optional[Path]]:

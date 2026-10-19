@@ -29,7 +29,7 @@
     // Phone tab: result of the last phone check / load, and the choices on the tab
     phone: { result: null, serial: "", devices: [], updateApp: false, progress: null, error: null },
     // Data tab: the study's folders and register, the phone's sessions, the last unload
-    data: { status: null, unload: null, export: null, faces: null, heatmaps: null, blur: false, by: "cell", error: null },
+    data: { status: null, unload: null, export: null, faces: null, heatmaps: null, blur: false, by: "cell", unblind: false, error: null },
     studies: { list: null, newId: "", error: null },
     files: { result: null, missingOnly: true, error: null },   // the study folder's files (Design > Content)
     aois: { result: null, overwrite: false, error: null },     // the last automatic AOIs (Design > Content)
@@ -904,6 +904,8 @@
         ${btn("data-open:data", "Open data folder", "link", dis)}${btn("data-refresh", "Refresh", "link", dis)}</div>
       ${ph.error ? `<p class="hint">${esc(ph.error)}</p>` : ""}
       ${busy && ui.phone.progress ? `<p class="hint">${esc(ui.phone.progress)}</p>` : ""}
+      ${rows.length ? `<label class="check"><input type="checkbox" id="data-unblind" ${D.unblind ? "checked" : ""}> <span>Unblind the exploration page (real condition names)</span></label>` : ""}
+      ${x && x.exploration ? `<p>${btn("open-path:" + x.exploration, x.unblinded ? "Open the exploration page (unblinded)" : "Open the exploration page (blinded)", "link")}</p>` : ""}
       ${x && x.out_dir ? `<p class="hint">Tables (by session, by item, by condition, and a codebook) for ${x.sessions} session${x.sessions === 1 ? "" : "s"} in ${btn("data-open-export", esc(x.out_dir), "link")}${x.skipped.length
         ? `. Skipped ${x.skipped.length}: ${x.skipped.map((s) => esc(`${s.folder.split(/[\\/]/).slice(-2).join("/")} (${s.why})`)).join("; ")}` : ""}</p>` : ""}`;
     const u = D.unload;
@@ -1004,7 +1006,7 @@
     const D = ui.data;
     D.error = null;
     ui.phone.progress = "Starting…";
-    try { D.export = await bridge("data_export", "Making tables…", ui.folder); }
+    try { D.export = await bridge("data_export", "Making tables…", ui.folder, D.unblind); }
     catch (e) { D.error = e.message; }
     ui.phone.progress = null;
     render();
@@ -1122,7 +1124,7 @@
     ui.sessions = 0;
     ui.protect = null;
     ui.phone.result = null;
-    ui.data = { status: null, unload: null, export: null, faces: null, heatmaps: null, blur: false, by: "cell", error: null };
+    ui.data = { status: null, unload: null, export: null, faces: null, heatmaps: null, blur: false, by: "cell", unblind: false, error: null };
     ui.files.result = null;
     ui.aois = { result: null, overwrite: false, error: null };
     if (!opened) C.syncFoils(ui.study, ui.content);
@@ -1430,6 +1432,10 @@
     if (el.id === "phone-update") { ui.phone.updateApp = el.checked; return; }
     if (el.id === "aois-overwrite") { ui.aois.overwrite = el.checked; return; }
     if (el.id === "data-blur") { ui.data.blur = el.checked; render(); return; }
+    if (el.id === "data-unblind") {
+      if (el.checked && !confirm("Unblinding shows which condition is which. Do it only once your analysis plan is fixed. Unblind the next exploration page?")) { el.checked = false; return; }
+      ui.data.unblind = el.checked; return;
+    }
     if (el.id === "data-by") { ui.data.by = el.value; return; }
     if (el.id === "advanced-toggle") { setAdvanced(el.checked); render(); return; }
     if (el.id === "files-missing") { ui.files.missingOnly = el.checked; render(); return; }

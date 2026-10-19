@@ -139,7 +139,7 @@ for mixed models in R.
 | Example study (placeholder images) and tests | ✅ | `studies/example/`, `python/tests/` |
 | Session log format (touches, scrolling, interactions, quality events) | ✅ | `docs/EVENT_LOG.md` (version 1) |
 | Session analysis: gestures, time on screen, touch→AOI, finger occlusion, quality checks | ✅ | `python/src/socialeyes/session/` (tested on simulated sessions) |
-| Tables for analysis: by session, by item, by condition, with a codebook (`socialeyes export`, Data tab) | ✅ | `python/src/socialeyes/session/export.py` |
+| Tables for analysis: by session, by item, by condition, with a codebook (`socialeyes export`, Data tab), and a blinded exploration page | ✅ | `python/src/socialeyes/session/export.py`, `explore.py` |
 | Face camera analysis: face present, head pose, distance, looking away, expression scores, blurred copies (`socialeyes face`) | ✅ | `python/src/socialeyes/face/` |
 | Automatic face and body AOIs on post images, with a review page (`socialeyes aois`) | ✅ | `python/src/socialeyes/face/body_aois.py` |
 | Fixations on post images and AOIs (`socialeyes gaze`), heatmaps by condition with difference maps (`socialeyes heatmaps`), gaze columns in the export | ✅ (tested on one real session and simulated fixations) | `python/src/socialeyes/gaze/fixations.py`, `heatmap.py` |
@@ -542,6 +542,20 @@ They go to `export/` in the study's data folder (`--data` and `-o` choose others
 stay on the same drive as the sessions. Files are UTF-8 with a byte-order mark, which Excel
 needs for accents. Each session is analysed with the exact build it ran, and a session that
 can't be read is listed and skipped. Gaze columns are blank for sessions without `fixations.csv`.
+
+**A blinded first look.** Every export also writes `exploration.html`, for checking the data
+before the analysis without seeing the results:
+
+- the sessions someone might exclude, and why (not completed, a repeat participant id, more than
+  30 s in the background, interruptions, the face out of view): flagged, never excluded
+- each measure's missing values, outliers and distribution
+- each measure per condition (participants' means), with the conditions shown as **condition A,
+  B, …** and the groups as **group X, Y, …** in a shuffled order that says nothing about which is
+  which; the order stays the same from one export to the next, and the key is never written down
+
+It fits no models and runs no tests. Unblind (`socialeyes export --unblind`, or tick
+**Unblind** under Data in the app, which asks first) only once your analysis plan, including the
+exclusion rules, is fixed. The tables themselves always have the real condition names.
 
 ### Face camera analysis
 
@@ -995,8 +1009,9 @@ Roughly in order:
 - [ ] **Analysis pipeline**: tag detection → screen homography → scroll-aware
       mapping of gaze to post and image pixels → AOI fixation metrics
       (in progress: phone tracking and gaze on screen are built, `socialeyes gaze`)
-- [ ] **R templates** for the standard mixed models
-      (`dwell ~ edit * label + (1|participant) + (1|post)`)
+- [x] **Blinded exploration** instead of model templates: `exploration.html` with every export
+      shows data quality and distributions with the conditions behind codes until you unblind;
+      SocialEyes fits no models, so the analysis stays the researcher's, run once, as planned
 - [x] **On-screen tags in the real UI**: the chosen AprilTag 16h5
       10 mm tags drawn in the feed's own top bar and tab bar (`markers.on_screen` layout
       `bars`), kept visible over stories, reels and the comments sheet, plus a screenshot
@@ -1007,7 +1022,7 @@ Roughly in order:
       conditions, time on screen, likes, comment opens, ratings, recognition answers, gaze
       dwell per AOI, time to first fixation) and **by condition** (one row per participant x
       condition cell, averaged over posts); a codebook describing every column; a one-click
-      button in the desktop app's Data tab and `socialeyes export`; the R templates read these
+      button in the desktop app's Data tab and `socialeyes export`; ready for R, SPSS or Excel
 - [x] **Front (face) camera features** (`socialeyes face`): built on the existing front camera recording.
       Per-frame face detection after unloading (face present, head pose, distance from the
       screen, looking at the phone or away), a coverage report per step in `quality.json`,

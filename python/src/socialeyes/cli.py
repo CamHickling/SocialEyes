@@ -394,15 +394,17 @@ def cmd_export(args) -> int:
 
     try:
         r = export(args.study, data_dir=args.data, out_dir=args.out, progress=lambda s: print(s, flush=True),
-                   faces=not args.no_faces)
+                   faces=not args.no_faces, unblind=args.unblind)
     except ValueError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
     for folder, why in r.skipped:
         print(f"  skipped {folder}: {why}")
     print(f"{r.sessions} session(s) -> {r.out_dir}")
+    print(f"  exploration.html ({'UNBLINDED: real condition names' if r.unblinded else 'blinded: conditions as codes'})")
     for f in r.files:
-        print(f"  {Path(f).name}")
+        if not f.endswith("exploration.html"):
+            print(f"  {Path(f).name}")
     return 1 if r.skipped and not r.sessions else 0
 
 
@@ -550,6 +552,9 @@ def main(argv: list[str] | None = None) -> int:
     ex.add_argument("-o", "--out", help="output folder (default: export/ in the data folder)")
     ex.add_argument("--no-faces", action="store_true",
                     help="don't analyse front camera videos that haven't been analysed yet (their face columns stay blank)")
+    ex.add_argument("--unblind", action="store_true",
+                    help="show the real condition names in exploration.html (default: neutral codes, so the "
+                         "data can be checked without seeing the results)")
     ex.set_defaults(func=cmd_export)
 
     fo = sub.add_parser("folders", help="show or set where this computer keeps a study's data and second copy")
