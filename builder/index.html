@@ -198,6 +198,8 @@ table.register td.end { text-align: right; }
 details.folders { margin-top: 28px; border-top: 1px solid var(--line); padding-top: 12px; }
 details.folders summary { cursor: pointer; color: var(--muted); font-weight: 600; }
 details.folders p { margin: 8px 0; }
+table.register tr.withdrawn td { color: var(--muted); }
+#tabpage p.hint .status { margin-right: 6px; }
 .row input[type=checkbox] { flex: none; width: auto; min-width: 0; }
 .row .check { margin: 0 0 0 8px; align-items: center; font-size: 14px; }
 .row .check input { margin-top: 0; }
@@ -1789,10 +1791,15 @@ if (typeof module !== "undefined") module.exports = Core;
     let html = `<h2>Data</h2>`;
     if (D.error) html += `<p class="error-box">${esc(D.error)}</p>`;
     if (!st) return html + `<p class="hint">${esc(ui.busy || "Loading…")}</p>`;
-    const ph = st.phone || {}, rows = st.register || [], x = D.export;
+    const ph = st.phone || {}, all = st.register || [], x = D.export;
+    const rows = all.filter((r) => r.session_uid);
+    const nWithdrawn = new Set(all.filter((r) => r.status === "withdrawn").map((r) => r.participant_id)).size;
+    const copiedOnPhone = rows.filter((r) => r.on_phone === "yes" && r.status !== "withdrawn").length;
     html += `
-      <p class="lead">${rows.length} session${rows.length === 1 ? "" : "s"} on this computer${ph.error ? "" : ` · ${ph.sessions} on ${esc(ph.name)}`}</p>
-      <div class="row">${btn("data-unload", ph.sessions ? `Unload ${ph.sessions} from the phone` : "Unload from phone", "primary", busy || ph.error || !ph.sessions ? "disabled" : "")}
+      <p class="lead">${rows.length} session${rows.length === 1 ? "" : "s"} on this computer${ph.error ? "" : ` · ${ph.sessions} on ${esc(ph.name)}${copiedOnPhone ? ` (${copiedOnPhone} copied)` : ""}`}${nWithdrawn ? ` · ${nWithdrawn} withdrawn` : ""}</p>
+      ${storageLine(st)}${retentionLine(st)}
+      <div class="row">${btn("data-unload", "Copy from the phone", "primary", busy || ph.error || !ph.sessions ? "disabled" : "")}
+        ${!st.clear_after_unload && copiedOnPhone && !ph.error ? btn("data-clear-phone", `Clear ${copiedOnPhone} copied from the phone`, "", dis) : ""}
         ${btn("data-export", "Make tables", "", busy || !rows.length ? "disabled" : "")}
         ${btn("data-open:data", "Open data folder", "link", dis)}${btn("data-refresh", "Refresh", "link", dis)}</div>
       ${ph.error ? `<p class="hint">${esc(ph.error)}</p>` : ""}
@@ -1801,6 +1808,9 @@ if (typeof module !== "undefined") module.exports = Core;
       ${x && x.exploration ? `<p>${btn("open-path:" + x.exploration, x.unblinded ? "Open the exploration page (unblinded)" : "Open the exploration page (blinded)", "link")}</p>` : ""}
       ${x && x.out_dir ? `<p class="hint">Tables (by session, by item, by condition, and a codebook) for ${x.sessions} session${x.sessions === 1 ? "" : "s"} in ${btn("data-open-export", esc(x.out_dir), "link")}${x.skipped.length
         ? `. Skipped ${x.skipped.length}: ${x.skipped.map((s) => esc(`${s.folder.split(/[\\/]/).slice(-2).join("/")} (${s.why})`)).join("; ")}` : ""}</p>` : ""}`;
+    const L = D.last;
+    if (L && L.notes && L.notes.length) html += `<p class="hint">${esc(L.participant_id)} ${esc(L.action)}: ${L.notes.map(esc).join("; ")}</p>`;
+    if (L && L.deleted && typeof L.files === "number") html += `<p class="hint">Deleted ${L.files} file(s) of ${L.deleted.length} session(s).</p>`;
     const u = D.unload;
     if (u && u.error) html += `<p class="error-box">${esc(u.error)}</p>`;
     if (u && u.sessions && u.sessions.length) {
@@ -1808,15 +1818,25 @@ if (typeof module !== "undefined") module.exports = Core;
         const [cls, ic, msg] = s.error ? ["error", "✕", `not unloaded: ${s.error}`]
           : s.deleted ? [s.warnings.length ? "warning" : "ok", s.warnings.length ? "!" : "✓",
             `copied and checked${s.second_copy ? ", second copy checked" : ""}, deleted from the phone${s.warnings.length ? `. ${s.warnings.length} warning(s): ${s.warnings.join("; ")}` : ""}`]
-          : ["info", "→", `copied and checked; ${s.kept_reason}`];
+          : s.copied ? ["ok", "✓", `copied and checked${s.second_copy ? ", second copy checked" : ""}; ${s.kept_reason}`]
+          : ["info", "→", s.kept_reason || "left on the phone"];
         return `<li class="${cls}"><div class="msg"><span class="ic">${ic}</span><span><b>${esc(s.participant_id)}</b> ${esc(s.session_uid)}: ${esc(msg)}</span></div></li>`;
       }).join("")}</ul>`;
     }
-    html += rows.length ? `<div class="table-wrap"><table class="register"><thead><tr><th>Participant</th><th>Started</th><th>Completed</th><th>Warnings</th><th>Notes</th></tr></thead><tbody>
-      ${rows.map((r) => `<tr><td>${esc(r.participant_id)}${r.duplicate_id ? ` <span class="pill">ID used twice</span>` : ""}${r.on_phone ? ` <span class="pill">still on phone</span>` : ""}</td>
-        <td>${esc((r.started || "").replace("T", " ").slice(0, 16))}</td><td>${r.completed === "yes" ? "yes" : `<b>${esc(r.completed || "?")}</b> ${esc(r.end_reason || "")}`}</td>
-        <td title="${esc(r.warnings)}">${esc(r.n_warnings || "0")}</td><td>${esc(r.notes)}</td></tr>`).join("")}
-      </tbody></table></div><p class="hint">Hover a warning count to read the warnings. Notes added to <code>sessions.csv</code> in Excel are kept.</p>`
+    const firstRow = new Set();
+    html += all.length ? `<div class="table-wrap"><table class="register"><thead><tr><th>Participant</th><th>Started</th><th>Completed</th><th>Warnings</th><th>Notes</th><th></th></tr></thead><tbody>
+      ${all.map((r) => {
+        const first = !firstRow.has(r.participant_id);
+        firstRow.add(r.participant_id);
+        const w = r.status === "withdrawn", gone = r.status === "deleted";
+        const actions = !first ? "" : w ? `${btn(`data-restore:${r.participant_id}`, "Restore", "link", dis)}${btn(`data-delete-withdrawn:${r.participant_id}`, "Delete permanently…", "link danger", dis)}`
+          : gone ? "" : btn(`data-withdraw:${r.participant_id}`, "Withdraw…", "link", dis);
+        return `<tr class="${w || gone ? "withdrawn" : ""}"><td>${esc(r.participant_id)}${w ? ` <span class="pill">withdrawn ${esc((r.status_at || "").slice(0, 10))}</span>` : gone ? ` <span class="pill">deleted</span>` : ""}${r.duplicate_id && !w ? ` <span class="pill">ID used twice</span>` : ""}${r.on_phone === "yes" && !w ? ` <span class="pill">on phone</span>` : ""}</td>
+        <td>${esc((r.started || "").replace("T", " ").slice(0, 16))}</td><td>${!r.session_uid ? "" : r.completed === "yes" ? "yes" : `<b>${esc(r.completed || "?")}</b> ${esc(r.end_reason || "")}`}</td>
+        <td title="${esc(r.warnings)}">${esc(r.n_warnings || (r.session_uid ? "0" : ""))}</td><td>${esc(r.notes)}</td><td class="end">${actions}</td></tr>`;
+      }).join("")}
+      </tbody></table></div><p class="hint">Hover a warning count to read the warnings. Notes added to <code>sessions.csv</code> in Excel are kept.
+      Withdrawing moves a participant's data aside and out of every table (Restore undoes it); <i>Delete permanently</i> then removes it, from the phone too.</p>`
       : `<p class="hint">No sessions yet.</p>`;
     html += analysisSection(st);
     html += `
@@ -1827,6 +1847,52 @@ if (typeof module !== "undefined") module.exports = Core;
         <p class="hint">A second copy of every session, e.g. on an encrypted or university drive. Set for this computer only.</p>
       </details>`;
     return html;
+  }
+
+  /** Data: whether the data folders are on an encrypted drive, or inside a cloud-sync folder. */
+  function storageLine(st) {
+    const items = (st.storage || []).map((s) => s.cloud
+      ? `<span class="status warning" title="${esc(s.path)}">${esc(s.folder)}: inside ${esc(s.cloud)}, so it uploads itself</span>`
+      : s.encrypted === true ? `<span class="status ok" title="${esc(s.path)}">${esc(s.folder)}: on an encrypted drive</span>`
+      : s.encrypted === false ? `<span class="status warning" title="${esc(s.path)}">${esc(s.folder)}: not on an encrypted drive</span>`
+      : "");
+    return items.some(Boolean) ? `<p class="hint">${items.join(" ")}</p>` : "";
+  }
+
+  /** Data: what the study's retention rules (data: in study.yaml) say is due. */
+  function retentionLine(st) {
+    const r = st.retention, dis = ui.busy ? "disabled" : "";
+    if (!r || (!r.keep_until && r.face_video_days == null)) return "";
+    const parts = [];
+    if (r.sessions.length) parts.push(`${r.sessions.length} session${r.sessions.length === 1 ? "" : "s"} past the keep-until date (${esc(r.keep_until)}) ${btn("data-retention:sessions", "Delete them…", "link danger", dis)}`);
+    if (r.face_videos.length) parts.push(`face videos of ${r.face_videos.length} session${r.face_videos.length === 1 ? "" : "s"} older than ${r.face_video_days} days ${btn("data-retention:face_videos", "Delete the videos…", "link danger", dis)}`);
+    return parts.length ? `<p class="error-box">Retention: ${parts.join("; ")}</p>`
+      : `<p class="hint">Retention: keep until ${esc(r.keep_until || "–")}${r.face_video_days != null ? `; face videos ${r.face_video_days} days after unloading` : ""}. Nothing due.</p>`;
+  }
+
+  async function dataCall(name, busy, ...args) {
+    const D = ui.data;
+    D.error = null;
+    ui.phone.progress = "Starting…";
+    try { D.last = await bridge(name, busy, ui.folder, ...args); }
+    catch (e) { D.error = e.message; }
+    ui.phone.progress = null;
+    await dataRefresh();
+  }
+
+  async function dataPeople(name, pid) {
+    if (name === "data-withdraw") {
+      const reason = prompt(`Withdraw ${pid}? Their data is moved aside and left out of every table; you can restore it until you delete it permanently.\n\nReason (optional, kept in withdrawals.csv):`, "");
+      if (reason === null) return;
+      if (prompt(`Type ${pid} to confirm the withdrawal:`) !== pid) return;
+      await dataCall("data_withdraw", "Withdrawing…", pid, reason);
+    } else if (name === "data-restore") {
+      if (!confirm(`Restore ${pid}'s data? They will be in the tables again.`)) return;
+      await dataCall("data_restore", "Restoring…", pid);
+    } else if (name === "data-delete-withdrawn") {
+      if (prompt(`Delete ${pid}'s data permanently, from this computer, the second copy and the phone if connected? This can't be undone. Type ${pid} to confirm:`) !== pid) return;
+      await dataCall("data_delete_withdrawn", "Deleting…", pid, ui.phone.serial || null);
+    }
   }
 
   /** Data: face videos and eye tracking, for studies that have them. */
@@ -2225,6 +2291,14 @@ if (typeof module !== "undefined") module.exports = Core;
       case "data-unload": dataUnload(); return;
       case "data-export": dataExport(); return;
       case "data-faces": dataFaces(); return;
+      case "data-clear-phone":
+        if (confirm("Delete from the phone the sessions whose copy on this computer (and second copy) still matches it? Anything else stays on the phone.")) dataCall("data_clear", "Clearing the phone…", ui.phone.serial || null).then(() => { ui.data.unload = ui.data.last; render(); });
+        return;
+      case "data-withdraw": case "data-restore": case "data-delete-withdrawn": dataPeople(name, args.join(":")); return;
+      case "data-retention":
+        if (confirm(args[0] === "sessions" ? "Delete every session past the study's keep-until date from this computer (and the second copy)? The register keeps their rows. This can't be undone."
+          : "Delete the raw face videos that are due (the face measures stay)? This can't be undone.")) dataCall("data_retention_delete", "Deleting…", args[0]);
+        return;
       case "data-heatmaps": dataHeatmaps(); return;
       case "aois-draw": aoisDraw(); return;
       case "data-open-export": bridge("open_path", null, ui.data.export.out_dir).catch((e) => { ui.data.error = e.message; render(); }); return;

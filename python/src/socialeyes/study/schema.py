@@ -6,6 +6,7 @@ working example.
 """
 from __future__ import annotations
 
+import datetime
 from typing import Annotated, Literal, Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -79,6 +80,18 @@ class OnScreenTags(_Strict):
     size_mm: float = Field(12.0, ge=4, le=20)
     """Black-border edge length on the screen. 9 mm was at the Neon scene camera's detection limit
     with the phone held low (CAM-210), so 12 mm by default."""
+
+
+class DataPolicy(_Strict):
+    """How long the study's data may be kept (from its ethics approval). SocialEyes only reminds:
+    the Data page and `socialeyes retention` list what is due, and nothing is deleted without the
+    researcher confirming it."""
+
+    keep_until: Optional[datetime.date] = None
+    """The date after which the study's session data should be deleted."""
+    face_video_days: Optional[int] = Field(None, ge=0, le=36500)
+    """Days after unloading after which the raw front camera videos should be deleted (the face
+    measures and expression scores from `socialeyes face` are kept). Unset: with the rest."""
 
 
 class Markers(_Strict):
@@ -578,6 +591,7 @@ class Study(_Strict):
     feed: Feed = Feed()
     procedure: list[Step]
     participants: Participants = Participants()
+    data: DataPolicy = DataPolicy()
 
     @field_validator("id")
     @classmethod

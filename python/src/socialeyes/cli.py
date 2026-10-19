@@ -364,9 +364,9 @@ def cmd_load(args) -> int:
 
 
 def cmd_unload(args) -> int:
-    from .phone.unload import unload
+    from .phone.unload import clear_phone, unload
 
-    r = unload(args.study, serial=args.serial, progress=lambda s: print(s, flush=True))
+    r = (clear_phone if args.clear else unload)(args.study, serial=args.serial, progress=lambda s: print(s, flush=True))
     if r.error:
         print(f"error: {r.error}", file=sys.stderr)
         return 1
@@ -379,10 +379,11 @@ def cmd_unload(args) -> int:
             failed += 1
             print(f"  {s.participant_id} {s.session_uid}: NOT unloaded: {s.error}")
             continue
-        state = "deleted from the phone" if s.deleted else f"left on the phone: {s.kept_reason}"
+        state = "deleted from the phone" if s.deleted else f"on the phone: {s.kept_reason}"
         extra = ", second copy checked" if s.second_copy else ""
         done = "" if s.completed is None else (" completed" if s.completed else " NOT completed")
-        print(f"  {s.participant_id} {s.session_uid}:{done}, copied and checked{extra}, {state}")
+        what = "copied and checked" if s.copied else "not copied"
+        print(f"  {s.participant_id} {s.session_uid}:{done}, {what}{extra}, {state}")
         for w in s.warnings:
             print(f"      warning: {w}")
     print(f"Data folder: {r.data_dir} (register: sessions.csv)")
@@ -408,6 +409,80 @@ def cmd_export(args) -> int:
     return 1 if r.skipped and not r.sessions else 0
 
 
+def _confirm(prompt: str, expected: str, yes: bool) -> bool:
+    if yes:
+        return True
+    try:
+        return input(f"{prompt} Type {expected} to confirm: ").strip() == expected
+    except EOFError:
+        return False
+
+
+def cmd_withdraw(args) -> int:
+    from .session import withdraw as W
+
+    pid = args.participant
+    try:
+        if args.restore:
+            r = W.restore(args.study, pid)
+        elif args.delete:
+            if not _confirm(f"Delete {pid}'s withdrawn data permanently (this computer and, if connected, the "
+                            "phone)? This can't be undone.", pid, args.yes):
+                print("Nothing deleted.")
+                return 1
+            r = W.delete_permanently(args.study, pid, serial=args.serial)
+        else:
+            if not _confirm(f"Withdraw {pid}? Their data moves to withdrawn/ and leaves the exports (undo with "
+                            "--restore).", pid, args.yes):
+                print("Nothing changed.")
+                return 1
+            r = W.withdraw(args.study, pid, reason=args.reason or "")
+    except (ValueError, OSError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    print(f"{pid}: {r.action}; {len(r.sessions)} session(s)")
+    for a, b in r.moved:
+        print(f"  moved {a} -> {b}")
+    for d in r.deleted:
+        print(f"  deleted {d}")
+    for n in r.notes:
+        print(f"  note: {n}")
+    return 0
+
+
+def cmd_retention(args) -> int:
+    from .session import retention as R
+
+    try:
+        d = R.due(args.study)
+    except (ValueError, OSError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    for st in R.storage(args.study):
+        enc = {True: "on an encrypted drive", False: "NOT on an encrypted drive", None: "drive encryption unknown"}[st["encrypted"]]
+        cloud = f"; inside {st['cloud']}, so it uploads itself" if st["cloud"] else ""
+        print(f"{st['folder']}: {st['path']} ({enc}{cloud})")
+    if not d["keep_until"] and d["face_video_days"] is None:
+        print("No retention rules (data: keep_until / face_video_days in study.yaml).")
+    else:
+        print(f"Keep until: {d['keep_until'] or '-'}; face videos: "
+              f"{str(d['face_video_days']) + ' days after unloading' if d['face_video_days'] is not None else '-'}")
+        print(f"Due: {len(d['sessions'])} session(s) past keep_until, face videos of {len(d['face_videos'])} session(s)")
+    if args.delete:
+        what = {"face-videos": "face_videos", "sessions": "sessions"}[args.delete]
+        n = len(d[what])
+        if not n:
+            print("Nothing due.")
+            return 0
+        if not _confirm(f"Delete {'the face videos of ' if what == 'face_videos' else ''}{n} session(s) from this "
+                        "computer? This can't be undone.", "delete", args.yes):
+            print("Nothing deleted.")
+            return 1
+        r = R.delete_due(args.study, what)
+        print(f"Deleted {r['files']} file(s) of {len(r['deleted'])} session(s).")
+    return 0
+
+
 def cmd_folders(args) -> int:
     from . import settings
     from .phone.unload import study_id_of
@@ -418,11 +493,15 @@ def cmd_folders(args) -> int:
         changes["data_dir"] = str(Path(args.data).resolve())
     if args.second_copy:
         changes["second_copy_dir"] = None if args.second_copy.lower() == "none" else str(Path(args.second_copy).resolve())
+    if args.clear_after_unload:
+        changes["clear_after_unload"] = True if args.clear_after_unload == "on" else None
     if changes:
         settings.set_study(sid, **changes)
     second = settings.second_copy_dir(sid)
     print(f"{sid}: data folder {settings.data_dir(sid)}")
     print(f"{sid}: second copy {second if second else '(none)'}")
+    print(f"{sid}: sessions leave the phone "
+          f"{'as soon as they are unloaded' if settings.study(sid).get('clear_after_unload') else 'only with: socialeyes unload --clear'}")
     print(f"(saved in {settings.settings_path()})")
     return 0
 
@@ -541,10 +620,28 @@ def main(argv: list[str] | None = None) -> int:
     ld.add_argument("--anyway", action="store_true", help="load despite warnings (battery, Do Not Disturb, ...)")
     ld.set_defaults(func=cmd_load)
 
-    ul = sub.add_parser("unload", help="copy the study's sessions off the phone, check them, then delete them there")
+    ul = sub.add_parser("unload", help="copy the study's sessions off the phone and check them (the phone keeps them)")
     ul.add_argument("study", help="study folder (or its study.yaml)")
     ul.add_argument("--serial", help="the phone to use when several are connected (see: adb devices)")
+    ul.add_argument("--clear", action="store_true",
+                    help="instead: delete from the phone the sessions whose copies here (and second copy) match it")
     ul.set_defaults(func=cmd_unload)
+
+    wd = sub.add_parser("withdraw", help="withdraw a participant: their data leaves everything (undo: --restore)")
+    wd.add_argument("study", help="study folder (or its study.yaml)")
+    wd.add_argument("participant", help="participant id")
+    wd.add_argument("--reason", help="noted in withdrawals.csv")
+    wd.add_argument("--restore", action="store_true", help="undo a withdrawal that hasn't been deleted permanently")
+    wd.add_argument("--delete", action="store_true", help="delete a withdrawn participant's data permanently")
+    wd.add_argument("--serial", help="the phone, with --delete")
+    wd.add_argument("--yes", action="store_true", help="don't ask to confirm")
+    wd.set_defaults(func=cmd_withdraw)
+
+    rt = sub.add_parser("retention", help="where the study's data is kept and what its retention rules say is due")
+    rt.add_argument("study", help="study folder (or its study.yaml)")
+    rt.add_argument("--delete", choices=["face-videos", "sessions"], help="delete what is due (asks to confirm)")
+    rt.add_argument("--yes", action="store_true", help="don't ask to confirm")
+    rt.set_defaults(func=cmd_retention)
 
     ex = sub.add_parser("export", help="tidy tables of every session: by session, by item, by condition, with a codebook")
     ex.add_argument("study", help="study folder (or its study.yaml)")
@@ -561,6 +658,8 @@ def main(argv: list[str] | None = None) -> int:
     fo.add_argument("study", help="study folder (or its study.yaml)")
     fo.add_argument("--data", help="folder for the study's sessions (default: data/<study id>)")
     fo.add_argument("--second-copy", help="folder for a checked second copy of every session, or 'none'")
+    fo.add_argument("--clear-after-unload", choices=["on", "off"],
+                    help="on: delete each session from the phone as soon as it is unloaded and checked (default off)")
     fo.set_defaults(func=cmd_folders)
 
     a = sub.add_parser("app", help="open the desktop app (design studies in a window)")

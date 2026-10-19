@@ -833,10 +833,14 @@ socialeyes unload studies/example
 For every session of the study on the phone it reads each file's SHA-256 on the phone,
 copies the session into the study's data folder and checks every file, makes the second
 copy if one is set (and checks it), runs the session analysis (`analysis_out/<study>/…`)
-and records the session in `sessions.csv` in the data folder. **Only then** is the session
-deleted from the phone; if anything fails, it stays there. A session that hasn't ended
-while SocialEyes is open on the phone may still be recording, so it is copied but left on
-the phone until you close the app and unload again.
+and records the session in `sessions.csv` in the data folder. **The phone keeps every
+session**: losing data is the bigger risk. When you're ready, `socialeyes unload --clear` (or
+**Clear copied from the phone** on the Data page) deletes from the phone only the sessions whose
+copy on this computer, and second copy if one is set, still match the phone's files file for
+file; anything else stays. A computer can instead clear each session as soon as it is copied and
+checked: `socialeyes folders <study> --clear-after-unload on`. A session that hasn't ended while
+SocialEyes is open on the phone may still be recording, so it always stays until you close the
+app and unload again.
 
 The data folder is `data/<study id>` unless you choose another one, for example an
 encrypted or university drive. That choice, and the optional second copy, belong to
@@ -989,6 +993,40 @@ docs/
   a debrief that explains the image editing, and signposting to support
   resources.
 
+### Withdrawal, retention and where the data lives
+
+SocialEyes is built to lose nothing by accident, and to keep a record of every participant:
+
+- **Withdrawal, in two steps.** `socialeyes withdraw <study> <participant id>` (or **Withdraw…**
+  on the Data page, which asks for the id to be typed) marks the participant `withdrawn` in
+  `sessions.csv` and moves all their files (sessions in the data folder and second copy, their
+  analysis output) into `withdrawn/<participant>/` folders. From then on they are left out of
+  unloading, the tables, the exploration page and the heatmaps; the tables and heatmaps that
+  included them are deleted to be made again. Until the second step a mistake can be undone
+  (`--restore`, **Restore**). `--delete` (**Delete permanently…**) then removes the held files and,
+  with the phone connected, their sessions still on it. The register keeps the participant's rows
+  with their status, and `withdrawals.csv` in the data folder logs every step (when, what, how many
+  files, the reason if given). Their **Neon recording** lives in Neon Companion or Pupil Cloud,
+  outside SocialEyes: the log and the app show its id so it can be deleted there.
+- **Retention reminders.** A study can say how long its data may be kept:
+
+  ```yaml
+  data:
+    keep_until: 2031-12-31     # from the ethics approval
+    face_video_days: 90        # raw front camera videos, after unloading (face measures stay)
+  ```
+
+  The Data page and `socialeyes retention <study>` show what is due; nothing is deleted until you
+  confirm (`--delete sessions` or `--delete face-videos`, or the page's buttons). Deletions are
+  logged in `withdrawals.csv`, and the register keeps the rows (status `deleted`).
+- **Where the data lives.** The Data page and `socialeyes retention` say whether the data folder
+  and second copy are on an encrypted drive (BitLocker; Windows reports it without admin rights)
+  and warn if either is inside a cloud-sync folder (OneDrive, Dropbox, Google Drive), whose files
+  upload themselves. SocialEyes doesn't encrypt files itself: a lost password would lose the data,
+  and Excel, R and SPSS couldn't open the tables. Keep the data on an IT-managed encrypted drive or
+  a university drive instead. Participants appear only by id, and the profile photo is never
+  stored.
+
 ---
 
 ## Roadmap
@@ -1009,6 +1047,11 @@ Roughly in order:
 - [ ] **Analysis pipeline**: tag detection → screen homography → scroll-aware
       mapping of gaze to post and image pixels → AOI fixation metrics
       (in progress: phone tracking and gaze on screen are built, `socialeyes gaze`)
+- [x] **Withdrawal, retention and storage checks**: two-step withdrawal (held, then deleted
+      permanently; undo in between) with a status per participant in the register and a log;
+      sessions stay on the phone until safely copied ones are cleared; retention reminders from
+      `data:` in study.yaml; a check for encrypted drives and cloud-sync folders (no encryption by
+      SocialEyes itself)
 - [x] **Blinded exploration** instead of model templates: `exploration.html` with every export
       shows data quality and distributions with the conditions behind codes until you unblind;
       SocialEyes fits no models, so the analysis stays the researcher's, run once, as planned
@@ -1064,8 +1107,8 @@ Roughly in order:
         (storage, battery, Do Not Disturb, camera permission). Load only unlocks when the
         study validates
   - [x] **Data (data unloader)**: copy every new session off the phone, check each file
-        arrived intact (checksums), then delete it from the phone so participant data never
-        stays on the device; run the quality checks and show a summary; keep a session
+        arrived intact (checksums), keeping the phone's copy until you clear safely copied
+        sessions (since 18 Oct 2026; deleting right away was the first design); run the quality checks and show a summary; keep a session
         register per study (participant, date, phone, completed, warnings; flags participant
         IDs used twice); optionally make a second copy (e.g. a network or encrypted drive);
         once Neon is integrated, also collect the matching Neon recording

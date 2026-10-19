@@ -54,6 +54,7 @@ class Api:
 
     def __init__(self):
         self._window = None  # set once the window exists; underscore keeps it out of the JS bridge
+        self._storage: dict = {}  # folder -> drive encryption and cloud sync, asked once per run
 
     @_reply
     def app_info(self) -> dict:
@@ -164,8 +165,23 @@ class Api:
         sessions = [p.parent for p in data.glob("*/*/session.json") if not p.parent.parent.name.startswith(".")]
         gaze = sum((analysis / s.parent.name / s.name / "fixations.csv").is_file() for s in sessions)
         heatmaps = analysis / "heatmaps" / "index.html"
+        from ..session import retention
+
+        storage = []
+        for name, path in (("data", data), ("second copy", second)):
+            if path is None:
+                continue
+            key = str(path)
+            if key not in self._storage:  # asking Windows takes a moment: once per folder per run
+                self._storage[key] = {"encrypted": retention.bitlocker(path), "cloud": retention.cloud_folder(path)}
+            storage.append({"folder": name, "path": key, **self._storage[key]})
+        try:
+            due = retention.due(folder)
+        except (ValueError, OSError):
+            due = None
         return {"study_id": sid, "data_dir": str(data), "second_copy_dir": str(second) if second else None,
-                "register": rows, "phone": phone,
+                "register": rows, "phone": phone, "storage": storage, "retention": due,
+                "clear_after_unload": bool(settings.study(sid).get("clear_after_unload")),
                 "faces": {"videos": len(videos), "analysed": analysed},
                 "gaze": {"sessions": gaze, "heatmaps": str(heatmaps) if heatmaps.is_file() else None}}
 
@@ -183,6 +199,37 @@ class Api:
         from ..phone.unload import unload
 
         return unload(folder, serial=serial or None, progress=self._progress).to_json()
+
+    @_reply
+    def data_clear(self, folder: str, serial: str | None = None) -> dict:
+        """Deletes from the phone the sessions safely copied to this computer (and the second copy)."""
+        from ..phone.unload import clear_phone
+
+        return clear_phone(folder, serial=serial or None, progress=self._progress).to_json()
+
+    @_reply
+    def data_withdraw(self, folder: str, participant_id: str, reason: str = "") -> dict:
+        from ..session.withdraw import withdraw
+
+        return withdraw(folder, participant_id, reason or "").to_json()
+
+    @_reply
+    def data_restore(self, folder: str, participant_id: str) -> dict:
+        from ..session.withdraw import restore
+
+        return restore(folder, participant_id).to_json()
+
+    @_reply
+    def data_delete_withdrawn(self, folder: str, participant_id: str, serial: str | None = None) -> dict:
+        from ..session.withdraw import delete_permanently
+
+        return delete_permanently(folder, participant_id, serial=serial or None).to_json()
+
+    @_reply
+    def data_retention_delete(self, folder: str, what: str) -> dict:
+        from ..session.retention import delete_due
+
+        return delete_due(folder, what)
 
     @_reply
     def data_export(self, folder: str, unblind: bool = False) -> dict:

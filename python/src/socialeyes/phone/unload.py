@@ -7,12 +7,14 @@ For each session of the study on the phone, in this order:
    against the phone's hashes;
 3. if a second copy folder is set, copy it there too and check that copy;
 4. run the session analysis (quality.json etc. in analysis_out/);
-5. add or refresh its row in the register (sessions.csv);
-6. only then delete it from the phone.
+5. add or refresh its row in the register (sessions.csv).
 
-Any failure before step 6 leaves the session on the phone. A session that hasn't
-ended while SocialEyes is open on the phone may still be recording: it is copied
-but left on the phone.
+The phone keeps every session: data loss is the bigger risk. **Clear copied sessions**
+(``clear_phone``, ``socialeyes unload --clear``) deletes from the phone only the sessions whose copy
+on this computer, and second copy if one is set, still match the phone's files. A computer can be
+set to clear each session as soon as it is unloaded (``clear_after_unload``, off by default).
+Sessions of withdrawn participants are not copied; they leave the phone when the participant is
+deleted permanently (withdraw.py).
 """
 from __future__ import annotations
 
@@ -42,7 +44,7 @@ class SessionResult:
     session_uid: str
     copied: bool = False
     second_copy: Optional[bool] = None   # None: no second copy folder set
-    deleted: bool = False
+    deleted: bool = False                # deleted from the phone
     kept_reason: Optional[str] = None    # why it is still on the phone
     completed: Optional[bool] = None
     warnings: list = field(default_factory=list)
@@ -153,15 +155,21 @@ def unload(study_dir: Path | str, serial: Optional[str] = None,
         found = phone_sessions(adb, sid)
         if not found:
             return r
+        withdrawn = register.withdrawn_ids(data / register.REGISTER)
         app_running = bool(adb.shell(f"pidof {PACKAGE}").strip())
         try:
             progress("Compiling the study for the analysis…")
             build = build_study(study_dir)
         except Exception:
             build = None  # analyse without it: quality only, no image/AOI mapping
+        clear = bool(settings.study(sid).get("clear_after_unload"))
         for n, (pid, uid) in enumerate(found, 1):
+            if pid in withdrawn:
+                r.sessions.append(SessionResult(pid, uid, kept_reason="participant withdrawn: not copied; it leaves "
+                                                "the phone when they are deleted permanently"))
+                continue
             progress(f"Session {n} of {len(found)}: {pid} ({uid})…")
-            s = _unload_one(adb, sid, pid, uid, data, second, build, app_running, device.id)
+            s = _unload_one(adb, sid, pid, uid, data, second, build, app_running, device.id, clear)
             r.sessions.append(s)
         _tidy_phone(adb, sid)
         return r
@@ -173,7 +181,7 @@ def unload(study_dir: Path | str, serial: Optional[str] = None,
 
 
 def _unload_one(adb: Adb, sid: str, pid: str, uid: str, data: Path, second: Optional[Path],
-                build, app_running: bool, serial: str) -> SessionResult:
+                build, app_running: bool, serial: str, clear: bool = False) -> SessionResult:
     s = SessionResult(pid, uid)
     remote = f"{APP_FILES}/data/{sid}/{pid}/{uid}"
     try:
@@ -221,26 +229,86 @@ def _unload_one(adb: Adb, sid: str, pid: str, uid: str, data: Path, second: Opti
         except Exception as e:
             s.warnings = [f"could not analyse this session: {e}"]
 
-        # 5: register (before deleting, so every deleted session is on record)
-        on_phone = not ended and app_running
+        # 5: register (before anything leaves the phone, so every session is on record)
+        recording = not ended and app_running
+        delete = clear and not recording
         row = _register_row(final, quality, serial)
-        row["on_phone"] = "yes" if on_phone else ""
+        row["on_phone"] = "" if delete else "yes"
         if quality is None:
             row["warnings"], row["n_warnings"] = "; ".join(s.warnings), len(s.warnings)
         register.update(data / register.REGISTER, [row])
         if second is not None:
             shutil.copy2(data / register.REGISTER, second / register.REGISTER)
 
-        # 6: delete from the phone
-        if on_phone:
+        # 6: only on a computer set to clear sessions after unloading
+        if recording:
             s.kept_reason = ("hasn't ended and SocialEyes is open on the phone, so it may still be recording: "
                              "copied but left on the phone. Close the app and unload again")
-        else:
+        elif delete:
             adb.shell(f"rm -r {remote}", check=True)
             s.deleted = True
+        else:
+            s.kept_reason = "copied and checked; kept on the phone until you clear copied sessions"
     except (OSError, AdbError) as e:
         s.error = str(e)
     return s
+
+
+def clear_phone(study_dir: Path | str, serial: Optional[str] = None,
+                progress: Callable[[str], None] = lambda s: None) -> UnloadResult:
+    """Deletes from the phone the study's sessions that are safely copied: every file of the copy on
+    this computer (and of the second copy, if one is set) matches the phone's. Anything else stays."""
+    r = UnloadResult()
+    try:
+        r.study_id = sid = study_id_of(study_dir)
+        data, second = settings.data_dir(sid), settings.second_copy_dir(sid)
+        r.data_dir, r.second_copy_dir = str(data), (str(second) if second else None)
+        adb = Adb(serial)
+        device = adb.choose()
+        r.phone = f"{device.model or device.id} ({device.id})"
+        withdrawn = register.withdrawn_ids(data / register.REGISTER)
+        found = phone_sessions(adb, sid)
+        app_running = bool(adb.shell(f"pidof {PACKAGE}").strip())
+        cleared = []
+        for n, (pid, uid) in enumerate(found, 1):
+            s = SessionResult(pid, uid)
+            r.sessions.append(s)
+            if pid in withdrawn:
+                s.kept_reason = "participant withdrawn: leaves the phone when they are deleted permanently"
+                continue
+            progress(f"Checking session {n} of {len(found)}: {pid} ({uid})…")
+            remote = f"{APP_FILES}/data/{sid}/{pid}/{uid}"
+            try:
+                expected = parse_sha256sum(adb.shell(f"cd {remote} && find . -type f -exec sha256sum {{}} +", timeout=600))
+                meta = json.loads(adb.shell(f"cat {remote}/session.json") or "{}")
+                if not meta.get("end") and app_running:
+                    s.kept_reason = "hasn't ended and SocialEyes is open on the phone: it may still be recording"
+                    continue
+                local = data / pid / uid
+                s.copied = local.is_dir() and local_hashes(local) == expected
+                if second is not None:
+                    s.second_copy = (second / pid / uid).is_dir() and local_hashes(second / pid / uid) == expected
+                if not s.copied:
+                    s.kept_reason = "not copied to this computer yet (or the copy differs): unload it first"
+                elif s.second_copy is False:
+                    s.kept_reason = "the second copy is missing or differs: unload again to remake it"
+                else:
+                    adb.shell(f"rm -r {remote}", check=True)
+                    s.deleted = True
+                    cleared.append(meta.get("session_uid") or uid)  # the register's id for it
+            except (OSError, AdbError, ValueError) as e:
+                s.error = str(e)
+        if cleared:
+            rows = [r0 for r0 in register.read(data / register.REGISTER)[1] if r0.get("session_uid") in cleared]
+            register.update(data / register.REGISTER, [{"session_uid": x["session_uid"], "participant_id": x["participant_id"],
+                                                        "on_phone": ""} for x in rows])
+            if second is not None and (data / register.REGISTER).is_file():
+                shutil.copy2(data / register.REGISTER, second / register.REGISTER)
+        _tidy_phone(adb, sid)
+        return r
+    except (AdbError, ValueError) as e:
+        r.error = str(e)
+        return r
 
 
 def _build_for(session: Path, sid: str, fresh) -> Optional[Path]:

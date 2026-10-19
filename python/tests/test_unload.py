@@ -75,42 +75,80 @@ def run(monkeypatch, example, phone):
     return U.unload(example)
 
 
-def test_unload_copies_checks_registers_then_deletes(setup, monkeypatch):
+def phone_sessions_left(phone_root):
+    return sorted(p.name for p in (phone_root / "data" / "example").glob("*/*"))
+
+
+def test_unload_copies_checks_registers_and_keeps_the_phones_copy(setup, monkeypatch):
     example, phone_root, tmp = setup
     r = run(monkeypatch, example, FakePhone(phone_root))
     assert r.error is None and len(r.sessions) == 2
     for s in r.sessions:
-        assert s.copied and s.deleted and s.error is None and s.completed
+        assert s.copied and not s.deleted and s.error is None and s.completed
+        assert "kept on the phone until you clear" in s.kept_reason
     data = tmp / "ws" / "data" / "example"
     assert (data / "P001" / "P001-20261004T100000" / "session.json").is_file()
-    assert not list((phone_root / "data" / "example").glob("*/*"))  # gone from the phone
+    assert len(phone_sessions_left(phone_root)) == 2  # the phone keeps everything
     _, rows = register.read(data / "sessions.csv")
     assert [r["participant_id"] for r in rows] == ["P001", "P002"]
     assert rows[0]["completed"] == "yes" and rows[0]["package_sha256"] and rows[0]["duplicate_id"] == ""
+    assert rows[0]["status"] == "active" and rows[0]["on_phone"] == "yes"
     assert (tmp / "ws" / "analysis_out" / "example" / "P001" / "P001-20261004T100000" / "quality.json").is_file()
 
 
-def test_damaged_copy_is_not_deleted(setup, monkeypatch):
+def test_clear_deletes_only_safely_copied_sessions(setup, monkeypatch):
+    example, phone_root, tmp = setup
+    phone = FakePhone(phone_root)
+    monkeypatch.setattr(U, "Adb", lambda serial=None: phone)
+    r = U.clear_phone(example)  # nothing copied yet: nothing may go
+    assert all(not s.deleted and "unload it first" in s.kept_reason for s in r.sessions)
+    assert len(phone_sessions_left(phone_root)) == 2
+    U.unload(example)
+    # a copy damaged on this computer afterwards: that session must stay on the phone
+    f = next((tmp / "ws" / "data" / "example" / "P002").rglob("events.jsonl"))
+    f.write_text(f.read_text(encoding="utf-8")[:-50], encoding="utf-8")
+    r = U.clear_phone(example)
+    done = {s.participant_id: s for s in r.sessions}
+    assert done["P001"].deleted and not done["P002"].deleted and "differs" in done["P002"].kept_reason
+    assert phone_sessions_left(phone_root) == ["P002-20261004T100000"]
+    _, rows = register.read(tmp / "ws" / "data" / "example" / "sessions.csv")
+    assert {x["participant_id"]: x["on_phone"] for x in rows} == {"P001": "", "P002": "yes"}
+
+
+def test_damaged_copy_is_not_registered(setup, monkeypatch):
     example, phone_root, tmp = setup
     r = run(monkeypatch, example, FakePhone(phone_root, corrupt=True))
     for s in r.sessions:
         assert not s.copied and not s.deleted and "don't match" in s.error
-    assert len(list((phone_root / "data" / "example").glob("*/*"))) == 2  # still on the phone
+    assert len(phone_sessions_left(phone_root)) == 2  # still on the phone
     assert not (tmp / "ws" / "data" / "example" / "sessions.csv").exists()
 
 
-def test_second_copy(setup, monkeypatch):
+def test_second_copy_must_match_before_clearing(setup, monkeypatch):
     example, phone_root, tmp = setup
     settings.set_study("example", second_copy_dir=str(tmp / "backup"))
     r = run(monkeypatch, example, FakePhone(phone_root))
-    assert all(s.second_copy and s.deleted for s in r.sessions)
+    assert all(s.second_copy and not s.deleted for s in r.sessions)
     assert U.local_hashes(tmp / "backup" / "P002" / "P002-20261004T100000") == \
         U.local_hashes(tmp / "ws" / "data" / "example" / "P002" / "P002-20261004T100000")
     assert (tmp / "backup" / "sessions.csv").is_file()
+    shutil.rmtree(tmp / "backup" / "P001")
+    r = U.clear_phone(example)
+    done = {s.participant_id: s for s in r.sessions}
+    assert not done["P001"].deleted and "second copy" in done["P001"].kept_reason and done["P002"].deleted
+
+
+def test_a_computer_can_clear_after_unloading(setup, monkeypatch):
+    example, phone_root, tmp = setup
+    settings.set_study("example", clear_after_unload=True)
+    r = run(monkeypatch, example, FakePhone(phone_root))
+    assert all(s.copied and s.deleted for s in r.sessions)
+    assert not phone_sessions_left(phone_root)
 
 
 def test_unfinished_session_stays_while_the_app_is_open(setup, monkeypatch):
     example, phone_root, tmp = setup
+    settings.set_study("example", clear_after_unload=True)
     meta_path = phone_root / "data" / "example" / "P001" / "P001-20261004T100000" / "session.json"
     meta = json.loads(meta_path.read_text(encoding="utf-8"))
     del meta["end"]
@@ -124,6 +162,18 @@ def test_unfinished_session_stays_while_the_app_is_open(setup, monkeypatch):
     # once the app is closed, unloading again finishes the job
     r = run(monkeypatch, example, FakePhone(phone_root, running=False))
     assert [s.deleted for s in r.sessions] == [True]
+
+
+def test_withdrawn_participants_are_not_unloaded(setup, monkeypatch):
+    example, phone_root, tmp = setup
+    data = tmp / "ws" / "data" / "example"
+    register.set_status(data / "sessions.csv", "P002", "withdrawn", "2026-10-18T10:00:00")
+    r = run(monkeypatch, example, FakePhone(phone_root))
+    done = {s.participant_id: s for s in r.sessions}
+    assert done["P001"].copied and not done["P002"].copied and "withdrawn" in done["P002"].kept_reason
+    assert not (data / "P002").exists()
+    r = U.clear_phone(example)
+    assert "withdrawn" in {s.participant_id: s for s in r.sessions}["P002"].kept_reason
 
 
 def test_register_keeps_notes_and_flags_reused_ids(tmp_path):
