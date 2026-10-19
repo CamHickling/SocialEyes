@@ -283,7 +283,11 @@ its name appears in the top bar with its three pages:
   critical posts' images ([`socialeyes aois`](#defining-areas-of-interest-aois)). **Preview**
   shows one participant's feed as the phone will show it (their post order, images, labels,
   likes, captions and first comments), from the study as saved; pick any participant, and tick
-  **Show each post's condition** to check the counterbalancing.
+  **Show each post's condition** to check the counterbalancing. **Undo** and **Redo** (under the
+  steps, or Ctrl+Z and Ctrl+Y) step back through every change since the study was opened; typing
+  in one field counts as one change. Unsaved changes are kept on this computer as you go: if the
+  app closes before **Save**, opening the study again offers them back, and a new study that was
+  never saved can be continued from **Studies**.
 - **Phone**: checks the phone and loads the study onto it (see [Running the app](#running-the-app)).
 - **Data**: unloads sessions from the phone, lists them, and makes the
   [tables for analysis](#tables-for-analysis); the data and second-copy folders are under
@@ -1155,8 +1159,9 @@ Roughly in order:
   - [ ] **Plain language everywhere**: hover explanations for terms (within-subjects, AOI,
         seed, filler, ...), rarely used settings behind an "Advanced" switch, YAML never
         shown unless asked for, error messages that say what to do
-  - [ ] **Safety nets**: undo, autosave, and a saved copy of the study each time it is
-        loaded onto a phone, so you can always see and restore what participants ran
+  - [x] **Safety nets**: undo and redo in the builder; unsaved changes kept as you go and
+        offered back when the study is opened again; a copy of each build loaded onto a phone
+        (`builds/` in the study's data folder), which the tables and checks use for its sessions
   - [ ] **One-click tidy data export**: see **Clean data export** above
   - [x] **Short guides**: [Your first study](docs/guides/FIRST_STUDY.md) and a printable
         [Running a session](docs/guides/RUNNING_A_SESSION.md) checklist (screen recordings of the main tasks still to do)

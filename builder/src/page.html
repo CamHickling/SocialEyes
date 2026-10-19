@@ -49,6 +49,9 @@ header span { color: var(--muted); font-size: 13px; }
 #nav button:disabled { color: var(--muted); opacity: .5; cursor: default; }
 #nav .count:not(:empty) { background: var(--error); color: var(--surface); border-radius: 999px; font-size: 11px; padding: 0 7px; font-weight: 600; }
 #nav .adv-toggle { margin: 16px 0 0; padding: 12px 12px 0; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+#nav .undo-row { display: flex; gap: 4px; padding: 8px 4px 0; }
+#nav .undo-row .btn { padding: 4px 8px; font-size: 13px; color: var(--accent); }
+#nav .undo-row .btn:disabled { color: var(--muted); }
 .more-settings { margin-top: 20px; color: var(--muted); font-size: 13px; }
 #main { min-width: 0; }
 #side { position: sticky; top: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; max-height: calc(100vh - 32px); overflow: auto; }
@@ -147,7 +150,7 @@ header #app-sub { padding-left: 12px; border-left: 1px solid var(--line); font-w
 .layout { grid-template-columns: 200px minmax(0, 1fr) 300px; gap: 28px; padding: 28px 24px 48px; }
 #nav { counter-reset: section; top: 76px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 8px; box-shadow: var(--shadow); }
 #nav button { justify-content: flex-start; gap: 10px; padding: 7px 10px; border-radius: 10px; transition: background .15s; }
-#nav button::before { counter-increment: section; content: counter(section); flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 600; background: var(--surface-2); color: var(--muted); }
+#nav button[data-section]::before { counter-increment: section; content: counter(section); flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 600; background: var(--surface-2); color: var(--muted); }
 #nav button[data-section="start"]::before { content: "★"; }
 #nav button.on::before { background: var(--accent); color: var(--accent-ink); }
 #nav button .count { margin-left: auto; }
@@ -231,6 +234,7 @@ select.narrow { width: auto; flex: 0 0 auto; min-width: 0; }
   #nav { position: static; flex-direction: row; overflow-x: auto; }
   #nav button { flex: none; }
   #nav .adv-toggle { margin: 0; padding: 8px 12px; border-top: 0; flex: none; }
+  #nav .undo-row { flex: none; padding: 0; align-items: center; }
   #side { position: static; max-height: none; }
   header { padding: 12px 16px; }
   header span { display: none; }

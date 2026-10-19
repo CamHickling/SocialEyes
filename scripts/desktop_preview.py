@@ -6,7 +6,7 @@ Serves builder/index.html on http://127.0.0.1:<port>/ with a stand-in for pywebv
 each window.pywebview.api.<name>(...) call goes to the real socialeyes.desktop.app.Api over HTTP,
 so every tab works as in the app (with the phone, folders and data of this computer). Folder
 dialogs can't open from a browser: pick_folder returns localStorage "previewPick" if set, else
-asks with a prompt. ``?do=pick:<folder>;click:<data-action>;wait:<ms>`` steps through the page
+asks with a prompt. ``?do=pick:<folder>;click:<data-action>;type:<data-path>=<text>;key:z;wait:<ms>`` steps through the page
 after it loads, for screenshots with a headless browser. Listens on 127.0.0.1 only; not for participants or other people's machines.
 """
 from __future__ import annotations
@@ -41,10 +41,22 @@ window.addEventListener("load", async () => {
     const i = step.indexOf(":"), kind = step.slice(0, i), arg = step.slice(i + 1);
     if (kind === "pick") localStorage.setItem("previewPick", arg);
     if (kind === "wait") await sleep(Number(arg));
+    if (kind === "confirm") window.confirm = () => arg === "yes";   // answers the page's questions from now on
     if (kind === "click") {
       const el = [...document.querySelectorAll("[data-action]")].find((e) => e.dataset.action === arg);
       if (el) el.click(); else console.warn("preview: nothing to click for", arg);
       await sleep(800);
+    }
+    if (kind === "type") {   // type:<data-path>=<text>, as if typed into that field
+      const j = arg.indexOf("="), el = document.querySelector(`[data-path="${CSS.escape(arg.slice(0, j))}"]`);
+      if (el) { el.focus(); el.value = arg.slice(j + 1); el.dispatchEvent(new Event("input", {bubbles: true})); }
+      else console.warn("preview: no field", arg);
+      await sleep(300);
+    }
+    if (kind === "key") {    // key:z or key:shift+z, pressed with Ctrl
+      const shift = arg.startsWith("shift+");
+      document.dispatchEvent(new KeyboardEvent("keydown", {key: shift ? arg.slice(6).toUpperCase() : arg, ctrlKey: true, shiftKey: shift, bubbles: true}));
+      await sleep(500);
     }
   }
 });
