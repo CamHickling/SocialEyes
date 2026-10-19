@@ -1103,9 +1103,10 @@ Roughly in order:
 - [x] **Gaze heatmaps** (`socialeyes heatmaps`): fixation heatmaps over each post image, per participant and pooled
       by condition (e.g. retouched vs original, labelled vs not), with AOI outlines drawn on
       top; difference maps between conditions; PNGs plus an HTML report per study
-- [ ] **Desktop app review**: go back over the study builder and loader with fresh eyes
+- [x] **Desktop app review**: went back over the study builder and loader with fresh eyes
       (how a new researcher makes and loads an experiment, what is confusing or missing)
-      and fold in the export, AOI and heatmap features above
+      and folded in the export, AOI and heatmap features above: a Studies home, one open
+      study with Design / Phone / Data, shorter Design pages
 - [ ] *Later:* **Facial expression analysis** of the front camera video (expressions / action
       units over time, aligned to the posts on screen), once the face camera features are in
 - [ ] More tests and docs, macOS/Linux setup (golden sessions done: `python/tests/test_golden.py`

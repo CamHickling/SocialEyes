@@ -126,7 +126,7 @@ The glasses are away for now, so work goes in this order (full descriptions in t
    heatmaps`; gaze columns in by_item). Checked on the 12 Oct accuracy_check session (90 feed
    fixations, 39 on images) and simulated fixations. Story and reel images aren't placed in
    image pixels yet. Needs a real multi-participant run with the glasses.
-6. **Desktop app review** (making and loading experiments).
+6. ~~**Desktop app review**~~: done 16–18 Oct (simpler layout, shorter Design pages).
 7. Later: **facial expression analysis** of the front camera video.
 
 Steps 3–5 above (settings test etc.) wait for the glasses; step 1 (rerun older analyses) can
@@ -134,7 +134,7 @@ be slotted in any time.
 
 ## Loose ends
 
-- Results posted to Linear (CAM-220, CAM-165, CAM-210, CAM-219, CAM-162); statuses not changed yet.
+- Linear caught up on 18 Oct: CAM-162, 163, 210, 220 Done; CAM-165 and CAM-219 In Progress.
 - Companion's recording template has no "Participant"/"Study" fields (warning on every session).
 - On the phone: screenshot sessions tag_bars/T08 and the scratch studies `shots_tags` and
   `shots_plain` (not in the repo) can be deleted; T01/T02 of tag_bars are the real runs (copied).
