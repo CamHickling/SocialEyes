@@ -218,6 +218,10 @@ java -version
 
 ## Designing a study
 
+> [!TIP]
+> New to SocialEyes? Start with **[Your first study](docs/guides/FIRST_STUDY.md)**; for the people
+> running participants there is a printable checklist, **[Running a session](docs/guides/RUNNING_A_SESSION.md)**.
+
 > [!NOTE]
 > **Study format version 1.** The CSV columns are documented in
 > [`docs/STUDY_DESIGN.md`](docs/STUDY_DESIGN.md). Studies written for v1 keep
@@ -1150,8 +1154,8 @@ Roughly in order:
   - [ ] **Safety nets**: undo, autosave, and a saved copy of the study each time it is
         loaded onto a phone, so you can always see and restore what participants ran
   - [ ] **One-click tidy data export**: see **Clean data export** above
-  - [ ] **Short guides**: a printable "running a session" sheet and short screen
-        recordings of the main tasks (design a study, add content, load a phone, unload data)
+  - [x] **Short guides**: [Your first study](docs/guides/FIRST_STUDY.md) and a printable
+        [Running a session](docs/guides/RUNNING_A_SESSION.md) checklist (screen recordings of the main tasks still to do)
 - [ ] **Different phones and screen sizes**: run and test on other Android phones (Samsung,
       Pixel, Motorola, ...), Android 10-15, and small to large screens (about 5.5" to 6.9",
       tall and short aspect ratios, notches and camera cutouts, gesture and button
