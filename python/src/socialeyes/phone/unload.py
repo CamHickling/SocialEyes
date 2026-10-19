@@ -248,7 +248,7 @@ def _unload_one(adb: Adb, sid: str, pid: str, uid: str, data: Path, second: Opti
             adb.shell(f"rm -r {remote}", check=True)
             s.deleted = True
         else:
-            s.kept_reason = "copied and checked; kept on the phone until you clear copied sessions"
+            s.kept_reason = "kept on the phone until you clear copied sessions"
     except (OSError, AdbError) as e:
         s.error = str(e)
     return s

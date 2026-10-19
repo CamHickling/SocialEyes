@@ -379,11 +379,10 @@ def cmd_unload(args) -> int:
             failed += 1
             print(f"  {s.participant_id} {s.session_uid}: NOT unloaded: {s.error}")
             continue
-        state = "deleted from the phone" if s.deleted else f"on the phone: {s.kept_reason}"
-        extra = ", second copy checked" if s.second_copy else ""
-        done = "" if s.completed is None else (" completed" if s.completed else " NOT completed")
-        what = "copied and checked" if s.copied else "not copied"
-        print(f"  {s.participant_id} {s.session_uid}:{done}, {what}{extra}, {state}")
+        parts = [] if s.completed is None else ["completed" if s.completed else "NOT completed"]
+        parts.append(("copied and checked" + (", second copy checked" if s.second_copy else "")) if s.copied else "not copied")
+        parts.append("deleted from the phone" if s.deleted else f"on the phone: {s.kept_reason}")
+        print(f"  {s.participant_id} {s.session_uid}: {', '.join(parts)}")
         for w in s.warnings:
             print(f"      warning: {w}")
     print(f"Data folder: {r.data_dir} (register: sessions.csv)")
