@@ -27,7 +27,8 @@
     sessions: 0,            // sessions already collected with this study (from its register)
     protect: null,          // a save refused because it would break them: {reasons, sessions, version}
     // Phone tab: result of the last phone check / load, and the choices on the tab
-    phone: { result: null, serial: "", devices: [], updateApp: false, progress: null, error: null },
+    phone: { result: null, serial: "", devices: [], updateApp: false, progress: null, error: null,
+      setup: null, setupOpen: false, setupNote: null, setupError: null },
     // Data tab: the study's folders and register, the phone's sessions, the last unload
     data: { status: null, unload: null, export: null, faces: null, gaze: null, heatmaps: null, blur: false, by: "cell", unblind: false, error: null },
     studies: { list: null, newId: "", error: null },
@@ -898,7 +899,7 @@
       ? `<div class="row"><label for="phone-serial" class="hint">Phone</label><select id="phone-serial">${P.devices.map((d) =>
           `<option value="${esc(d.serial)}" ${d.serial === P.serial ? "selected" : ""}>${esc(d.model || d.serial)} (${esc(d.serial)}${d.state !== "device" ? `, ${esc(d.state)}` : ""})</option>`).join("")}</select></div>` : "";
     let body = "";
-    if (P.error) body += `<p class="error-box">${esc(P.error)}</p>`;
+    if (P.error && !(P.setup && !P.setup.device)) body += `<p class="error-box">${esc(P.error)}</p>`;   // no phone: the guide says
     if (r && r.phone) {
       const p = r.phone;
       body += `<div class="phone-head"><h3>${esc(p.model || p.serial)}</h3><span class="hint">Android ${esc(p.android)} · ${esc(p.serial)}</span></div>
@@ -913,6 +914,7 @@
     return `
       <h2>Phone</h2>
       <p class="lead">Copies the study onto the phone, installing the SocialEyes app if it's missing.</p>
+      ${phoneSetup()}
       ${unsaved() ? `<p class="hint"><span class="pill">unsaved changes</span> The phone gets the study as saved. ${btn("save", "Save it first", "link", busy ? "disabled" : "")}</p>` : ""}
       ${devices}
       <div class="row">${btn("phone-load", confirm ? "Load anyway" : "Load onto phone", "primary", canLoad ? "" : "disabled")}
@@ -923,12 +925,56 @@
       ${body}`;
   }
 
+  const SETUP_ICON = { done: ["ok", "✓"], todo: ["warning", "!"], optional: ["info", "○"], waiting: ["waiting", "·"] };
+
+  /** The phone setup guide: shown open until the phone is set up, then folded to one line. */
+  function phoneSetup() {
+    const P = ui.phone, g = P.setup, busy = !!ui.busy;
+    if (!g) return "";
+    const done = !g.next && !g.error && g.device;
+    if (done && !P.setupOpen) {
+      return `<p class="ok-box">This phone is set up. ${btn("setup-toggle", "Show the setup steps", "link")}</p>`;
+    }
+    const step = (s) => {
+      const [cls, ic] = SETUP_ICON[s.status];
+      const open = s.id === g.next || (s.status === "optional" && s.action) || (s.status === "todo" && P.setupOpen);
+      return `<li class="${s.id === g.next ? "next" : cls}">
+        <div class="msg"><span class="ic">${ic}</span><span><b>${esc(s.title)}</b>${s.detail ? ` <span class="hint">${esc(s.detail)}</span>` : ""}</span></div>
+        ${open ? `<div class="how">${s.how.map((h) => `<p>${esc(h)}</p>`).join("")}
+          ${s.action ? `<div class="row">${btn(`setup-do:${s.action}`, esc(s.action_label), s.id === g.next ? "primary" : "", busy ? "disabled" : "")}</div>` : ""}</div>` : ""}
+      </li>`;
+    };
+    return `<div class="card setup">
+      <div class="row"><h3>Phone setup</h3><span class="grow"></span>${done ? btn("setup-toggle", "Hide", "link") : ""}</div>
+      ${g.device ? `<p class="hint">${esc(g.device.model || g.device.serial)}${g.device.android ? ` · Android ${esc(g.device.android)}` : ""}</p>` : ""}
+      ${g.error ? `<p class="error-box">${esc(g.error)}</p>` : ""}
+      ${P.setupError ? `<p class="error-box">${esc(P.setupError)}</p>` : ""}
+      ${P.setupNote ? `<p class="ok-box">${esc(P.setupNote)}</p>` : ""}
+      <ol class="checks setup-steps">${g.steps.map(step).join("")}</ol>
+      ${busy && P.progress ? `<p class="hint">${esc(P.progress)}</p>` : ""}
+    </div>`;
+  }
+
+  async function setupDo(action) {
+    const P = ui.phone;
+    P.setupError = null;
+    P.setupNote = null;
+    try {
+      const r = await bridge("phone_setup_do", "Working on the phone…", action, P.devices.length > 1 ? P.serial : null);
+      P.setupNote = r.done;
+      P.setup = r.guide;
+    } catch (e) { P.setupError = e.message; }
+    if (action === "install") await phoneCheck();
+    else render();
+  }
+
   async function phoneCheck() {
     const P = ui.phone;
     P.error = null;
     try {
       P.devices = (await bridge("phone_devices", null)) || [];
       if (P.devices.length && !P.devices.some((d) => d.serial === P.serial)) P.serial = P.devices[0].serial;
+      P.setup = await bridge("phone_setup", "Reading the phone…", P.devices.length > 1 ? P.serial : null);
       const r = await bridge("phone_check", "Checking the phone…", ui.folder, P.devices.length > 1 ? P.serial : null);
       if (r.error) { P.error = r.error; P.result = null; } else P.result = r;
     } catch (e) { P.error = e.message; }
@@ -1865,6 +1911,8 @@
       case "data-pick": dataPick(args[0]); return;
       case "data-clear": case "data-open": dataAct(name, args[0]); return;
       case "phone-check": phoneCheck(); return;
+      case "setup-do": setupDo(args[0]); return;
+      case "setup-toggle": ui.phone.setupOpen = !ui.phone.setupOpen; render(); return;
       case "phone-load": phoneLoad(); return;
       case "open-folder": openFolder(); return;
       case "save": saveStudy(false); return;

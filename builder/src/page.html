@@ -121,6 +121,18 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 .checks .warning button { background: var(--warn-soft); color: var(--warn); } .checks .warning .ic { background: var(--warn); }
 .checks .tip button { background: var(--tip-soft); color: var(--tip); } .checks .tip .ic { background: var(--tip); }
 .checks .msg { display: flex; gap: 8px; border-radius: 8px; padding: 8px 10px; font-size: 13px; }
+/* the phone setup guide (Phone tab) */
+.card.setup { margin: 12px 0 18px; }
+.card.setup h3 { margin: 0; }
+.card.setup .grow { flex: 1; }
+.setup-steps { counter-reset: none; }
+.setup-steps li.next .msg { background: var(--accent-soft); }
+.setup-steps li.next .ic { background: var(--accent); }
+.setup-steps li.waiting .msg { color: var(--muted); }
+.setup-steps li.waiting .ic { background: var(--line); }
+.setup-steps li.info .ic { background: var(--tip); }
+.setup-steps .how { padding: 4px 10px 8px 36px; font-size: 14px; }
+.setup-steps .how p { margin: 4px 0; }
 /* a research term explained on hover (ui.js GLOSSARY) */
 abbr.term { text-decoration: underline dotted; text-decoration-thickness: 1px; text-underline-offset: 3px; cursor: help; }
 /* a check's "fix it" button, under its message */

@@ -6,11 +6,13 @@ done on the command line (`socialeyes --help`); the README has the details.
 ## 1. Install
 
 1. Run `SocialEyes-Setup-<version>.exe`. It includes everything: Python, the phone app and adb.
-2. On the Android phone (Android 10 or newer): **Settings > About phone**, tap **Build number** seven
-   times, then **Settings > System > Developer options > USB debugging** on.
-3. Plug the phone in and tap **Allow** when it asks about USB debugging.
-4. Eye tracking only, once per phone: after the first **Load onto phone** (section 3), open SocialEyes
-   on the phone, tap **Check screen size**, measure the two lines with a ruler and type the lengths.
+2. Set up the phone (Android 10 or newer) with **Phone setup** on any study's **Phone** tab: it reads
+   the phone and shows the next step, and does the ones it can for you (installing the app, Do Not
+   Disturb). In short: **Settings > About phone**, tap **Build number** seven times, then
+   **Settings > System > Developer options > USB debugging** on; plug the phone in and tap **Allow**
+   when it asks about USB debugging.
+3. Eye tracking only, once per phone: open SocialEyes on the phone, tap **Check screen size**, measure
+   the two lines with a ruler and type the lengths.
    Some phones misreport their screen's size; this keeps the eye-tracking tags and gaze in true
    millimetres. **Load onto phone** also warns if the phone's rounded corners or camera cut-out would
    get in the tags' way.

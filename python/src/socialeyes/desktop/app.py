@@ -178,6 +178,23 @@ class Api:
                     progress=self._progress).to_json()
 
     @_reply
+    def phone_setup(self, serial: str | None = None) -> dict:
+        """The phone setup guide: each step's state, read from the phone."""
+        from ..phone.setup import guide
+
+        return guide(serial or None)
+
+    @_reply
+    def phone_setup_do(self, action: str, serial: str | None = None) -> dict:
+        """Runs one setup step on the phone, then reads the guide again."""
+        from ..phone.setup import do, guide
+
+        if action == "install":
+            self._progress("Installing the app (about a minute)…")
+        done = do(action, serial or None)
+        return {"done": done, "guide": guide(serial or None)}
+
+    @_reply
     def phone_devices(self) -> list:
         from ..phone.adb import Adb, AdbError
 
