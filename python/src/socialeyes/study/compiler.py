@@ -460,8 +460,9 @@ def check_study(study_dir: Path | str) -> tuple[Optional[StudyBundle], Report]:
             captions[(r["post_id"], r["variant"])] = r["text"]
 
     b = StudyBundle(root, study, accounts, images, posts, comments, captions, image_sizes, {})
-    b.stories = _load_stories(b, rep)
-    b.reels = _load_reels(b, rep)
+    # switched off (feed.stories / feed.reels): the CSV stays in the folder but isn't read
+    b.stories = _load_stories(b, rep) if study.feed.stories else []
+    b.reels = _load_reels(b, rep) if study.feed.reels else []
     _check_aois(b, rep)
     _check_design(b, rep)
     if not rep.errors:

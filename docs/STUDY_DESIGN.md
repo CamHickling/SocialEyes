@@ -138,7 +138,8 @@ to needs at least one comment for each level (e.g. variants `neutral` and
 
 Short videos shown in the Reels tab, swiped up and down in this order. Every
 participant sees the same reels (they are not manipulated by factors). Without
-this file the Reels tab does nothing.
+this file, or with `feed: reels: false`, the Reels tab does nothing (the file is kept
+but left out of the study).
 
 | column | required | meaning |
 |---|---|---|
@@ -170,7 +171,8 @@ the `caption` column of `posts.csv`.
 
 Stories, opened by tapping an account's circle at the top of the feed. Every
 participant sees the same stories (they are not manipulated by factors).
-Without this file the story circles are only decoration.
+Without this file, or with `feed: stories: false`, the story circles are only
+decoration (the file is kept but left out of the study).
 
 | column | required | meaning |
 |---|---|---|

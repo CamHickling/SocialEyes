@@ -66,6 +66,14 @@ def test_content_checklist(example):
     assert c["n_found"] == 61 - 7
 
 
+def test_content_checklist_leaves_out_switched_off_stories(example):
+    text = (example / "study.yaml").read_text(encoding="utf-8")
+    (example / "study.yaml").write_text(text.replace("feed:\n", "feed:\n  stories: false\n", 1), encoding="utf-8")
+    c = content_checklist(example)
+    assert {i["kind"] for i in c["items"]} == {"image", "aoi", "avatar", "video"}
+    assert {t["file"]: t["used"] for t in c["tables"] if "used" in t} == {"stories.csv": False, "reels.csv": True}
+
+
 def test_content_checklist_on_an_unfinished_study(tmp_path):
     (tmp_path / "study.yaml").write_text("id: draft\n", encoding="utf-8")  # far from valid
     (tmp_path / "images.csv").write_text("file,post_id\nimages/a.jpg,p1\n", encoding="utf-8")

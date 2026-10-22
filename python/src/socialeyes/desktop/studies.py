@@ -101,9 +101,11 @@ def content_checklist(folder: Path | str) -> dict:
 
     for kind in ("accounts", "images", "posts"):
         tables.append({"file": names[kind], "found": (folder / names[kind]).is_file()})
+    feed = raw.get("feed") or {}
+    used = {kind: feed.get(kind, True) is not False for kind in ("stories", "reels")}
     for kind in ("stories", "reels"):
         if (folder / names[kind]).is_file():
-            tables.append({"file": names[kind], "found": True})
+            tables.append({"file": names[kind], "found": True, "used": used[kind]})
 
     roles = {r["post_id"]: r["role"] for _, r in _read_csv(folder / names["posts"], "posts", rep)}
     for _, r in _read_csv(folder / names["accounts"], "accounts", rep):
@@ -115,10 +117,12 @@ def content_checklist(folder: Path | str) -> dict:
         add("image", r["file"], label)
         if r["aoi_file"] or roles.get(post) == "critical":
             add("aoi", r["aoi_file"] or f"aois/{Path(r['file']).stem}.json", f"AOIs for {label}")
-    for _, r in _read_csv(folder / names["stories"], "stories", rep, required=False):
-        add("story", r["file"], f"story of {r['account_id']}")
-    for _, r in _read_csv(folder / names["reels"], "reels", rep, required=False):
-        add("video", r["file"], f"reel of {r['account_id']}")
+    if used["stories"]:
+        for _, r in _read_csv(folder / names["stories"], "stories", rep, required=False):
+            add("story", r["file"], f"story of {r['account_id']}")
+    if used["reels"]:
+        for _, r in _read_csv(folder / names["reels"], "reels", rep, required=False):
+            add("video", r["file"], f"reel of {r['account_id']}")
 
     return {"folder": str(folder), "tables": tables, "items": items,
             "n_found": sum(i["found"] for i in items), "n_needed": len(items)}

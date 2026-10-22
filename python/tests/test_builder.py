@@ -163,13 +163,13 @@ def test_blank_study_has_only_the_baseline_feed():
     assert not any(s["feed"][k] for k in ("allow_saves", "allow_shares", "allow_comment_likes", "allow_comment_typing"))
     assert not s["logging"]["sensors"] and not s["logging"]["screen_recording"]
     assert not s["logging"]["front_camera"]["enabled"] and not s["neon"]["required"]
-    assert c["stories"] == 0 and c["reels"] == 0
+    assert c["stories"] == 0 and c["reels"] == 0 and s["feed"]["stories"] is False and s["feed"]["reels"] is False
     assert {st["type"] for st in s["procedure"]} == {"instructions", "marker_calibration", "validation", "feed", "end"}
 
 
 def test_blank_study_has_the_tags_in_the_feeds_bars():
     s = core("Core.newStudy('blank')")["study"]
-    assert s["markers"]["on_screen"] == {"steps": ["feed"], "layout": "bars", "family": "tag16h5", "size_mm": 10}
+    assert s["markers"]["on_screen"] == {"steps": ["feed"], "layout": "bars", "family": "tag16h5", "size_mm": 10, "side_inset_mm": 3}
     Study.model_validate(s)
     s["markers"]["on_screen"]["steps"] = ["val1", "feed"]
     tips = core("Core.checks(data, null).filter(c => c.level === 'tip').map(c => c.msg)", s)

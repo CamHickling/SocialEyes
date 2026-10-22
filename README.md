@@ -410,6 +410,8 @@ feed:
   allow_saves: true            # bookmark button
   allow_shares: true           # send button (only shows "Sent")
   allow_comment_likes: true    # liking comments in the comments sheet
+  stories: true                # false: story circles are decoration, stories.csv is left out
+  reels: true                  # false: the Reels tab does nothing, reels.csv is left out
 
 logging:                       # what the app records besides gaze
   touches: true
@@ -900,7 +902,7 @@ rest of the session works.
 (stories row, post header, thin-line icons, likes, captions with "… more", comments,
 "2 days ago", tab bar) under the neutral name Pictogram and a free script font, with no
 real logos. Liking, saving (bookmark), sending (shows "Sent"), captions and comments work, and the
-Home tab scrolls back to the top. With a `stories.csv`, tapping a story circle opens the
+Home tab scrolls back to the top. With a `stories.csv` (and `feed.stories` not switched off), tapping a story circle opens the
 account's stories full screen (progress bars, tap right/left to skip/go back, hold to
 pause, swipe sideways to turn, cube-style, to the next/previous account or drag part way
 to peek, swipe down to close, 5 s each by default via `feed.story_duration_s`). The
@@ -908,7 +910,7 @@ story's reply bar works too: typing a reply pauses the story and sends it (logge
 every draft edit, under `feed.allow_comment_typing`), the heart likes the story and the
 paper plane shows "Sent"; watched
 accounts get a grey ring.
-With a `reels.csv`, the Reels tab opens full-screen vertical videos (swipe up/down, loop,
+With a `reels.csv` (and `feed.reels` not switched off), the Reels tab opens full-screen vertical videos (swipe up/down, loop,
 muted until tapped, hold to pause, double-tap or heart to like, send shows "Sent"), with
 the playback position logged on every frame so gaze can be mapped to video frames. The
 top-bar icons and the other tabs are for the look only. Each post shows its first 2 comments; with more, "View all N comments"

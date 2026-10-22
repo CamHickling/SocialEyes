@@ -266,6 +266,12 @@ class Feed(_Strict):
     """Comments can be liked in the comments sheet."""
     story_duration_s: float = Field(5.0, gt=0, le=60)
     """How long each story shows before moving on; stories.csv can override it per story."""
+    stories: bool = True
+    """Story circles open stories.csv's stories. Off: the circles are decoration and
+    stories.csv is left out of the study (the file is kept)."""
+    reels: bool = True
+    """The Reels tab plays reels.csv's videos. Off: the tab does nothing and reels.csv is
+    left out of the study (the file is kept)."""
 
 
 # ---------------------------------------------------------------- procedure steps

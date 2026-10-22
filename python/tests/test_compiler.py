@@ -88,7 +88,9 @@ def test_compile_writes_package(example, tmp_path):
             assert (out / img["aoi"]).is_file()
     for acc in manifest["accounts"].values():
         assert (out / acc["avatar"]).is_file()
-    assert sorted(p.name for p in (out / "tags").iterdir()) == [f"tag36h11_{i}.png" for i in range(4)]
+    # the marker calibrations' tags, and the feed bars' tag16h5 ones
+    assert sorted(p.name for p in (out / "tags").iterdir()) == ([f"tag16h5_{i}.png" for i in range(4)]
+                                                                 + [f"tag36h11_{i}.png" for i in range(4)])
     aoi = json.loads((out / "aois" / "crit01_original.json").read_text())
     assert [a["name"] for a in aoi["aois"]] == ["face", "waist", "legs"]
 
@@ -241,6 +243,17 @@ def test_reels(example, tmp_path):
     assert (reels[0]["width"], reels[0]["height"]) == (540, 960)
     assert reels[0]["duration_s"] == pytest.approx(6.0, abs=0.1)
     assert (out / reels[0]["file"]).is_file()
+
+
+def test_stories_and_reels_switched_off(example, tmp_path):
+    # the CSVs stay in the folder, but neither they nor their files are checked or packaged
+    edit_file(example / "study.yaml", "feed:\n  order: shuffle", "feed:\n  stories: false\n  reels: false\n  order: shuffle")
+    edit_file(example / "stories.csv", "acc5,stories/acc5_1.png,8h", "nobody,stories/missing.png,8h")
+    out, rep = compile_study(example, tmp_path / "build")
+    manifest = json.loads((out / "study.json").read_text(encoding="utf-8"))
+    assert manifest["stories"] == [] and manifest["reels"] == []
+    assert not (out / "stories").exists() and not (out / "reels").exists()
+    assert (example / "stories.csv").is_file() and (example / "reels.csv").is_file()
 
 
 def test_reel_must_be_a_video(example):

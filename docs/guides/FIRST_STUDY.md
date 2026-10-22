@@ -16,8 +16,10 @@ done on the command line (`socialeyes --help`); the README has the details.
    study id (the example is a complete 2 x 2 x 2 study with placeholder images: the quickest way to
    see everything working).
 2. Work through the **Design** steps on the left: **Basics**, **Design** (your factors: what changes
-   between conditions), **Content** (how many posts, accounts, stories), **Feed**, **Procedure** (the
-   screens participants go through), **Recording**, **Participants**. The panel on the right lists
+   between conditions), **Content** (how many posts and accounts), **Feed**, **Procedure** (the
+   screens participants go through: tick **Pre-test survey**, **Post-test survey**, **Image ratings**,
+   **Recognition test**, **Stories** and **Reels** under *Parts of the session*, then open each step
+   to write its questions), **Recording**, **Participants**. The panel on the right lists
    problems as you go; each one links to the step it's about.
 3. **Save**. This creates the study folder with CSV files to fill in and a `NEXT_STEPS.txt`.
 4. Put your images, avatars and videos in the folder and fill in the CSV files (posts, captions,

@@ -83,6 +83,7 @@
     marker_calibration: ["Marker calibration", "Shows AprilTags on screen and a sync flash so the scene camera can map gaze onto the screen. Do one before and one after the feed."],
     tag_ladder: ["Tag size check", "Setup test, not for participants: tags in several sizes and edge distances while the phone is held in different ways, to choose the on-screen tag size for these glasses and phone (sizes, insets and holds are set in study.yaml)."],
     display_calibration: ["Display calibration", "Finds the screen brightness and Neon scene camera exposure at which the on-screen tags read best without blowing out the screen. A laptop runs socialeyes calibrate-display during it (about 30 s); the researcher can skip it. Put it before the first marker calibration."],
+    settings_test: ["Settings test", "Setup test with the Neon, not for participants: the app steps through screen brightness x scene camera exposure itself (no laptop) with the study's tags in the bars, to choose display.brightness and neon.scene_exposure for phone-only sessions (levels and exposures are set in study.yaml). Score it with python -m socialeyes.gaze.settings_test."],
     validation: ["Validation", "Dots to look at and tap: measures eye-tracking accuracy on the phone."],
     camera_check: ["Camera check", "Researcher-run framing check for the front camera. Shows a guide and whether a face is detected, never the video."],
     profile_photo: ["Profile photo", "Optional selfie as the participant's profile picture; kept in memory only and deleted when the session ends."],
@@ -94,7 +95,7 @@
   };
 
   /** Setup steps, offered under "Add step" only with advanced settings on. */
-  const ADVANCED_STEPS = ["tag_ladder", "display_calibration"];
+  const ADVANCED_STEPS = ["tag_ladder", "display_calibration", "settings_test"];
 
   const KIND_INFO = { vas: "Slider (VAS)", likert: "Likert scale", choice: "Multiple choice", text: "Free text", number: "Number" };
 
@@ -335,12 +336,12 @@
         ${field({ path: "content.critical", label: "Critical posts", kind: "int", min: 0, help: c > 1 ? `A multiple of ${c} (the number of within-subject cells), so everyone sees each cell equally often.` : "Posts that carry the manipulation." })}
         ${field({ path: "content.fillers", label: "Filler posts", kind: "int", min: 0, help: "Unmanipulated posts around the critical ones. More fillers make the manipulation less obvious." })}
         ${field({ path: "content.accounts", label: "Accounts", kind: "int", min: 1, help: "Fake poster accounts; posts are spread over them." })}
-        ${field({ path: "content.stories", label: "Stories", kind: "int", min: 0, help: "Images behind the story circles (0 = circles are decoration)." })}
-        ${field({ path: "content.reels", label: "Reels", kind: "int", min: 0, help: "Short videos in the Reels tab (0 = the tab does nothing)." })}
+        ${featureOn("stories") && !hasTable("stories") ? field({ path: "content.stories", label: "Stories", kind: "int", min: 1, help: "Images behind the story circles. Switch stories off under Procedure." }) : ""}
+        ${featureOn("reels") && !hasTable("reels") ? field({ path: "content.reels", label: "Reels", kind: "int", min: 1, help: "Short videos in the Reels tab. Switch reels off under Procedure." }) : ""}
         ${rec ? field({ path: "content.foils", label: "Recognition foils", kind: "int", min: 0, help: "Never-shown images for the recognition test." }) : ""}
       </div>
       ${field({ path: "content.comments", label: "Posts have comments (when no factor sets them)", kind: "bool" })}
-      <div class="summary">You'll need <b>${nImages}</b> image${nImages === 1 ? "" : "s"}${nv > 1 ? ` (${nv} versions of each critical post)` : ""}, ${ui.content.accounts} avatar${ui.content.accounts === 1 ? "" : "s"}${ui.content.stories ? `, ${ui.content.stories} story image(s)` : ""}${ui.content.reels ? `, ${ui.content.reels} video(s)` : ""}, and an AOI file for every critical image.</div>
+      <div class="summary">You'll need <b>${nImages}</b> image${nImages === 1 ? "" : "s"}${nv > 1 ? ` (${nv} versions of each critical post)` : ""}, ${ui.content.accounts} avatar${ui.content.accounts === 1 ? "" : "s"}${featureOn("stories") && !hasTable("stories") ? `, ${ui.content.stories} story image(s)` : ""}${featureOn("reels") && !hasTable("reels") ? `, ${ui.content.reels} video(s)` : ""}, and an AOI file for every critical image.</div>
       ${ui.desktop ? folderFiles() : ""}`;
   }
 
@@ -355,7 +356,7 @@
         ${field({ path: P + "lead_in_fillers", label: "Fillers at the top", kind: "int", min: 0, adv: true, help: "Warm-up posts before the first critical post." })}
         ${field({ path: P + "max_run_same_cell", label: "Max critical posts in a row from one cell", kind: "int", min: 1, adv: true })}
         ${field({ path: P + "min_fillers_between_critical", label: "Fillers between critical posts", kind: "int", min: 0, adv: true })}
-        ${ui.content.stories ? field({ path: P + "story_duration_s", label: "Seconds per story", kind: "float", min: 1, max: 60, adv: true }) : ""}
+        ${featureOn("stories") ? field({ path: P + "story_duration_s", label: "Seconds per story", kind: "float", min: 1, max: 60, adv: true }) : ""}
       </div>
       <h3>What participants can do</h3>
       <div class="checks-grid">
@@ -394,6 +395,7 @@
       case "marker_calibration": return `<div class="grid">${f("duration_s", "Duration (s)", "float", { min: 1, max: 30, adv: true })}</div>`;
       case "tag_ladder": return `<div class="grid">${f("hold_s", "Seconds per way of holding", "float", { min: 5, max: 120 })}${f("flip_every_s", "Reverse the order every (s)", "float", { min: 1, max: 60 })}</div>`;
       case "display_calibration": return `<div class="grid">${f("wait_s", "Offer Skip after (s)", "float", { min: 5, max: 600, adv: true })}${f("port", "Port", "int", { min: 1024, max: 65535, adv: true, help: "The laptop connects to the phone on this port." })}</div>${f("text", "Text", "textarea", { rows: 2 })}`;
+      case "settings_test": return `<div class="grid">${f("setting_s", "Seconds per setting", "float", { min: 2, max: 30 })}${f("rounds", "Rounds per hold", "int", { min: 1, max: 4, help: "Each round reverses the order." })}</div>`;
       case "camera_check": return `<div class="grid">${f("min_face_s", "Face in view for (s)", "float", { min: 0.5, max: 30, adv: true })}${f("instructions", "Instructions", "text", { wide: true })}</div>`;
       case "profile_photo": return `${f("text", "Text", "textarea")}${f("allow_skip", "Participants can skip it", "bool")}`;
       case "validation": return `<div class="grid">${f("points", "Dots", "select", { num: true, options: [[5, "5"], [9, "9"], [13, "13"]] })}${f("target_dp", "Dot size (dp)", "int", { min: 12, max: 80, adv: true })}${f("instructions", "Instructions", "text", { wide: true })}</div>`;
@@ -411,6 +413,85 @@
       case "end": return f("text", "Text", "textarea");
       default: return help("This step type isn't known to the builder; it is kept as it is.");
     }
+  }
+
+  // ------------------------------------------------------------ parts of the session (Procedure)
+
+  /** Whether the study folder has this CSV (desktop app: the folder's file list). */
+  function hasTable(kind) {
+    const r = ui.files.result, name = getP(kind) || `${kind}.csv`;
+    return !!(r && r.tables.some((t) => t.file === name && t.found));
+  }
+
+  /** Stories / reels are on: switched on (feed.stories / feed.reels) and there's content for them. */
+  function featureOn(kind) {
+    if (val(`feed.${kind}`, true) === false) return false;
+    if (ui.opened && !ui.desktop) return true;   // a study.yaml opened in the browser: its CSVs can't be seen
+    return ui.content[kind] > 0 || hasTable(kind);
+  }
+
+  const PARTS = [
+    ["pre", "Pre-test survey", "Questions before the feed."],
+    ["post", "Post-test survey", "Questions after the feed."],
+    ["image_rating", "Image ratings", "Each critical post's image again, with questions about it."],
+    ["recognition", "Recognition test", "\"Did you see exactly this image?\" for images shown and not shown."],
+  ];
+
+  /** Indexes of the procedure steps that make up a part: questionnaires before / after the feed, or steps of a type. */
+  function partSteps(part) {
+    const steps = ui.study.procedure || [], feed = steps.findIndex((s) => s.type === "feed");
+    return steps.map((s, i) => [s, i]).filter(([s, i]) => part === "pre" ? s.type === "questionnaire" && i < feed
+      : part === "post" ? s.type === "questionnaire" && i > feed : s.type === part).map(([, i]) => i);
+  }
+
+  function sessionParts() {
+    const box = (part, label, hint, on) => `<label class="check"><input type="checkbox" data-action-change="part:${part}" ${on ? "checked" : ""}> <span>${label}</span></label>${help(hint)}`;
+    return `<div class="card"><h4>Parts of the session</h4>
+      <div class="checks-grid">
+        ${PARTS.map(([part, label, hint]) => box(part, label, hint, partSteps(part).length)).join("")}
+        ${box("stories", "Stories", "Story circles open full-screen stories. Off: the circles are only decoration.", featureOn("stories"))}
+        ${box("reels", "Reels", "The Reels tab plays short videos. Off: the tab does nothing.", featureOn("reels"))}
+      </div>
+      <p class="hint">Ticking a part adds its step in the right place below; open the step to write its questions.</p></div>`;
+  }
+
+  /** Switch a part of the session on or off; false if the researcher cancelled. */
+  function setPart(part, on) {
+    const S = ui.study;
+    if (part === "stories" || part === "reels") {
+      setP(`feed.${part}`, on);
+      if (on && !hasTable(part) && !ui.content[part]) ui.content[part] = part === "stories" ? 6 : 3;
+      if (!on && !hasTable(part)) ui.content[part] = 0;
+      return true;
+    }
+    const label = PARTS.find((p) => p[0] === part)[1];
+    if (!on) {
+      const at = partSteps(part);
+      const written = at.some((i) => (S.procedure[i].items || []).some((it) => it.text));
+      if (written && !confirm(`Remove the ${label.toLowerCase()} and its questions? Undo brings them back.`)) return false;
+      S.procedure = S.procedure.filter((_, i) => !at.includes(i));
+      ui.openStep = null;
+      return true;
+    }
+    const steps = S.procedure, feed = steps.findIndex((s) => s.type === "feed");
+    let afterFeed = feed + 1;   // after the feed and the marker calibration that closes it
+    while (afterFeed < steps.length && steps[afterFeed].type === "marker_calibration") afterFeed++;
+    const firstAfter = (types) => { const i = steps.findIndex((s, j) => j > feed && types.includes(s.type)); return i < 0 ? steps.length : i; };
+    const s = newStep(part === "pre" || part === "post" ? "questionnaire" : part);
+    let at;
+    if (part === "pre") { s.id = uniqueId("pre", steps.map((x) => x.id)); at = feed; }
+    else if (part === "post") { s.id = uniqueId("post", steps.map((x) => x.id)); at = afterFeed; }
+    else if (part === "image_rating") at = Math.max(afterFeed, firstAfter(["recognition", "end"]));
+    else at = Math.max(afterFeed, firstAfter(["end"]));
+    if (part === "image_rating" || part === "recognition") {
+      // after any post-test survey already there
+      const post = partSteps("post");
+      if (post.length) at = Math.max(at, post[post.length - 1] + 1);
+    }
+    steps.splice(at, 0, s);
+    if (part === "recognition") C.syncFoils(S, ui.content);
+    ui.openStep = at;
+    return true;
   }
 
   function sectionProcedure() {
@@ -431,6 +512,8 @@
     return `
       <h2>Procedure</h2>
       <p class="lead">The screens a participant goes through, in order. Click a step to edit it.</p>
+      ${sessionParts()}
+      <h3>Steps</h3>
       ${cards}
       <div class="row add-step"><select id="new-step">${types.map((t) => `<option value="${t}">${STEP_INFO[t][0]}</option>`).join("")}</select>${btn("add-step", "+ Add step", "primary")}</div>
       <p class="hint">New steps go before the end screen.</p>`;
@@ -496,6 +579,8 @@
             ${help("The bars keep the app looking like Instagram; tested with the Neon at 10 mm (tag16h5). Other steps chosen get bands.")}</div>
           ${field({ path: "markers.on_screen.family", label: "Tag family", kind: "select", options: [["tag16h5", "tag16h5 (smallest that reads)"], ["tag25h9", "tag25h9"], ["tag36h11", "tag36h11 (most robust)"]] })}
           ${field({ path: "markers.on_screen.size_mm", label: "Tag size (mm)", kind: "float", min: 4, max: 20 })}
+          ${val("markers.on_screen.layout", "bands") === "bars" ? field({ path: "markers.on_screen.side_inset_mm", label: "From the side edges (mm)", kind: "float", min: 0, max: 12, help: "To the tags' black border. 3 mm read as well as 5 mm, on curved edges and one-handed too." }) : ""}
+          ${val("markers.on_screen.layout", "bands") === "bars" ? field({ path: "markers.on_screen.edge_gap_mm", label: "From the top and bottom edges (mm)", kind: "float", min: 0, max: 12 }) : ""}
         </div>` : ""}
       </div>
       <div class="card">
@@ -1279,7 +1364,7 @@
   }
 
   const STEP_ID_BASE = { instructions: "info", marker_calibration: "cal", tag_ladder: "ladder", display_calibration: "dcal", validation: "val", camera_check: "camcheck", profile_photo: "photo",
-    questionnaire: "q", feed: "feed", image_rating: "ratings", recognition: "recog", end: "end" };
+    settings_test: "settings", questionnaire: "q", feed: "feed", image_rating: "ratings", recognition: "recog", end: "end" };
 
   function newStep(type) {
     const ids = (ui.study.procedure || []).map((s) => s.id);
@@ -1432,7 +1517,7 @@
       case "goto":
         ui.section = args[0];
         window.scrollTo(0, 0);
-        if (ui.desktop && ui.section === "content" && !ui.files.result && !ui.busy) { render(); filesRefresh(); return; }
+        if (ui.desktop && (ui.section === "content" || ui.section === "procedure") && !ui.files.result && !ui.busy) { render(); filesRefresh(); return; }
         if (ui.desktop && ui.section === "preview" && !ui.preview.result && !ui.busy) { render(); previewRefresh(); return; }
         break;
       case "random-seed": S.seed = Math.floor(Math.random() * 1e8); break;
@@ -1512,7 +1597,7 @@
         if (ui.tab === "phone" && !ui.phone.result && !ui.busy) { render(); phoneCheck(); return; }
         if (ui.tab === "data" && !ui.busy) { render(); dataRefresh(); return; }
         if (ui.tab === "studies" && !ui.busy) { render(); studiesRefresh(); return; }
-        if (ui.tab === "design" && ui.section === "content" && !ui.files.result && !ui.busy) { render(); filesRefresh(); return; }
+        if (ui.tab === "design" && (ui.section === "content" || ui.section === "procedure") && !ui.files.result && !ui.busy) { render(); filesRefresh(); return; }
         break;
       case "studies-refresh": studiesRefresh(); return;
       case "study-open": case "study-goto": case "studies-new-blank": case "studies-copy": studiesAct(name, args); return;
@@ -1568,6 +1653,8 @@
       const order = S.procedure.map((s) => s.id);
       steps.sort((x, y) => order.indexOf(x) - order.indexOf(y));
       setP(path, steps);
+    } else if (name === "part") {
+      if (!setPart(args[0], el.checked)) { el.checked = !el.checked; return; }
     } else if (name === "tags-layout") {
       // each layout with the tags it was tested with: bars 10 mm tag16h5, bands 12 mm tag36h11
       const preset = el.value === "bars" ? { family: "tag16h5", size_mm: 10 } : { family: "tag36h11", size_mm: 12 };

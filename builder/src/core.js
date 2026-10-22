@@ -13,7 +13,7 @@ const Core = (() => {
     feed: {
       order: "shuffle", lead_in_fillers: 2, max_run_same_cell: 2, min_fillers_between_critical: 0,
       time_limit_s: null, done_button_after_s: 60, allow_comment_typing: false, allow_likes: true,
-      allow_saves: true, allow_shares: true, allow_comment_likes: true, story_duration_s: 5,
+      allow_saves: true, allow_shares: true, allow_comment_likes: true, story_duration_s: 5, stories: true, reels: true,
     },
     logging: {
       touches: true, sensors: false, sensor_hz: 50, screen_recording: false, screen_recording_fps: 30,
@@ -29,7 +29,7 @@ const Core = (() => {
       ],
     },
     display: { viewing_distance_cm: 35, brightness: null },
-    markers: { on_screen: { steps: [], layout: "bands", family: "tag36h11", size_mm: 12 } },
+    markers: { on_screen: { steps: [], layout: "bands", family: "tag36h11", size_mm: 12, side_inset_mm: 5, edge_gap_mm: 2 } },
     participants: { n_plans: 120, id_prefix: "P", id_digits: 3 },
   };
 
@@ -38,6 +38,7 @@ const Core = (() => {
     marker_calibration: { duration_s: 4 },
     tag_ladder: { hold_s: 20, flip_every_s: 5 },
     display_calibration: { text: "Hold the phone as you normally would and keep looking at the screen. This takes about half a minute.", wait_s: 60, port: 8091 },
+    settings_test: { setting_s: 5, rounds: 2 },
     camera_check: { min_face_s: 3, instructions: "Hold the phone as you normally would and look at the screen." },
     profile_photo: { text: "Take a photo for your profile picture. It is only used during this session and is deleted afterwards.", allow_skip: true },
     validation: { points: 9, target_dp: 28, instructions: "Look at each dot and tap it." },
@@ -80,6 +81,7 @@ const Core = (() => {
   const EXAMPLE = {
     id: "example", title: "Retouching labels and visual attention (example)", version: 1, seed: 20251001,
     platform: { name: "Pictogram", theme: "light", participant_handle: "you" },
+    markers: { on_screen: { steps: ["feed"], layout: "bars", family: "tag16h5", size_mm: 10, side_inset_mm: 3 } },
     labels: { edited: { text: "This image has been digitally altered", style: "banner" } },
     factors: [
       { name: "edit", design: "within", levels: ["original", "retouched"], sets: { image_version: "{level}" } },
@@ -126,11 +128,12 @@ const Core = (() => {
     feed: {
       order: "shuffle", lead_in_fillers: 2, done_button_after_s: 60, time_limit_s: null,
       allow_likes: true, allow_saves: false, allow_shares: false, allow_comment_likes: false, allow_comment_typing: false,
+      stories: false, reels: false,
     },
     logging: { touches: true, sensors: false, screen_recording: false, front_camera: { enabled: false } },
     neon: { required: false },
     // the screen tags chosen with the Neon (CAM-165): in the feed's own top bar and tab bar
-    markers: { on_screen: { steps: ["feed"], layout: "bars", family: "tag16h5", size_mm: 10 } },
+    markers: { on_screen: { steps: ["feed"], layout: "bars", family: "tag16h5", size_mm: 10, side_inset_mm: 3 } },
     procedure: [
       { id: "welcome", type: "instructions", title: "Welcome", text: "Please browse the feed as you normally would." },
       { id: "cal1", type: "marker_calibration", duration_s: 4 },
@@ -366,7 +369,7 @@ const Core = (() => {
     platform: ["name", "theme", "participant_handle"],
     "factors[]": ["name", "design", "levels", "applies_to", "sets"],
     feed: ["order", "lead_in_fillers", "max_run_same_cell", "min_fillers_between_critical", "done_button_after_s", "time_limit_s",
-      "allow_likes", "allow_saves", "allow_shares", "allow_comment_likes", "allow_comment_typing", "story_duration_s"],
+      "allow_likes", "allow_saves", "allow_shares", "allow_comment_likes", "allow_comment_typing", "stories", "story_duration_s", "reels"],
     logging: ["touches", "sensors", "sensor_hz", "screen_recording", "screen_recording_fps", "front_camera"],
     "logging.front_camera": ["enabled", "resolution", "fps", "bitrate_mbps", "steps", "segment_s"],
     "procedure[]": ["id", "type"],
