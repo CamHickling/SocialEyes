@@ -7,8 +7,14 @@ This software includes or downloads third-party components under their own licen
 
 - MediaPipe and its face landmarker, pose landmarker and selfie multiclass segmentation
   models (Google LLC), Apache License 2.0.
+- The phone app's wordmark font, Grand Hotel (Astigmatic, via Google Fonts), SIL Open Font
+  License 1.1.
 - The Windows installer bundles adb from the Android SDK Platform-Tools (The Android Open
   Source Project), Apache License 2.0; its own NOTICE.txt is installed alongside it.
 - The Windows installer bundles Python (Python Software Foundation License) and the Python
   packages listed in python/pyproject.toml, each under its own licence (BSD, MIT, Apache 2.0
   or similar permissive terms).
+
+SocialEyes is a research tool. It is not affiliated with, endorsed by or sponsored by Meta
+Platforms or Instagram; its mock feed uses its own name, icons and code, and "Instagram" is a
+trademark of its owner, used here only to describe what the feed resembles.

@@ -46,6 +46,9 @@ scroll, participants wear **Pupil Labs Neon** eye-tracking glasses, and
 SocialEyes maps their gaze onto the regions of each image (face, waist, legs,
 ...).
 
+*SocialEyes is not affiliated with, endorsed by or sponsored by Meta or Instagram. Its mock
+feed has its own name (Pictogram by default), icons and code; see NOTICE.*
+
 <table>
 <tr>
 <td width="33%" valign="top">
