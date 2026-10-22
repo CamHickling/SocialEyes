@@ -85,7 +85,10 @@ class Session:
         return max(times)
 
     def events_of(self, *types: str) -> pd.DataFrame:
-        return self.events[self.events["type"].isin(types)].dropna(axis=1, how="all")
+        found = self.events[self.events["type"].isin(types)]
+        # columns no found event uses are dropped; with nothing found, every column stays (a session
+        # stopped before the feed has no likes, but code reading them still needs the columns)
+        return found.dropna(axis=1, how="all") if len(found) else found
 
     def step_windows(self) -> pd.DataFrame:
         """step_id, step_type, start_ns, end_ns (end = session end if the step never ended)."""

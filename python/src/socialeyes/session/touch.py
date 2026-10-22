@@ -30,7 +30,7 @@ def touch_targets(
     with ``aois`` labelled with the AOI it falls in.
     """
     if touch is None or not len(touch):
-        return pd.DataFrame(columns=TARGET_COLUMNS)
+        return pd.DataFrame(columns=TARGET_COLUMNS + ["image_screen_w"])
     post_images = post_images or {}
     aois = aois or {}
     image_sizes = image_sizes or {}

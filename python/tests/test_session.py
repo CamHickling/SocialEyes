@@ -529,3 +529,23 @@ def test_quality_reports_display_calibration(simulated, tmp_path):
     assert q["display_calibration"][1]["status"] == "skipped"
     assert any("display calibration 'dcal2' didn't run: it was skipped" in w for w in q["warnings"])
     assert not any("'dcal'" in w for w in q["warnings"])
+
+
+def test_session_stopped_before_the_feed_exports(tmp_path):
+    # the participant stopped during the instructions: no feed events at all, still a row in every table
+    from socialeyes.session.export import export_study
+
+    build, _ = compile_study(EXAMPLE, tmp_path / "build")
+    out = simulate_session(build, "P001", tmp_path / "data" / "P001" / "P001-sim", seed=1)
+    lines = (out / "events.jsonl").read_text(encoding="utf-8").splitlines()
+    feed = next(i for i, l in enumerate(lines) if '"step_start"' in l and '"feed"' in l)
+    (out / "events.jsonl").write_text("\n".join(lines[:feed]) + "\n", encoding="utf-8")
+    for name in ("viewport.csv", "touch.csv"):   # nothing was on screen or touched in a feed either
+        head = (out / name).read_text(encoding="utf-8").splitlines()[0]
+        (out / name).write_text(head + "\n", encoding="utf-8")
+    s = load_session(out)
+    assert "type" in s.events_of("like", "comments_open").columns
+    r = export_study(EXAMPLE, tmp_path / "data", tmp_path / "out", build_for=lambda _f: build)
+    assert r.skipped == [] and r.sessions == 1
+    items = pd.read_csv(tmp_path / "out" / "by_item.csv", encoding="utf-8-sig")
+    assert items["liked"].sum() == 0 and items["seen"].sum() == 0

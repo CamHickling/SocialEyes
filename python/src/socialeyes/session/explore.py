@@ -132,7 +132,9 @@ def write_exploration(out: Path, tables: dict[str, pd.DataFrame], manifest: dict
 
     flags = _flags(sessions) if len(sessions) else pd.DataFrame()
     crit = items[items["role"] == "critical"].copy() if len(items) else items
-    keys = (crit["cell"].fillna("") + (" | " + crit["group_key"].fillna("") if "group_key" in crit else "")).str.strip(" |")
+    # astype(str): a column that is empty in every session reads back as numbers (NaN)
+    text = lambda col: crit[col].fillna("").astype(str)  # noqa: E731
+    keys = (text("cell") + (" | " + text("group_key") if "group_key" in crit else "")).str.strip(" |")
     crit["condition"] = keys
     cond_names = sorted(set(keys))
     cond = {k: k for k in cond_names} if unblind else _codes(cond_names, study["id"] + "/conditions", "condition",
