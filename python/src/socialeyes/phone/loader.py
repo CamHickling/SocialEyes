@@ -467,8 +467,12 @@ def _push_verified(adb: Adb, study: StudyInfo, progress: Callable[[str], None]) 
     """Push to a staging folder, check every file's SHA-256 on the phone, then swap it in."""
     staging = f"{APP_FILES}/incoming/{study.id}"
     final = f"{APP_FILES}/studies/{study.id}"
-    adb.shell(f"rm -rf {staging} && mkdir -p {APP_FILES}/incoming {APP_FILES}/studies", check=True)
-    adb.run("push", str(study.build), staging, timeout=600)
+    # every folder made by the shell first: adb push can't create folders under Android/data on some
+    # Android versions ("secure_mkdirs failed: Operation not permitted", the Android 14 emulator)
+    folders = sorted({staging} | {f"{staging}/{p.parent.relative_to(study.build).as_posix()}".removesuffix("/.")
+                                  for p in study.build.rglob("*") if p.is_file()})
+    adb.shell(f"rm -rf {staging} && mkdir -p {APP_FILES}/studies " + " ".join(f"'{f}'" for f in folders), check=True)
+    adb.run("push", f"{study.build}/.", staging, timeout=600)   # the contents, into the folders made above
     progress("Checking every file arrived intact…")
     expected = expected_hashes(study.build)
     got = parse_sha256sum(adb.shell(f"cd {staging} && find . -type f -exec sha256sum {{}} +", timeout=300))
