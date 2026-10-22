@@ -170,11 +170,14 @@ def resize_large(folder: Path | str, files: list[str] | None = None) -> dict:
     return {"resized": done, "originals": str(folder / "originals")}
 
 
-def sources(folder: Path | str) -> dict:
+def sources(folder: Path | str, create: bool = True) -> dict:
     """Brings sources.csv in step with the study's files (adds rows, never removes them) and says how
-    many files still lack a source and a licence."""
+    many files still lack a source and a licence. Without ``create``, a study that has no sources.csv
+    yet gets none ({exists: False}): looking at a study doesn't write to it."""
     folder = Path(folder)
     path = folder / SOURCES
+    if not create and not path.is_file():
+        return {"path": str(path), "exists": False, "files": len(_slots(folder)), "complete": 0, "added": 0}
     rows, columns = [], list(SOURCE_COLUMNS)
     if path.is_file():
         with path.open(encoding="utf-8-sig", newline="") as fh:
@@ -192,4 +195,4 @@ def sources(folder: Path | str) -> dict:
             w.writerows(rows)
     current = [r for r in rows if r.get("file") in set(files)]
     complete = sum(1 for r in current if (r.get("source") or "").strip() and (r.get("licence") or "").strip())
-    return {"path": str(path), "files": len(current), "complete": complete, "added": len(added)}
+    return {"path": str(path), "exists": True, "files": len(current), "complete": complete, "added": len(added)}

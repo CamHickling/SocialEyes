@@ -151,7 +151,7 @@ def test_undefined_label(example):
 
 def test_missing_aoi_for_critical_image(example):
     (example / "aois" / "crit05_original.json").unlink()
-    assert "need an AOI file" in errors_of(example)
+    assert "need AOIs" in errors_of(example)
 
 
 def test_aoi_size_mismatch(example):
@@ -194,7 +194,7 @@ def test_warnings_for_unbalanced_numbers(example):
     edit_file(example / "study.yaml", "n_plans: 16", "n_plans: 10")
     b, rep = check_study(example)
     assert b is not None
-    assert any("not a multiple of the assignment block size 8" in w for w in rep.warnings)
+    assert any("aren't a multiple of the balanced block of 8" in w for w in rep.warnings)
 
 
 def test_caption_variants(example):
@@ -218,7 +218,7 @@ def test_profile_photo_step(example):
     edit_file(y, "  - {id: photo, type: profile_photo}", "")
     edit_file(y, "  - {id: feed, type: feed}", "  - {id: feed, type: feed}\n  - {id: photo, type: profile_photo}")
     _, rep = check_study(example)
-    assert any("profile_photo step comes after the feed" in w for w in rep.warnings)
+    assert any("profile photo step comes after the feed" in w for w in rep.warnings)
 
 
 def test_stories(example, tmp_path):

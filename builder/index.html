@@ -122,6 +122,8 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 .checks .warning button { background: var(--warn-soft); color: var(--warn); } .checks .warning .ic { background: var(--warn); }
 .checks .tip button { background: var(--tip-soft); color: var(--tip); } .checks .tip .ic { background: var(--tip); }
 .checks .msg { display: flex; gap: 8px; border-radius: 8px; padding: 8px 10px; font-size: 13px; }
+/* a research term explained on hover (ui.js GLOSSARY) */
+abbr.term { text-decoration: underline dotted; text-decoration-thickness: 1px; text-underline-offset: 3px; cursor: help; }
 /* a check's "fix it" button, under its message */
 .checks .fix { padding: 2px 0 0 28px; }
 .checks .fix .btn, .checks .error .fix .btn, .checks .warning .fix .btn, .checks .tip .fix .btn { display: inline-block; width: auto;
@@ -1691,9 +1693,9 @@ if (typeof module !== "undefined") module.exports = Core;
   const STEP_INFO = {
     instructions: ["Instructions", "A screen of text with a Continue button."],
     marker_calibration: ["Marker calibration", "Shows AprilTags on screen and a sync flash so the scene camera can map gaze onto the screen. Do one before and one after the feed."],
-    tag_ladder: ["Tag size check", "Setup test, not for participants: tags in several sizes and edge distances while the phone is held in different ways, to choose the on-screen tag size for these glasses and phone (sizes, insets and holds are set in study.yaml)."],
-    display_calibration: ["Display calibration (retired)", "Retired: fix display.brightness and neon.scene_exposure instead, chosen with a Settings test step. Kept so older studies still run. It found the screen brightness and Neon scene camera exposure at which the on-screen tags read best without blowing out the screen. A laptop runs socialeyes calibrate-display during it (about 30 s); the researcher can skip it. Put it before the first marker calibration."],
-    settings_test: ["Settings test", "Setup test with the Neon, not for participants: the app steps through screen brightness x scene camera exposure itself (no laptop) with the study's tags in the bars, to choose display.brightness and neon.scene_exposure for phone-only sessions (levels and exposures are set in study.yaml). Score it with python -m socialeyes.gaze.settings_test."],
+    tag_ladder: ["Tag size check", "Setup test, not for participants: tags in several sizes and edge distances while the phone is held in different ways, to choose the on-screen tag size for these glasses and phone (the sizes, insets and holds it tries are set in the study file)."],
+    display_calibration: ["Display calibration (retired)", "Retired: set the screen brightness and scene camera exposure under Recording instead, chosen with a Settings test step. Kept so older studies still run. It found the screen brightness and Neon scene camera exposure at which the on-screen tags read best without blowing out the screen. A laptop runs socialeyes calibrate-display during it (about 30 s); the researcher can skip it. Put it before the first marker calibration."],
+    settings_test: ["Settings test", "Setup test with the Neon, not for participants: the app steps through screen brightness x scene camera exposure itself (no laptop) with the study's tags in the bars, to choose the screen brightness and scene camera exposure (Recording) for phone-only sessions. The levels it tries are set in the study file; score it with python -m socialeyes.gaze.settings_test."],
     validation: ["Validation", "Dots to look at and tap: measures eye-tracking accuracy on the phone."],
     camera_check: ["Camera check", "Researcher-run framing check for the front camera. Shows a guide and whether a face is detected, never the video."],
     profile_photo: ["Profile photo", "Optional selfie as the participant's profile picture; kept in memory only and deleted when the session ends."],
@@ -2209,7 +2211,7 @@ if (typeof module !== "undefined") module.exports = Core;
         </div>
       </div>
       <div class="card">
-        ${field({ path: "neon.checklist", label: "Checklist before each recording", kind: "lines", rows: 4, wide: true, help: "One item per line; the researcher ticks each before starting. Leave empty for no checklist. Companion's template fields are set in study.yaml (neon.template)." })}
+        ${field({ path: "neon.checklist", label: "Checklist before each recording", kind: "lines", rows: 4, wide: true, help: "One item per line; the researcher ticks each before starting. Leave empty for no checklist. Fields for Neon Companion's recording template can be set in the study file." })}
       </div>`;
     if (ui.advanced) return `<h3>Phone tracking</h3>${html}`;
     ui.hidden.push(
@@ -2363,7 +2365,8 @@ if (typeof module !== "undefined") module.exports = Core;
       <h3>Checks</h3>
       ${list.length ? `<ul class="checks">${list.map((c, i) => `<li class="${c.level}"><button type="button" data-action="goto:${c.section}"><span class="ic">${icon[c.level]}</span><span>${esc(c.msg)}</span></button>${fixBtn(c, i)}</li>`).join("")}</ul>`
         : ui.desktop && folderClean() ? "" : `<p class="ok-box">All good.</p>`}
-      ${ui.desktop ? folderChecks(!list.length) : ""}`;
+      ${ui.desktop ? folderChecks(!list.length, list) : ""}`;
+    annotateTerms(side);
     const counts = {};
     for (const c of list) if (c.level === "error") counts[c.section] = (counts[c.section] || 0) + 1;
     document.querySelectorAll("#nav button[data-section]").forEach((b) => {
@@ -2385,7 +2388,7 @@ if (typeof module !== "undefined") module.exports = Core;
   const folderClean = () => !!(ui.folder && ui.compiler && !ui.compiler.errors.length && !ui.compiler.warnings.length && !unsaved() && !ui.desktopError);
 
   /** The compiler's checks of the saved folder (desktop app only); with ``designOk``, one line for both when all is well. */
-  function folderChecks(designOk) {
+  function folderChecks(designOk, design = []) {
     if (designOk && folderClean()) {
       return `<p class="ok-box">All good: the design, images, AOIs and CSV files check out.</p>
         <p class="hint">Checked at ${clock(ui.compiler.at)}. ${btn("check-folder", ui.busy === "Checking…" ? "Checking…" : "Check again", "link", ui.busy ? "disabled" : "")}</p>`;
@@ -2393,13 +2396,68 @@ if (typeof module !== "undefined") module.exports = Core;
     const head = `<h3>Study folder</h3>${ui.desktopError ? `<p class="error-box">${esc(ui.desktopError)}</p>` : ""}`;
     if (!ui.folder) return `${head}<p class="hint">Save the study to a folder to check its images, AOIs and CSV files too.</p>`;
     const k = ui.compiler;
-    const items = k ? [...k.errors.map((m) => ["error", "✕", m]), ...k.warnings.map((m) => ["warning", "!", m])] : [];
+    // the design checks above already say these (in the same words), for the study being edited
+    const said = (m) => design.some((c) => c.msg.slice(0, 40) === m.slice(0, 40));
+    const items = k ? [...k.errors.map((m) => ["error", "✕", m]), ...k.warnings.filter((m) => !said(m)).map((m) => ["warning", "!", m])] : [];
     return `${head}
       ${unsaved() ? `<p class="hint"><span class="pill">unsaved changes</span> These checks are of the saved files. ${btn("save", "Save", "link", ui.busy ? "disabled" : "")}</p>` : ""}
       ${!k ? `<p class="hint">Not checked yet.</p>`
         : items.length ? `<ul class="checks">${items.map(([lv, ic, m]) => `<li class="${lv}"><div class="msg"><span class="ic">${ic}</span><span>${esc(m)}</span></div>${folderFix(m)}</li>`).join("")}</ul>`
         : `<p class="ok-box">Images, AOIs and CSV files all check out.</p>`}
       <p class="hint">${k ? `Checked at ${clock(k.at)}. ` : ""}${btn("check-folder", ui.busy === "Checking…" ? "Checking…" : "Check study", "link", ui.busy ? "disabled" : "")}</p>`;
+  }
+
+  // ------------------------------------------------------------ glossary
+
+  /** Research and eye-tracking terms, explained on hover wherever they appear in the text. */
+  const GLOSSARY = [
+    [/\bwithin[- ]subjects?\b/i, "Within-subjects: every participant sees every level of this factor, on different posts."],
+    [/\bbetween[- ]subjects?\b/i, "Between-subjects: each participant sees only one level; participants are split into groups."],
+    [/\bcritical posts?\b/i, "Critical posts carry the manipulation: the factors change them, and gaze on them is what's analysed."],
+    [/\bfillers?\b/i, "Filler posts are ordinary posts around the critical ones, the same for everyone, so the manipulation isn't obvious."],
+    [/\bAOIs?\b/, "AOI (area of interest): a named region of an image, such as the face or waist, that gaze is counted in."],
+    [/\bcells?\b/i, "A cell is one combination of the within-subject levels (e.g. retouched + labelled); each participant sees each cell equally often."],
+    [/\bbalanced block\b/i, "The balanced block is the smallest number of participants that covers every group and cell once; use a multiple of it so the design stays balanced."],
+    [/\bseed\b/i, "The seed is the number the random orders are made from: the same seed always makes the same participant plans."],
+    [/\b(participant )?plans?\b/i, "A participant plan is one participant's post order and conditions, made in advance, so the session follows it exactly."],
+    [/\bfoils?\b/i, "Foils are images never shown in the feed, used in the recognition test to see whether people say they saw them."],
+    [/\blures?\b/i, "Lures are images in the recognition test that weren't in the feed (foils, or the other version of a post)."],
+    [/\bmarker calibration\b/i, "A marker calibration shows tags at the screen's corners for a few seconds, so the eye tracker's view can be matched to the phone screen."],
+    [/\bvalidation\b/i, "Validation: the participant looks at dots and taps them, which measures how accurate the eye tracking is for them."],
+    [/\b(on-screen )?tags\b/i, "Tags (AprilTags) are small black-and-white squares on the phone screen that let the eye tracker's camera find the screen."],
+    [/\bfixations?\b/i, "A fixation is a pause of the eyes on one spot (about a tenth of a second or more); it's where looking is counted."],
+    [/\bcounterbalanc\w*/i, "Counterbalancing: participants get the conditions in different orders, so order effects even out."],
+    [/\bscene camera\b/i, "The scene camera is the eye tracker's forward-facing camera; it sees the phone, and gaze is mapped onto its view."],
+    [/\bunblind\w*/i, "Results are blinded (conditions hidden) until you unblind, so looking at data can't steer the analysis."],
+  ];
+  const GLOSSARY_SKIP = "button, a, input, select, textarea, code, pre, abbr, option, .ic, .logo, .nav, #nav, .tabs";
+
+  /** Marks the first use of each glossary term in `root` with its explanation on hover. */
+  function annotateTerms(root) {
+    if (!root) return;
+    const seen = new Set();
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode: (n) => n.nodeValue.trim() && n.parentElement && !n.parentElement.closest(GLOSSARY_SKIP)
+        ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT,
+    });
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    for (let node of nodes) {
+      for (let g = 0; g < GLOSSARY.length; g++) {
+        if (seen.has(g)) continue;
+        const m = GLOSSARY[g][0].exec(node.nodeValue);
+        if (!m) continue;
+        seen.add(g);
+        const after = node.splitText(m.index);
+        const rest = after.splitText(m[0].length);
+        const abbr = document.createElement("abbr");
+        abbr.className = "term";
+        abbr.title = GLOSSARY[g][1];
+        abbr.textContent = after.nodeValue;
+        after.replaceWith(abbr);
+        node = rest;   // later terms are looked for in what's left of this text
+      }
+    }
   }
 
   // ------------------------------------------------------------ render
@@ -2644,6 +2702,8 @@ if (typeof module !== "undefined") module.exports = Core;
     const s = r.sources;
     if (!s) return "";
     if (s.error) return `<p class="hint">Couldn't update sources.csv: ${esc(s.error)} (close it in Excel and refresh).</p>`;
+    if (!s.exists) return `<p class="hint">Keep a record of where each of the ${s.files} files came from (source, licence, credit, consent), for the ethics board:
+      ${btn("sources-make", "Make sources.csv", "link", ui.busy ? "disabled" : "")}</p>`;
     const left = s.files - s.complete;
     return `<p class="hint">Sources: <b>${s.complete} of ${s.files}</b> files have a source and licence in ${btn("open-path:" + s.path, "sources.csv", "link")}${left ? ` (fill in the other ${left}: source, licence, credit, consent)` : ""}.</p>`;
   }
@@ -3022,6 +3082,7 @@ if (typeof module !== "undefined") module.exports = Core;
     ui.hidden = [];
     const page = ui.study || ui.section === "start" ? RENDER[ui.section]() : sectionStart();
     main.innerHTML = page + moreSettings() + navButtons();
+    annotateTerms(main);
     renderSide();
     save();
     syncUndo();
@@ -3402,6 +3463,9 @@ if (typeof module !== "undefined") module.exports = Core;
         return;
       }
       case "fix-files": ui.section = "content"; render(); imagesPick(); return;
+      case "sources-make":
+        bridge("sources_make", "Making sources.csv…", ui.folder).then(filesRefresh).catch((e) => { ui.files.error = e.message; render(); });
+        return;
       case "images-copy": imagesCopy(); return;
       case "images-report": imagesReport(); return;
       case "images-resize": imagesResize(); return;

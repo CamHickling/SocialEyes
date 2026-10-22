@@ -121,6 +121,8 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 .checks .warning button { background: var(--warn-soft); color: var(--warn); } .checks .warning .ic { background: var(--warn); }
 .checks .tip button { background: var(--tip-soft); color: var(--tip); } .checks .tip .ic { background: var(--tip); }
 .checks .msg { display: flex; gap: 8px; border-radius: 8px; padding: 8px 10px; font-size: 13px; }
+/* a research term explained on hover (ui.js GLOSSARY) */
+abbr.term { text-decoration: underline dotted; text-decoration-thickness: 1px; text-underline-offset: 3px; cursor: help; }
 /* a check's "fix it" button, under its message */
 .checks .fix { padding: 2px 0 0 28px; }
 .checks .fix .btn, .checks .error .fix .btn, .checks .warning .fix .btn, .checks .tip .fix .btn { display: inline-block; width: auto;

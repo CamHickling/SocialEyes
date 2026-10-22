@@ -289,9 +289,9 @@ its name appears in the top bar with its three pages:
   already there are only replaced when ticked). **Check the images** flags images the wrong
   shape for a feed post (taller than 4:5 or wider than 1.91:1), narrower than 600 px, larger
   than 2160 px (**Shrink** them, keeping the originals in `originals/`), the same picture used
-  twice, and versions of a critical post that differ in size. `sources.csv` gets a row per file
-  for its source, licence, credit and consent (rows are added, never removed), and the page
-  counts how many are filled in. **Draw AOIs** draws face and body AOIs on the
+  twice, and versions of a critical post that differ in size. **Make sources.csv** starts a
+  record with a row per file for its source, licence, credit and consent; rows are added as
+  files are, never removed, and the page counts how many are filled in. **Draw AOIs** draws face and body AOIs on the
   critical posts' images ([`socialeyes aois`](#defining-areas-of-interest-aois)). **Preview**
   shows one participant's feed as the phone will show it (their post order, images, labels,
   likes, captions and first comments), from the study as saved; pick any participant, and tick

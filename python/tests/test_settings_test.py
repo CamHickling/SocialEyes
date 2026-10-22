@@ -35,7 +35,7 @@ def test_compiler_accepts_the_step_and_warns_without_auto_record(example):
     y.write_text(text.replace("neon:\n", "neon:\n  auto_record: false\n", 1) if "neon:\n" in text
                  else text + "\nneon:\n  auto_record: false\n", encoding="utf-8")
     _, rep = check_study(example)
-    assert any("settings_test step sets the Neon scene camera" in w for w in rep.warnings)
+    assert any("settings test sets the eye tracker's scene camera" in w for w in rep.warnings)
 
 
 def obs_row(variant, hold, placed, blown, fps, brightness=0.3, camera=None):

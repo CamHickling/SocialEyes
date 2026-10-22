@@ -124,10 +124,17 @@ class Api:
 
         out = content_checklist(folder)
         try:
-            out["sources"] = sources(folder)   # keeps sources.csv in step with the files the CSVs name
+            out["sources"] = sources(folder, create=False)   # keeps an existing sources.csv in step with the CSVs
         except OSError as e:                     # e.g. sources.csv open in Excel
             out["sources"] = {"error": str(e)}
         return out
+
+    @_reply
+    def sources_make(self, folder: str) -> dict:
+        """Starts sources.csv: a row per image and video, for where each came from."""
+        from .images import sources
+
+        return sources(folder)
 
     @_reply
     def images_match(self, folder: str, source: str) -> dict:

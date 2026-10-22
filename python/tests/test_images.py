@@ -54,6 +54,7 @@ def test_image_check_flags_shape_size_duplicates_and_mismatched_versions(example
 
 
 def test_sources_csv_follows_the_study_and_keeps_what_was_typed(example):
+    assert I.sources(example, create=False)["exists"] is False and not (example / I.SOURCES).exists()
     r = I.sources(example)
     assert r["files"] == r["added"] and r["complete"] == 0
     path = example / I.SOURCES

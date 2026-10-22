@@ -618,7 +618,8 @@ def _check_aois(b: StudyBundle, rep: Report) -> None:
         path = _study_file(b.root, rel, where, "AOI file", rep)
         if path is None:
             if needed:
-                rep.errors.append(f"{where}: images of critical posts need an AOI file")
+                rep.errors.append(f"{where}: images of critical posts need AOIs; draw them with Edit AOIs "
+                                  f"(Design > Content) or `socialeyes aois`, saved as {rel}")
             continue
         try:
             aois = load_aoi_file(b.root / path)
@@ -637,18 +638,22 @@ def _check_aois(b: StudyBundle, rep: Report) -> None:
             names_by_post.setdefault(img.post_id, {})[img.version] = sorted(aois.names())
     for pid, by_version in names_by_post.items():
         if len({tuple(v) for v in by_version.values()}) > 1:
-            rep.warnings.append(f"post {pid}: AOI names differ between image versions {by_version}")
+            names = "; ".join(f"{v or 'image'}: {', '.join(n) or 'none'}" for v, n in by_version.items())
+            rep.warnings.append(f"post {pid}: its image versions have different AOI names ({names}), so gaze on them "
+                                "can't be compared AOI by AOI; use the same names on each (Edit AOIs > Copy from)")
 
 
 def _check_design(b: StudyBundle, rep: Report) -> None:
     study = b.study
     for f in study.factors:
         if f.design == "within" and f.applies_to == "all":
-            rep.errors.append(f"factor {f.name}: within-subject factors can only apply to critical posts")
+            rep.errors.append(f"factor {f.name}: a within-subject factor can only change the critical posts; "
+                              "set it to apply to critical posts, or make it between-subjects")
     if not b.posts:
-        rep.errors.append(f"{study.posts}: no posts")
+        rep.errors.append(f"{study.posts}: no posts; add a row per post")
     if study.factors and not b.critical:
-        rep.errors.append(f"{study.posts}: the study has factors but no critical posts")
+        rep.errors.append(f"{study.posts}: the study has factors but no critical posts for them to change; "
+                          "set role to critical for the posts that carry the manipulation")
 
     for post in b.posts.values():
         fs = factors_for(study, post.role)
@@ -670,14 +675,14 @@ def _check_design(b: StudyBundle, rep: Report) -> None:
     n_cells = len(cells(study.within))
     if b.critical and len(b.critical) % n_cells:
         rep.warnings.append(
-            f"{len(b.critical)} critical posts is not a multiple of {n_cells} within-subject cells; "
-            "each participant will see some cells more often than others"
+            f"{len(b.critical)} critical posts can't be split evenly over {n_cells} within-subject cells, so each "
+            f"participant sees some cells more often than others; use a multiple of {n_cells}"
         )
     block = len(cells(study.between)) * n_cells
     if study.participants.n_plans % block:
         rep.warnings.append(
-            f"participants.n_plans={study.participants.n_plans} is not a multiple of the "
-            f"assignment block size {block}; the last block will be incomplete"
+            f"{study.participants.n_plans} participant plans aren't a multiple of the balanced block of {block}, "
+            f"so the last block is incomplete; use a multiple of {block} (Participants)"
         )
 
     cam = study.logging.front_camera
@@ -686,17 +691,20 @@ def _check_design(b: StudyBundle, rep: Report) -> None:
     if cam.enabled:
         recorded = [] if cam.steps == "all" else [k for k, s in enumerate(study.procedure) if s.id in cam.steps]
         if not checks:
-            rep.warnings.append("logging.front_camera is enabled but the procedure has no camera_check step "
-                                "to confirm the face is in view")
+            rep.warnings.append("the front camera records, but there's no camera check step to confirm the face "
+                                "is in view; add one before the recorded steps")
         elif recorded and checks[0] > recorded[0]:
-            rep.warnings.append(f"the first camera_check comes after recorded step {ids[recorded[0]]!r}")
+            rep.warnings.append(f"the camera check comes after {ids[recorded[0]]!r}, which the front camera records; "
+                                "move it before")
     elif checks:
-        rep.warnings.append("the procedure has a camera_check step but logging.front_camera is not enabled")
+        rep.warnings.append("there's a camera check step but the front camera doesn't record (Recording); "
+                            "turn the front camera on or remove the step")
 
     photos = [k for k, s in enumerate(study.procedure) if s.type == "profile_photo"]
     feed_at = next((k for k, s in enumerate(study.procedure) if s.type == "feed"), None)
     if photos and feed_at is not None and photos[0] > feed_at:
-        rep.warnings.append("the profile_photo step comes after the feed, so the photo is never seen in the feed")
+        rep.warnings.append("the profile photo step comes after the feed, so the photo is never seen in the feed; "
+                            "move it before the feed")
     for s in study.procedure:
         if s.type == "display_calibration":
             rep.warnings.append(f"step {s.id}: display_calibration is retired (it needs a laptop during the session); "
@@ -704,14 +712,15 @@ def _check_design(b: StudyBundle, rep: Report) -> None:
     tagged = study.markers.on_screen.steps
     untagged = [s.id for s in study.procedure if s.type == "validation" and s.id not in tagged]
     if tagged and untagged:
-        rep.warnings.append(f"markers.on_screen.steps leaves out validation step(s) {', '.join(untagged)}: without "
-                            "on-screen tags their dots can't be scored, and gaze isn't corrected for the wearer's offset")
+        rep.warnings.append(f"on-screen tags aren't shown during {', '.join(untagged)}: without them its dots can't "
+                            "be scored, and gaze isn't corrected for the wearer's offset; add the step to the tags' "
+                            "steps (Recording)")
     if any(s.type == "settings_test" for s in study.procedure) and not study.neon.auto_record:
-        rep.warnings.append("a settings_test step sets the Neon scene camera, which needs neon.auto_record; "
-                            "without it the step is skipped")
+        rep.warnings.append("the settings test sets the eye tracker's scene camera, which needs \"Start and stop "
+                            "the Neon recording from the app\" (Recording); without it the step is skipped")
     if photos and cam.enabled and (cam.steps == "all" or any(ids[k] in cam.steps for k in photos)):
-        rep.warnings.append("logging.front_camera records during the profile_photo step, but the camera can only "
-                            "do one at a time; leave that step out of logging.front_camera.steps")
+        rep.warnings.append("the front camera is set to record during the profile photo step, but it can only "
+                            "do one at a time; leave that step out of the front camera's steps (Recording)")
 
     for step in study.procedure:
         if isinstance(step, RecognitionStep):
@@ -726,9 +735,11 @@ def _check_design(b: StudyBundle, rep: Report) -> None:
                             "foils must be images that never appear in the feed"
                         )
                 if not step.foils:
-                    rep.warnings.append(f"procedure step {step.id}: lures include foils but no foils are listed")
+                    rep.warnings.append(f"procedure step {step.id}: the recognition test uses foils (images never "
+                                        "shown in the feed) but none are listed; set the number of foils (Content)")
             elif step.foils:
-                rep.warnings.append(f"procedure step {step.id}: foils are listed but lures is {step.lures!r}")
+                rep.warnings.append(f"procedure step {step.id}: foils are listed but the recognition test only uses "
+                                    "the other image versions, so they're never shown")
             if step.lures in ("alternate_version", "both"):
                 for post in b.critical:
                     if len(b.versions(post.post_id)) < 2:

@@ -376,7 +376,7 @@ def test_camera_and_screen_recording_exclusive(example):
 def test_camera_check_warnings(example):
     enable_camera(example, check_step=False)
     _, rep = check_study(example)
-    assert any("no camera_check step" in w for w in rep.warnings)
+    assert any("no camera check step" in w for w in rep.warnings)
 
 
 @pytest.fixture(scope="module")
