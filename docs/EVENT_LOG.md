@@ -80,7 +80,8 @@ the analysis map a screen point to exact image pixels.
   "device": {
     "manufacturer": "Google", "model": "Pixel 8", "android_sdk": 34,
     "screen_width_px": 1080, "screen_height_px": 2400,
-    "density_dpi": 420, "xdpi": 428.6, "ydpi": 427.3, "refresh_hz": 60.0, "font_scale": 1.0
+    "density_dpi": 420, "xdpi": 428.6, "ydpi": 427.3, "xdpi_reported": 428.6, "ydpi_reported": 427.3,
+    "screen_checked": false, "refresh_hz": 60.0, "font_scale": 1.0
   },
   "feed_area": [0, 210, 1080, 2400],
   "sync_patch": [1000, 2320, 1080, 2400],
@@ -93,6 +94,10 @@ the analysis map a screen point to exact image pixels.
   "end": {"reason": "completed", "clock": {"elapsed_ns": 0, "uptime_ns": 0, "wall_ms": 0}}
 }
 ```
+
+`device.xdpi` / `ydpi` are the dpi the analysis uses for millimetres: the phone's reported dpi
+(`xdpi_reported` / `ydpi_reported`) corrected by the ruler check on the phone (**Check screen size**;
+`screen_checked` says whether it was done). Before app 0.3.10 they are the reported dpi.
 
 `group_key` is the participant's between-subjects group, copied from their plan
 (`""` when the study has no between-subjects factors). `package_sha256` identifies

@@ -1,5 +1,6 @@
 package org.socialeyes.pictogram
 
+import org.socialeyes.pictogram.device.ScreenScale
 import android.app.Activity
 import android.os.Build
 import android.util.DisplayMetrics
@@ -213,8 +214,12 @@ class Session(
                 put("screen_width_px", dm.widthPixels)
                 put("screen_height_px", dm.heightPixels)
                 put("density_dpi", dm.densityDpi)
-                put("xdpi", dm.xdpi)
-                put("ydpi", dm.ydpi)
+                // the ruler-checked dpi, which the analysis uses for millimetres (CAM-227), and the reported one
+                put("xdpi", dm.xdpi * ScreenScale.factors(activity).first)
+                put("ydpi", dm.ydpi * ScreenScale.factors(activity).second)
+                put("xdpi_reported", dm.xdpi)
+                put("ydpi_reported", dm.ydpi)
+                put("screen_checked", ScreenScale.checkedAt(activity) != null)
                 put("refresh_hz", display.refreshRate)
                 put("font_scale", activity.resources.configuration.fontScale)
             }

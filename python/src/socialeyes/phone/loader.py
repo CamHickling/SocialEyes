@@ -93,6 +93,7 @@ class PhoneState:
     studies: dict = field(default_factory=dict)    # study id -> package hash on the phone (None: unknown)
     sessions: dict = field(default_factory=dict)   # study id -> sessions still on the phone
     session_ids: dict = field(default_factory=dict)  # study id -> [(participant id, session uid)] on the phone
+    profile: Optional[dict] = None        # device_profile.json from the app: screen, dpi, corners, cut-outs (CAM-227)
 
 
 def parse_package(dumpsys: str) -> tuple[bool, Optional[int], Optional[str], Optional[bool]]:
@@ -179,6 +180,10 @@ def read_phone(adb: Adb) -> PhoneState:
     studies = f"{APP_FILES}/studies"
     s.studies = parse_study_hashes(adb.shell(f"cd {studies} 2>/dev/null && sha256sum */{CHECKSUM_FILE} 2>/dev/null"),
                                    adb.shell(f"ls -1 {studies} 2>/dev/null"))
+    try:
+        s.profile = json.loads(adb.shell(f"cat {APP_FILES}/device_profile.json 2>/dev/null") or "null")
+    except ValueError:
+        s.profile = None
     found = adb.shell(f"find {APP_FILES}/data -mindepth 3 -maxdepth 3 -type d 2>/dev/null")
     s.sessions = parse_sessions(found)
     s.session_ids = parse_session_ids(found)
@@ -197,6 +202,7 @@ class StudyInfo:
     size_bytes: int
     needs_camera: bool          # the app uses the camera: front camera video, profile_photo or camera_check
     records_camera: bool = False  # front camera video: needs room on the phone
+    tags: Optional[dict] = None   # markers.on_screen, when steps show on-screen tags (eye tracking)
 
 
 def build_study(study_dir: Path | str) -> StudyInfo:
@@ -215,6 +221,8 @@ def build_study(study_dir: Path | str) -> StudyInfo:
         # the same rule as the app's setup screen (SetupScreen.kt, usesCamera)
         needs_camera=records or any(s.get("type") in CAMERA_STEPS for s in study.get("procedure", [])),
         records_camera=records,
+        tags=(study.get("markers") or {}).get("on_screen") if ((study.get("markers") or {}).get("on_screen") or {}).get("steps")
+        else None,
     )
 
 
@@ -272,6 +280,11 @@ def readiness(phone: PhoneState, study: Optional[StudyInfo] = None, apk: Optiona
             add("info", f"Replaces the different version of {study.id} that is on the phone.")
         if study.needs_camera and phone.app_installed and not phone.camera_granted:
             add("info", "The study uses the front camera; loading allows the app to use the camera.")
+        # this phone's screen against the study's tags (CAM-227)
+        from .layout import layout_checks, ruler_check
+
+        for level, text in ruler_check(phone.profile, study.tags is not None) + layout_checks(phone.profile, study.tags):
+            add(level, text)
 
         need = study.size_bytes + STORAGE_MARGIN + (CAMERA_MARGIN if study.records_camera else 0)
         if phone.free_bytes is not None and phone.free_bytes < need:

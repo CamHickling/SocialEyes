@@ -1,5 +1,6 @@
 package org.socialeyes.pictogram
 
+import org.socialeyes.pictogram.device.ScreenScale
 import android.app.ActivityManager
 import android.os.Bundle
 import android.view.MotionEvent
@@ -53,6 +54,7 @@ class MainActivity : ComponentActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         pinSessions = getPreferences(MODE_PRIVATE).getBoolean(PIN_SESSIONS, false)
         val studiesDir = File(getExternalFilesDir(null), "studies").apply { mkdirs() }
+        ScreenScale.writeProfile(this)   // for the computer's loader: screen, dpi, corners, cut-outs (CAM-227)
         setContent {
             val s = session
             val pending = neonPending

@@ -9,6 +9,11 @@ done on the command line (`socialeyes --help`); the README has the details.
 2. On the Android phone (Android 10 or newer): **Settings > About phone**, tap **Build number** seven
    times, then **Settings > System > Developer options > USB debugging** on.
 3. Plug the phone in and tap **Allow** when it asks about USB debugging.
+4. Eye tracking only, once per phone: after the first **Load onto phone** (section 3), open SocialEyes
+   on the phone, tap **Check screen size**, measure the two lines with a ruler and type the lengths.
+   Some phones misreport their screen's size; this keeps the eye-tracking tags and gaze in true
+   millimetres. **Load onto phone** also warns if the phone's rounded corners or camera cut-out would
+   get in the tags' way.
 
 ## 2. Make the study
 

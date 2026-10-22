@@ -1,5 +1,6 @@
 package org.socialeyes.pictogram.ui
 
+import org.socialeyes.pictogram.device.ScreenScale
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -124,11 +125,11 @@ internal fun HoldSequence(
 @Composable
 private fun LadderScreen(session: Session, step: Step, hold: Int, onDone: () -> Unit) {
     val pkg = session.pkg
-    val metrics = LocalContext.current.resources.displayMetrics
+    val context = LocalContext.current
     val density = LocalDensity.current
     val view = LocalView.current
-    val pxPerMmX = metrics.xdpi / 25.4
-    val pxPerMmY = metrics.ydpi / 25.4
+    val pxPerMmX = ScreenScale.xdpi(context) / 25.4   // the ruler-checked dpi (CAM-227)
+    val pxPerMmY = ScreenScale.ydpi(context) / 25.4
     val sizes = step.doubles("sizes_mm") ?: listOf(8.0, 10.0, 12.0, 14.0)
     val insets = step.doubles("side_insets_mm") ?: listOf(3.0, 4.0, 5.0, 6.0)
     val gaps = step.doubles("edge_gaps_mm") ?: listOf(1.5, 3.5)

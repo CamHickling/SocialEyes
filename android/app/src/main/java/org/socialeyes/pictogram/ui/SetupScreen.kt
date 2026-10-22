@@ -1,5 +1,6 @@
 package org.socialeyes.pictogram.ui
 
+import org.socialeyes.pictogram.device.ScreenScale
 import org.socialeyes.pictogram.log.InterruptionMonitor
 import kotlinx.coroutines.delay
 import androidx.compose.runtime.LaunchedEffect
@@ -84,6 +85,11 @@ fun SetupScreen(
     var participant by remember { mutableStateOf<String?>(null) }
     var confirmRepeat by remember { mutableStateOf(false) }
     val pkg = studies.firstOrNull { it.first == selectedDir }?.second?.getOrNull()
+    var ruler by remember { mutableStateOf(false) }
+    if (ruler) {
+        MaterialTheme { Surface(Modifier.fillMaxSize()) { RulerScreen { ruler = false } } }
+        return
+    }
 
     MaterialTheme {
         Surface(Modifier.fillMaxSize()) {
@@ -197,6 +203,10 @@ fun SetupScreen(
                     if (studies.none { it.first == selectedDir }) selectedDir = StudyPackage.latest(studies)
                 }) { Text("Reload studies") }
                 val context = LocalContext.current
+                val checked = remember(ruler) { ScreenScale.checkedAt(context) }
+                OutlinedButton(onClick = { ruler = true }) {
+                    Text(if (checked == null) "Check screen size (once per phone)" else "Check screen size again")
+                }
                 if (ShortcutManagerCompat.isRequestPinShortcutSupported(context)) {
                     OutlinedButton(onClick = { requestHomeScreenShortcut(context) }) { Text("Add to home screen") }
                 }

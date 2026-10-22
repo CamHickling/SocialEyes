@@ -1,5 +1,6 @@
 package org.socialeyes.pictogram.ui
 
+import org.socialeyes.pictogram.device.ScreenScale
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -51,16 +52,18 @@ fun OnScreenTags(session: Session, step: Step, content: @Composable () -> Unit) 
         content()
         return
     }
-    val metrics = LocalContext.current.resources.displayMetrics
+    val context = LocalContext.current
+    val xdpi = ScreenScale.xdpi(context)   // the ruler-checked dpi (CAM-227)
+    val ydpi = ScreenScale.ydpi(context)
     val density = LocalDensity.current
     val view = LocalView.current
     val cells = FAMILY_CELLS[cfg.family] ?: 8
-    val tagPx = (cfg.sizeMm / 25.4 * metrics.xdpi).toFloat()
+    val tagPx = (cfg.sizeMm / 25.4 * xdpi).toFloat()
     val cell = tagPx / cells
     val shown = with(density) { (cell * (cells + 2)).toDp() }
     val image = with(density) { (cell * (cells + 4)).toDp() }
-    val inset = with(density) { (SIDE_INSET_MM / 25.4f * metrics.xdpi - cell).coerceAtLeast(0f).toDp() }
-    val edge = with(density) { (EDGE_INSET_MM / 25.4f * metrics.ydpi).toDp() }
+    val inset = with(density) { (SIDE_INSET_MM / 25.4f * xdpi - cell).coerceAtLeast(0f).toDp() }
+    val edge = with(density) { (EDGE_INSET_MM / 25.4f * ydpi).toDp() }
     val ids = pkg.study.markers.screenTagIds
     val rects = remember { HashMap<Int, ScreenRect>() }
 

@@ -1,5 +1,6 @@
 package org.socialeyes.pictogram.ui
 
+import org.socialeyes.pictogram.device.ScreenScale
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -264,10 +265,12 @@ internal class BarTags(val family: String, val ids: List<Int>, val tagPx: Float,
 
 @Composable
 internal fun rememberBarTags(family: String, ids: List<Int>, sizeMm: Double, sideInsetMm: Double = 5.0, edgeGapMm: Double = 2.0): BarTags {
-    val metrics = LocalContext.current.resources.displayMetrics
-    return remember(family, ids, sizeMm, sideInsetMm, edgeGapMm) {
-        BarTags(family, ids, (sizeMm / 25.4 * metrics.xdpi).toFloat(), (sideInsetMm / 25.4 * metrics.xdpi).toFloat(),
-            (edgeGapMm / 25.4 * metrics.ydpi).toFloat())
+    val context = LocalContext.current
+    val xdpi = ScreenScale.xdpi(context)   // the ruler-checked dpi (CAM-227)
+    val ydpi = ScreenScale.ydpi(context)
+    return remember(family, ids, sizeMm, sideInsetMm, edgeGapMm, xdpi, ydpi) {
+        BarTags(family, ids, (sizeMm / 25.4 * xdpi).toFloat(), (sideInsetMm / 25.4 * xdpi).toFloat(),
+            (edgeGapMm / 25.4 * ydpi).toFloat())
     }
 }
 

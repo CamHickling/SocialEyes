@@ -182,3 +182,14 @@ def test_same_phone_on_usb_and_wifi_counts_once(monkeypatch):
                "ZY22HW42W8 device model:motorola_edge_40_pro\n")
     assert Adb(serial="128.189.50.150:37063", exe=Path("adb")).choose().serial == "128.189.50.150:37063"
     assert Adb(serial="128.189.50.150:37063", exe=Path("adb")).choose().id == "ZY22HW42W8"
+
+
+def test_the_phones_screen_is_checked_against_the_studys_tags():
+    tags = {"steps": ["feed"], "layout": "bars", "family": "tag16h5", "size_mm": 10, "side_inset_mm": 3, "edge_gap_mm": 2}
+    profile = {"screen_width_px": 1080, "screen_height_px": 2400, "density": 2.75, "xdpi": 397.6, "ydpi": 395.8,
+               "rounded_corners": {"top_left": 220}, "cutouts": []}
+    texts = [c.text for c in readiness(phone(profile=profile), study(tags=tags), APK)]
+    assert any("hasn't been checked with a ruler" in t for t in texts)
+    assert any("rounded screen corners would clip the top-left" in t for t in texts)
+    # a study without eye tracking doesn't care
+    assert not any("ruler" in t or "corners" in t for t in (c.text for c in readiness(phone(profile=profile), study(), APK)))

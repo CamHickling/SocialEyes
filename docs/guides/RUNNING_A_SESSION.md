@@ -7,6 +7,7 @@ Words in **bold** are buttons or screens in the SocialEyes app (phone) or deskto
 
 - [ ] On the computer, open the study and choose **Phone**, then **Load onto phone**. Fix anything
       marked in red; yellow warnings (battery, Do Not Disturb) can wait until the day.
+- [ ] A phone new to the study, with eye tracking: on the phone, **Check screen size** (once per phone).
 - [ ] Charge the phone (and the Neon glasses and their phone, if the study uses eye tracking).
 - [ ] Have enough consent forms, and a run sheet to note each participant's id and anything unusual.
 

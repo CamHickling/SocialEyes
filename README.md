@@ -883,6 +883,17 @@ sessions** (a switch, remembered on the phone) uses Android's app pinning, so a 
 leave the app by accident; Android asks to confirm at the start of each session, and may lock the
 phone when the session ends (Settings > Security > App pinning).
 
+**Other phones (CAM-227).** Everything sized in millimetres (the on-screen tags) uses the phone's
+dpi, and some phones misreport it. On the phone, **Check screen size** draws a 50 mm and a 100 mm
+line at the reported dpi; the researcher measures them and the app keeps the correction, uses it for
+the tags, and logs both the corrected and the reported dpi in `session.json` (`device`), so the gaze
+analysis works in true millimetres. The app also writes `device_profile.json` (screen size, dpi,
+rounded corners, camera cut-outs) into its files folder, and loading an eye-tracking study checks
+the study's bar tags against it: it warns when a rounded corner would cut into a tag's black square
+(and suggests a side inset that clears it), when a camera cut-out covers a tag, when the top bar has
+too little room between the tags for the wordmark and icons, and when the screen size hasn't been
+checked yet.
+
 Sessions are saved on the phone. Copy them off with `socialeyes unload` (or the desktop
 app's **Data** tab, which does the same):
 

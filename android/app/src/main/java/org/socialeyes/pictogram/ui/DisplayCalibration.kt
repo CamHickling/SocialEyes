@@ -1,5 +1,6 @@
 package org.socialeyes.pictogram.ui
 
+import org.socialeyes.pictogram.device.ScreenScale
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
@@ -233,7 +234,7 @@ private fun state(session: Session, step: Step, image: ScreenRect?, camera: Map<
         put("step_id", step.id)
         putJsonObject("screen") {
             put("width_px", dm.widthPixels); put("height_px", dm.heightPixels)
-            put("xdpi", dm.xdpi); put("ydpi", dm.ydpi)
+            put("xdpi", ScreenScale.xdpi(context)); put("ydpi", ScreenScale.ydpi(context))
         }
         putJsonObject("tags") { session.screenTagRects.forEach { (id, r) -> put(id.toString(), r.toJson()) } }
         image?.let { put("image", it.toJson()) }
