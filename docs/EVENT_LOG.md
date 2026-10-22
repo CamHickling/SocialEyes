@@ -369,7 +369,8 @@ faces, head pose, distance, eye position, blink, looking at the phone), `face_ex
 their AOI); `socialeyes heatmaps <study>` pools them into heatmaps per image and condition.
 
 `socialeyes export <study>` combines every session of a study into `by_session.csv`,
-`by_item.csv` (session x post), `by_condition.csv` (session x cell) and `codebook.csv`; see
+`by_item.csv` (session x post), `by_condition.csv` (session x cell), `by_comment.csv`
+(session x comment, with gaze per comment from the `sheet_comment_*` rects) and `codebook.csv`; see
 the README (Tables for analysis).
 
 Finger occlusion is an estimate. The app knows the touch point, not the finger's

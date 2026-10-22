@@ -48,12 +48,18 @@ def test_export_writes_every_table_and_skips_broken_sessions(exported):
     _, _, r, t, root = exported
     assert r.sessions == 3
     assert len(r.skipped) == 1 and "P009-x" in r.skipped[0][0]
-    assert sorted(p.name for p in (root / "out").iterdir()) == ["by_condition.csv", "by_item.csv", "by_session.csv",
-                                                                "codebook.csv", "exploration", "exploration.html"]
+    assert sorted(p.name for p in (root / "out").iterdir()) == ["by_comment.csv", "by_condition.csv", "by_item.csv",
+                                                                "by_session.csv", "codebook.csv", "exploration",
+                                                                "exploration.html"]
     assert (root / "out" / "by_item.csv").read_bytes().startswith(b"\xef\xbb\xbf")  # Excel reads UTF-8 with a BOM
     assert len(t["by_session"]) == 3
     assert len(t["by_item"]) == 3 * 20
     assert len(t["by_condition"]) == 3 * (4 + 1)  # the 4 within cells and the fillers
+    # every comment of every post in each participant's feed (no gaze columns without fixations.csv)
+    build = exported[0]
+    n = {pid: sum(len(e["comments"]) for e in json.loads((build / "plans" / f"{pid}.json").read_text(encoding="utf-8"))["feed"])
+         for pid in ("P001", "P002")}
+    assert len(t["by_comment"]) == n["P001"] + 2 * n["P002"] and t["by_comment"]["gaze_ms"].isna().all()
 
 
 def test_by_session(exported):

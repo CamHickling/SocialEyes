@@ -558,12 +558,18 @@ socialeyes export studies/my_study
 | `by_session.csv` | session | group and between-subjects levels, start time, completed, session and feed length, how the feed ended, totals (posts seen, likes, saves, shares, comments opened and posted, stories and reels watched), time in the background, interruptions, quality warnings, the register's duplicate-id flag and notes, every questionnaire answer, recognition hit and false alarm rates |
 | `by_item.csv` | session x feed post | the post's position, role, cell and factor levels, image, label and comment set; seconds on screen (post and image: any part, whole, area-weighted), when it was first seen, times scrolled into view, time its comments were open; liked, saved, shared, comments opened, posted and liked, caption, label and profile taps; its image ratings; the recognition answers for the version seen and the other version (answer, correct, confidence, response time) |
 | `by_condition.csv` | session x within-subjects cell (and one row for the fillers) | the means of `by_item`'s measures over the cell's posts (shares for yes/no columns) |
+| `by_comment.csv` | session x comment (every comment on the posts in the participant's feed, then their own) | the post's position, role, cell and factor levels, the comment set; the comment, its order, author and likes shown; time on screen in the comments sheet and when it first appeared there; liked, replies posted to it |
 | `codebook.csv` | column | what each column means and its values, with the question wording from the study |
 
 With eye tracking, `by_item.csv` also gets the post's fixations, the time fixating its image and,
 for every AOI name in the study, the time fixating that AOI (`gaze_<aoi>_ms`) and the time from
 the post coming on screen to the first fixation in it (`gaze_<aoi>_first_s`), from each
-session's `fixations.csv`.
+session's `fixations.csv`, plus the time fixating the comments under the post
+(`gaze_inline_comments_ms`, as one block) and its open comments sheet (`gaze_sheet_ms`).
+`by_comment.csv` gets each comment's fixations, fixation time and time to first fixation
+from it appearing in the sheet. Comments under a post aren't split per comment: their lines
+are about 3 mm apart, closer than the gaze accuracy (about 4 mm, see CAM-210); comments in
+the sheet are taller rows.
 
 They go to `export/` in the study's data folder (`--data` and `-o` choose others), so they
 stay on the same drive as the sessions. Files are UTF-8 with a byte-order mark, which Excel

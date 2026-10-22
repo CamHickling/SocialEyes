@@ -84,6 +84,8 @@ by_item,recog_alt_confidence,Recognition (recog): confidence for the other versi
 by_item,recog_alt_rt_ms,Recognition (recog): time to answer for the other version of this post's image (not seen),milliseconds
 by_item,gaze_fixations,Fixations on the post's image (from socialeyes gaze; blank: no eye tracking),count
 by_item,gaze_image_ms,Time fixating the post's image,milliseconds
+by_item,gaze_inline_comments_ms,Time fixating the comments shown under the post (as one block),milliseconds
+by_item,gaze_sheet_ms,"Time fixating the post's open comments sheet (its comments, the comment box and the rest)",milliseconds
 by_item,gaze_face_ms,Time fixating AOI face of the post's image,milliseconds
 by_item,gaze_face_first_s,Time from the post first coming on screen to the first fixation in AOI face (blank: never fixated),seconds
 by_item,gaze_waist_ms,Time fixating AOI waist of the post's image,milliseconds
@@ -131,9 +133,37 @@ by_condition,recog_alt_confidence,Mean over the cell's posts of by_item recog_al
 by_condition,recog_alt_rt_ms,Mean over the cell's posts of by_item recog_alt_rt_ms,milliseconds
 by_condition,gaze_fixations,Mean over the cell's posts of by_item gaze_fixations,count
 by_condition,gaze_image_ms,Mean over the cell's posts of by_item gaze_image_ms,milliseconds
+by_condition,gaze_inline_comments_ms,Mean over the cell's posts of by_item gaze_inline_comments_ms,milliseconds
+by_condition,gaze_sheet_ms,Mean over the cell's posts of by_item gaze_sheet_ms,milliseconds
 by_condition,gaze_face_ms,Mean over the cell's posts of by_item gaze_face_ms,milliseconds
 by_condition,gaze_face_first_s,Mean over the cell's posts of by_item gaze_face_first_s,seconds
 by_condition,gaze_waist_ms,Mean over the cell's posts of by_item gaze_waist_ms,milliseconds
 by_condition,gaze_waist_first_s,Mean over the cell's posts of by_item gaze_waist_first_s,seconds
 by_condition,gaze_legs_ms,Mean over the cell's posts of by_item gaze_legs_ms,milliseconds
 by_condition,gaze_legs_first_s,Mean over the cell's posts of by_item gaze_legs_first_s,seconds
+by_comment,participant_id,Participant id,
+by_comment,session_uid,"The session (a participant can have more than one, see duplicate_id)",
+by_comment,group,Between-subjects group number (1-based),
+by_comment,group_key,"The group's levels, factor=level joined by |",
+by_comment,list,Counterbalancing list of the within-subjects design (0-based),
+by_comment,comments,Between-subjects factor comments,"neutral, appearance"
+by_comment,position,Position in the participant's feed (0 = top),
+by_comment,post_id,The post (posts.csv),
+by_comment,role,critical (manipulated) or filler,"critical, filler"
+by_comment,cell,Within-subjects cell (filler: all filler posts),
+by_comment,edit,Within-subjects factor edit,"original, retouched"
+by_comment,label,Within-subjects factor label,"none, edited"
+by_comment,comment_variant,Comment set shown on the post (comments.csv variant),
+by_comment,comment_id,"The comment (comments.csv comment_id; p1, p2, ... for the participant's own)",
+by_comment,comment_order,Position in the post's comments (1 = first; blank for the participant's own),
+by_comment,own,Written by the participant,"1 = yes, 0 = no"
+by_comment,account_id,Account that wrote it (accounts.csv; blank for the participant's own),
+by_comment,reply_to,The comment the participant's own comment answered (blank: a new comment),
+by_comment,like_count_shown,Likes shown on the comment,count
+by_comment,sheet_visible_s,Time the comment was on screen in the open comments sheet,seconds
+by_comment,sheet_first_seen_s,"When the comment first came on screen in the sheet, from the start of the feed (blank: never)",seconds
+by_comment,liked,Liked by the participant at the end of the feed,"1 = yes, 0 = no"
+by_comment,replies,Replies the participant posted to it,count
+by_comment,gaze_fixations,Fixations on the comment in the sheet (from socialeyes gaze; blank: no eye tracking),count
+by_comment,gaze_ms,Time fixating the comment in the sheet,milliseconds
+by_comment,gaze_first_s,Time from the comment first coming on screen in the sheet to the first fixation on it (blank: never fixated),seconds

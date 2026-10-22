@@ -152,3 +152,72 @@ def test_export_gaze_columns(built, tmp_path):
     assert row["gaze_face_first_s"] == pytest.approx(0.5, abs=0.05)
     book = pd.read_csv(tmp_path / "out" / "codebook.csv", encoding="utf-8-sig", keep_default_na=False)
     assert (book[book["column"].str.startswith("gaze_")]["description"] != "").all()
+
+
+def test_export_gaze_per_comment(built, tmp_path):
+    """The comments sheet logs each comment's rect, so by_comment gets gaze per comment; the
+    comments under a post count as one block in by_item."""
+    from socialeyes.session.export import export_study
+
+    _, build, _ = built
+    data = tmp_path / "data"
+    session = simulate_session(build, "P001", data / "P001" / "P001-sim", seed=1)
+    p = plan(build, "P001")
+    crit = next(x for x in p["feed"] if x["comments"])
+    c1, c2 = (c["comment_id"] for c in crit["comments"][:2])
+    # open the post's sheet for 2 s during a pause in scrolling, then put the feed frame back
+    vp = pd.read_csv(session / "viewport.csv")
+    frames = vp.index[vp["element"] == "frame"]
+    t = vp.loc[frames, "t_ns"].to_numpy()
+    i = next(i for i in range(len(frames) // 2, len(frames) - 1) if t[i + 1] - t[i] > 2_100_000_000)
+    k, nxt = frames[i], frames[i + 1]
+    t_open = int(t[i]) + 1_000_000
+    t_close = t_open + 2_000_000_000
+    sheet = pd.DataFrame([
+        {"t_ns": t_open, "frame": -1, "scroll_y": vp.loc[k, "scroll_y"], "post_id": "", "element": "frame"},
+        {"t_ns": t_open, "post_id": crit["post_id"], "element": "sheet", "left": 0, "top": 1000, "right": 1080, "bottom": 2400},
+        {"t_ns": t_open, "post_id": crit["post_id"], "element": f"sheet_comment_{c1}", "left": 0, "top": 1200, "right": 1080, "bottom": 1350},
+        {"t_ns": t_open, "post_id": crit["post_id"], "element": f"sheet_comment_{c2}", "left": 0, "top": 1350, "right": 1080, "bottom": 1500},
+        {"t_ns": t_open, "post_id": crit["post_id"], "element": "sheet_comment_p1", "left": 0, "top": 1500, "right": 1080, "bottom": 1650},
+    ])
+    restore = vp.loc[k:nxt - 1].assign(t_ns=t_close)
+    pd.concat([vp.loc[:nxt - 1], sheet, restore, vp.loc[nxt:]]).to_csv(session / "viewport.csv", index=False)
+    with (session / "events.jsonl").open("a", encoding="utf-8") as fh:
+        for e in ({"t_ns": t_open + 500_000_000, "type": "comment_like", "post_id": crit["post_id"], "comment": c2, "liked": True},
+                  {"t_ns": t_open + 900_000_000, "type": "comment_submit", "post_id": crit["post_id"], "comment_id": "p1",
+                   "text": "same", "reply_to": c2, "typing_ms": 800}):
+            fh.write(json.dumps(e) + "\n")
+    fx = pd.DataFrame([
+        {"fixation": 0, "t_start_ns": t_open + 300_000_000, "t_end_ns": t_open + 550_000_000, "duration_ms": 250.0,
+         "post_id": crit["post_id"], "element": f"sheet_comment_{c2}", "image_id": "", "aoi": ""},
+        {"fixation": 1, "t_start_ns": t_open + 600_000_000, "t_end_ns": t_open + 750_000_000, "duration_ms": 150.0,
+         "post_id": crit["post_id"], "element": f"sheet_comment_{c2}", "image_id": "", "aoi": ""},
+        {"fixation": 2, "t_start_ns": t_open + 800_000_000, "t_end_ns": t_open + 900_000_000, "duration_ms": 100.0,
+         "post_id": crit["post_id"], "element": "sheet", "image_id": "", "aoi": ""},
+        {"fixation": 3, "t_start_ns": t_open - 900_000_000, "t_end_ns": t_open - 700_000_000, "duration_ms": 200.0,
+         "post_id": crit["post_id"], "element": "comments", "image_id": "", "aoi": ""},
+    ])
+    res = tmp_path / "analysis" / "P001" / "P001-sim"
+    res.mkdir(parents=True)
+    fx.to_csv(res / "fixations.csv", index=False)
+    r = export_study(EXAMPLE, data, tmp_path / "out", build_for=lambda _f: build, analysis_dir=tmp_path / "analysis")
+    assert not r.skipped
+    items = pd.read_csv(tmp_path / "out" / "by_item.csv", encoding="utf-8-sig").set_index("post_id")
+    assert items.loc[crit["post_id"], "gaze_sheet_ms"] == 500
+    assert items.loc[crit["post_id"], "gaze_inline_comments_ms"] == 200
+    assert items.loc[crit["post_id"], "gaze_fixations"] == 0  # none on the image
+    com = pd.read_csv(tmp_path / "out" / "by_comment.csv", encoding="utf-8-sig", keep_default_na=False, na_values=[""])
+    mine = com[com["post_id"] == crit["post_id"]].set_index("comment_id")
+    assert list(mine.index) == [c["comment_id"] for c in crit["comments"]] + ["p1"]
+    assert len(com) == sum(len(x["comments"]) for x in p["feed"]) + 1
+    a, b, own = mine.loc[c1], mine.loc[c2], mine.loc["p1"]
+    assert a["gaze_fixations"] == 0 and a["gaze_ms"] == 0 and np.isnan(a["gaze_first_s"])
+    assert b["gaze_fixations"] == 2 and b["gaze_ms"] == 400 and b["gaze_first_s"] == pytest.approx(0.3)
+    assert b["comment_order"] == 2 and b["own"] == 0 and b["liked"] == 1 and b["replies"] == 1
+    assert b["sheet_visible_s"] == pytest.approx(2.0, abs=0.01) and b["comment_variant"] == crit["comment_variant"]
+    assert own["own"] == 1 and own["reply_to"] == c2 and np.isnan(own["comment_order"])
+    other = com[com["post_id"] != crit["post_id"]]
+    assert (other["sheet_visible_s"] == 0).all() and other["sheet_first_seen_s"].isna().all()
+    book = pd.read_csv(tmp_path / "out" / "codebook.csv", encoding="utf-8-sig", keep_default_na=False)
+    assert (book[book["table"] == "by_comment"]["description"] != "").all()
+    assert book[(book["table"] == "by_comment") & (book["column"] == "liked")]["description"].iloc[0].startswith("Liked by")

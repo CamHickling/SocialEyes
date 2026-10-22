@@ -8,10 +8,12 @@ Every session in the study's data folder becomes rows in three tables:
   likes, comments, image ratings, recognition answers)
 - ``by_condition.csv``: one row per session x cell of the within-subjects design (and one for
   the fillers): the means of by_item's numeric columns over that cell's posts
+- ``by_comment.csv``: one row per session x comment in the participant's feed (the study's comments
+  on each post, and the participant's own): time in the comments sheet, likes, replies and gaze
 
 and ``codebook.csv`` describes every column. ``exploration.html`` is a blinded first look at them
 (session flags, missing values, distributions, conditions behind codes; no tests; see explore.py). Files are UTF-8 with a byte-order mark, so Excel
-shows accents correctly. Gaze columns join by_item once the gaze pipeline maps fixations to AOIs.
+shows accents correctly. Gaze columns in by_item and by_comment come from each session's fixations.csv.
 """
 from __future__ import annotations
 
@@ -31,7 +33,7 @@ from .analyze import analyze_session
 from .io import Session, load_session
 
 FORMAT_VERSION = 1
-TABLES = ("by_session", "by_item", "by_condition")
+TABLES = ("by_session", "by_item", "by_condition", "by_comment")
 
 # Fixed columns: (table, column, description, values). Columns named after the study's factors,
 # questionnaire items, rating items and recognition steps are added per study (see _codebook).
@@ -110,6 +112,26 @@ _CONDITION = [
     ("cell", "Within-subjects cell (filler: all filler posts)", ""),
     ("n_posts", "Posts of this cell in the participant's feed", "count"),
 ]
+# by_comment's own columns (after the ids and the post's position, post_id, role, cell, factors)
+_COMMENT = [
+    ("comment_variant", "Comment set shown on the post (comments.csv variant)", ""),
+    ("comment_id", "The comment (comments.csv comment_id; p1, p2, ... for the participant's own)", ""),
+    ("comment_order", "Position in the post's comments (1 = first; blank for the participant's own)", ""),
+    ("own", "Written by the participant", "1 = yes, 0 = no"),
+    ("account_id", "Account that wrote it (accounts.csv; blank for the participant's own)", ""),
+    ("reply_to", "The comment the participant's own comment answered (blank: a new comment)", ""),
+    ("like_count_shown", "Likes shown on the comment", "count"),
+    ("sheet_visible_s", "Time the comment was on screen in the open comments sheet", "seconds"),
+    ("sheet_first_seen_s", "When the comment first came on screen in the sheet, from the start of the feed "
+                           "(blank: never)", "seconds"),
+    ("liked", "Liked by the participant at the end of the feed", "1 = yes, 0 = no"),
+    ("replies", "Replies the participant posted to it", "count"),
+    ("gaze_fixations", "Fixations on the comment in the sheet (from socialeyes gaze; blank: no eye tracking)",
+     "count"),
+    ("gaze_ms", "Time fixating the comment in the sheet", "milliseconds"),
+    ("gaze_first_s", "Time from the comment first coming on screen in the sheet to the first fixation on it "
+                     "(blank: never fixated)", "seconds"),
+]
 
 
 @dataclass
@@ -156,7 +178,7 @@ def export_study(study_dir: Path | str, data_dir: Path | str, out_dir: Path | st
         return fresh
 
     try:
-        sessions, items, studies = [], [], {}
+        sessions, items, comments, studies = [], [], [], {}
         for n, folder in enumerate(folders, 1):
             progress(f"Session {n} of {len(folders)}: {folder.parent.name} ({folder.name})…")
             try:
@@ -167,12 +189,14 @@ def export_study(study_dir: Path | str, data_dir: Path | str, out_dir: Path | st
                 face = _face_summary(folder, analysis_dir, faces, progress) if analysis_dir else None
                 fx = analysis_dir and Path(analysis_dir) / folder.parent.name / folder.name / "fixations.csv"
                 fixations = pd.read_csv(fx) if fx and fx.is_file() else None
-                srow, irows = _session_tables(folder, build, studies[key], reg, face, fixations, aoi_names(build))
+                srow, irows, crows = _session_tables(folder, build, studies[key], reg, face, fixations,
+                                                     aoi_names(build))
             except Exception as e:  # one bad session never stops the export
                 r.skipped.append((str(folder), str(e)))
                 continue
             sessions.append(srow)
             items.extend(irows)
+            comments.extend(crows)
         # the columns come from the study as it compiles now (or the sessions' own build)
         try:
             manifest = json.loads((compiled() / "study.json").read_text(encoding="utf-8"))
@@ -182,10 +206,10 @@ def export_study(study_dir: Path | str, data_dir: Path | str, out_dir: Path | st
                 raise
             manifest = next(iter(studies.values()))
             names = sorted({k[len("gaze_"):-len("_ms")] for row in items for k in row
-                            if k.startswith("gaze_") and k.endswith("_ms") and k != "gaze_image_ms"})
+                            if k.startswith("gaze_") and k.endswith("_ms") and k not in _GAZE_FIXED})
         out = Path(out_dir)
         out.mkdir(parents=True, exist_ok=True)
-        tables = _frames(manifest, sessions, items, names)
+        tables = _frames(manifest, sessions, items, names, comments)
         for name, df in tables.items():
             path = out / f"{name}.csv"
             df.to_csv(path, index=False, encoding="utf-8-sig", lineterminator="\n")
@@ -255,29 +279,91 @@ def aoi_names(build: Path) -> list[str]:
     return names
 
 
+# by_item gaze columns that aren't an AOI's
+_GAZE_FIXED = ["gaze_fixations", "gaze_image_ms", "gaze_inline_comments_ms", "gaze_sheet_ms"]
+
+
 def gaze_columns(names: list[str]) -> list[str]:
-    return ["gaze_fixations", "gaze_image_ms"] + [c for n in names for c in (f"gaze_{n}_ms", f"gaze_{n}_first_s")]
+    return _GAZE_FIXED + [c for n in names for c in (f"gaze_{n}_ms", f"gaze_{n}_first_s")]
+
+
+def _since(t_ns, start_ns) -> Optional[float]:
+    """Seconds from start_ns to t_ns (None when either is missing)."""
+    if t_ns is None or start_ns is None or t_ns != t_ns or start_ns != start_ns:
+        return None
+    return round((t_ns - start_ns) / 1e9, 3)
 
 
 def _gaze(fixations: Optional[pd.DataFrame], post_id: str, first_seen_ns, names: list[str]) -> dict:
     """A post's gaze columns from fixations.csv (blank when the session has none)."""
     if fixations is None:
         return {}
-    f = fixations[(fixations["post_id"] == post_id) & (fixations["image_id"].fillna("") != "")]
-    out = {"gaze_fixations": len(f), "gaze_image_ms": round(float(f["duration_ms"].sum()), 1)}
+    mine = fixations[fixations["post_id"] == post_id]
+    element = mine["element"].fillna("") if "element" in mine else pd.Series("", index=mine.index)
+    f = mine[mine["image_id"].fillna("") != ""]
+    sheet = element.isin(["sheet", "sheet_input"]) | element.str.startswith("sheet_comment_")
+    out = {"gaze_fixations": len(f), "gaze_image_ms": round(float(f["duration_ms"].sum()), 1),
+           "gaze_inline_comments_ms": round(float(mine.loc[element == "comments", "duration_ms"].sum()), 1),
+           "gaze_sheet_ms": round(float(mine.loc[sheet, "duration_ms"].sum()), 1)}
     for n in names:
         g = f[f["aoi"].fillna("") == n]
         out[f"gaze_{n}_ms"] = round(float(g["duration_ms"].sum()), 1)
-        first = g["t_start_ns"].min() if len(g) else None
-        out[f"gaze_{n}_first_s"] = (round((first - first_seen_ns) / 1e9, 3)
-                                    if first is not None and first_seen_ns is not None and first_seen_ns == first_seen_ns
-                                    else None)
+        out[f"gaze_{n}_first_s"] = _since(g["t_start_ns"].min() if len(g) else None, first_seen_ns)
     return out
+
+
+def _comment_rows(s: Session, plan: dict, study: dict, ids: dict, by: dict, feed_start,
+                  fixations: Optional[pd.DataFrame]) -> list[dict]:
+    """by_comment's rows: every comment of every post in the participant's feed, then the
+    participant's own comments on that post. The sheet logs where each comment is while it's on
+    screen (sheet_comment_<id>), so gaze is per comment there; the comments shown under a post are
+    one block (by_item's gaze_inline_comments_ms): their lines are too close for eye tracking."""
+    likes = s.events_of("comment_like")
+    submits = s.events_of("comment_submit")
+    fx = None
+    if fixations is not None and "element" in fixations:
+        fx = fixations[fixations["element"].fillna("").str.startswith("sheet_comment_")]
+
+    def visible(pid, cid, col):
+        r = by.get((pid, f"sheet_comment_{cid}"))
+        v = getattr(r, col) if r is not None else None
+        return None if v is None or v != v else v
+
+    rows = []
+    for p in plan["feed"]:
+        pid = p["post_id"]
+        mine = submits[submits["post_id"] == pid] if len(submits) else submits
+        study_comments = [(c["comment_id"], {"comment_order": k, "own": 0, "account_id": c["account_id"],
+                                             "reply_to": "", "like_count_shown": c.get("like_count") or 0})
+                          for k, c in enumerate(p.get("comments") or [], 1)]
+        own = [(c["comment_id"], {"comment_order": None, "own": 1, "account_id": "",
+                                  "reply_to": c["reply_to"] if isinstance(c.get("reply_to"), str) else "",
+                                  "like_count_shown": 0})
+               for _, c in mine.iterrows()]
+        for cid, extra in study_comments + own:
+            liked = likes[(likes["post_id"] == pid) & (likes["comment"] == cid)] if len(likes) else likes
+            first_ns = visible(pid, cid, "first_visible_ns")
+            row = {
+                **ids,
+                "position": p["position"], "post_id": pid, "role": p["role"], "cell": p.get("cell") or "",
+                **{factor_col(f): (p.get("conditions") or {}).get(f, "") for f in _within(study)},
+                "comment_variant": p.get("comment_variant") or "", "comment_id": cid, **extra,
+                "sheet_visible_s": round(float(visible(pid, cid, "visible_s") or 0.0), 3),
+                "sheet_first_seen_s": _since(first_ns, feed_start),
+                "liked": int(bool(liked["liked"].iloc[-1])) if len(liked) else 0,
+                "replies": int((mine["reply_to"] == cid).sum()) if len(mine) and "reply_to" in mine else 0,
+            }
+            if fx is not None:
+                g = fx[(fx["post_id"] == pid) & (fx["element"] == f"sheet_comment_{cid}")]
+                row.update(gaze_fixations=len(g), gaze_ms=round(float(g["duration_ms"].sum()), 1),
+                           gaze_first_s=_since(g["t_start_ns"].min() if len(g) else None, first_ns))
+            rows.append(row)
+    return rows
 
 
 def _session_tables(folder: Path, build: Path, manifest: dict, reg: dict,
                     face: Optional[dict] = None, fixations: Optional[pd.DataFrame] = None,
-                    names: Optional[list[str]] = None) -> tuple[dict, list[dict]]:
+                    names: Optional[list[str]] = None) -> tuple[dict, list[dict], list[dict]]:
     s = load_session(folder)
     plan = json.loads((build / "plans" / f"{s.participant_id}.json").read_text(encoding="utf-8"))
     res = analyze_session(folder, build)
@@ -392,7 +478,7 @@ def _session_tables(folder: Path, build: Path, manifest: dict, reg: dict,
     srow.update(recog["session"])
     if _front_camera(study):
         srow.update(_face_columns(study, face))
-    return srow, items
+    return srow, items, _comment_rows(s, plan, study, ids, by, feed_start, fixations)
 
 
 def _ids(s: Session, plan: dict, study: dict) -> dict:
@@ -527,15 +613,19 @@ def _columns(manifest: dict, names: Optional[list[str]] = None) -> dict[str, lis
     by_session = ids + [c for c, _, _ in _SESSION] + [c for c, _, _ in _questionnaire_columns(study)] + recog_session
     if _front_camera(study):
         by_session += [c for c, _, _ in _FACE]
-    return {"by_session": by_session, "by_item": by_item, "between": between, "within": within, "ids": ids}
+    by_comment = ids + item_cols[:4] + within + [c for c, _, _ in _COMMENT]
+    return {"by_session": by_session, "by_item": by_item, "by_comment": by_comment, "between": between,
+            "within": within, "ids": ids}
 
 
 def _frames(manifest: dict, sessions: list[dict], items: list[dict],
-            names: Optional[list[str]] = None) -> dict[str, pd.DataFrame]:
+            names: Optional[list[str]] = None, comments: Optional[list[dict]] = None) -> dict[str, pd.DataFrame]:
     cols = _columns(manifest, names)
     by_session = pd.DataFrame(sessions).reindex(columns=cols["by_session"])
     by_item = pd.DataFrame(items).reindex(columns=cols["by_item"])
-    return {"by_session": by_session, "by_item": by_item, "by_condition": _by_condition(by_item, cols)}
+    by_comment = pd.DataFrame(comments or []).reindex(columns=cols["by_comment"])
+    return {"by_session": by_session, "by_item": by_item, "by_condition": _by_condition(by_item, cols),
+            "by_comment": by_comment}
 
 
 # by_item columns that are labels, answers or positions rather than measures to average
@@ -576,6 +666,11 @@ def _write_codebook(path: Path, manifest: dict, tables: dict[str, pd.DataFrame])
     desc: dict[str, tuple[str, str]] = {c: (d, v) for c, d, v in _ID + _SESSION + _ITEM + _CONDITION + _FACE}
     desc["gaze_fixations"] = ("Fixations on the post's image (from socialeyes gaze; blank: no eye tracking)", "count")
     desc["gaze_image_ms"] = ("Time fixating the post's image", "milliseconds")
+    desc["gaze_inline_comments_ms"] = ("Time fixating the comments shown under the post (as one block)",
+                                       "milliseconds")
+    desc["gaze_sheet_ms"] = ("Time fixating the post's open comments sheet (its comments, the comment box and "
+                             "the rest)", "milliseconds")
+    comment_desc = {c: (d, v) for c, d, v in _COMMENT}
     for c in tables["by_item"].columns:
         if c.startswith("gaze_") and c.endswith("_first_s"):
             n = c[len("gaze_"):-len("_first_s")]
@@ -610,7 +705,7 @@ def _write_codebook(path: Path, manifest: dict, tables: dict[str, pd.DataFrame])
         w.writerow(["table", "column", "description", "values"])
         for name in TABLES:
             for c in tables[name].columns:
-                d, v = desc.get(c, ("", ""))
+                d, v = comment_desc[c] if name == "by_comment" and c in comment_desc else desc.get(c, ("", ""))
                 if name == "by_condition" and c not in {k for k, _, _ in _ID + _CONDITION} and c not in {
                         factor_col(f["name"]) for f in study["factors"]}:
                     if v.startswith("1 = yes"):
