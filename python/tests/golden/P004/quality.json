@@ -27,5 +27,6 @@
  "session_uid": "P004-golden",
  "slept_s": 0.0,
  "thermal_max": "none",
+ "validation_checks": [],
  "warnings": []
 }
