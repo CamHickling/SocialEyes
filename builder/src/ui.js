@@ -1080,7 +1080,7 @@
       ${busy && ui.phone.progress ? `<p class="hint">${esc(ui.phone.progress)}</p>` : ""}
       ${rows.length ? `<label class="check"><input type="checkbox" id="data-unblind" ${D.unblind ? "checked" : ""}> <span>Unblind the tables and the exploration page (real condition names)</span></label>` : ""}
       ${x && x.exploration ? `<p>${btn("open-path:" + x.exploration, x.unblinded ? "Open the exploration page (unblinded)" : "Open the exploration page (blinded)", "link")}</p>` : ""}
-      ${x && x.out_dir ? `<p class="hint">Tables (by session, by item, by condition, and a codebook) for ${x.sessions} session${x.sessions === 1 ? "" : "s"} in ${btn("data-open-export", esc(x.out_dir), "link")}${x.skipped.length
+      ${x && x.out_dir ? `<p class="hint">Tables (by session, by item, by condition, by comment, and a codebook${x.unblinded ? "" : "; blinded until you unblind"}) for ${x.sessions} session${x.sessions === 1 ? "" : "s"} in ${btn("data-open-export", esc(x.out_dir), "link")}${x.skipped.length
         ? `. Skipped ${x.skipped.length}: ${x.skipped.map((s) => esc(`${s.folder.split(/[\\/]/).slice(-2).join("/")} (${s.why})`)).join("; ")}` : ""}</p>` : ""}`;
     const L = D.last;
     if (L && L.notes && L.notes.length) html += `<p class="hint">${esc(L.participant_id)} ${esc(L.action)}: ${L.notes.map(esc).join("; ")}</p>`;

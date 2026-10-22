@@ -21,7 +21,7 @@ STYLE = """body{margin:0;background:#fafafa;color:#18181b;font:16px/1.6 system-u
 main{max-width:46rem;margin:0 auto;padding:32px 20px 64px}h1{font-size:1.9rem;line-height:1.2}h2{margin-top:2em}
 code{background:#f0f0f3;padding:1px 5px;border-radius:4px;font-size:.92em}pre code{display:block;padding:12px;overflow-x:auto}
 table{border-collapse:collapse;width:100%;font-size:.95rem}th,td{border:1px solid #d4d4d8;padding:6px 8px;text-align:left;vertical-align:top}
-a{color:#1d4ed8}@media print{body{background:#fff}main{padding:0}}
+a{color:#1d4ed8}li.todo{list-style:none;margin-left:-1.1em}@media print{body{background:#fff}main{padding:0}}
 @media (prefers-color-scheme:dark){body{background:#18181b;color:#e4e4e7}code{background:#27272a}th,td{border-color:#3f3f46}a{color:#93c5fd}}"""
 
 
@@ -45,7 +45,7 @@ def render(md: str, title: str) -> str:
 
     body = MarkdownIt("commonmark").enable("table").render(md)
     body = re.sub(r'href="([A-Z_]+)\.md"', r'href="\1.html"', body)          # links between the guides
-    body = body.replace("[ ]", "&#9744;")                                     # checklist boxes
+    body = body.replace("<li>[ ]", '<li class="todo">&#9744;')                # checklist boxes, no bullet
     return (f"<!doctype html><html lang=en><meta charset=utf-8><meta name=viewport content=\"width=device-width,"
             f"initial-scale=1\"><title>{html.escape(title)}</title><style>{STYLE}</style><main>{body}</main></html>")
 
