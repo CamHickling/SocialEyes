@@ -46,7 +46,7 @@ def session_quality(s: Session, build_sha256: str | None = None) -> dict:
 
     by_kind, seconds_by_kind = interruption_summary(s)
     if by_kind:
-        warnings.append(f"interruptions: {by_kind}")
+        warnings.append("interruptions: " + ", ".join(f"{k.replace('_', ' ')} x{n}" for k, n in by_kind.items()))
     dnd = s.events_of("dnd")
     dnd_at_start = str(dnd["filter"].iloc[0]) if len(dnd) else None
     if dnd_at_start == "off":

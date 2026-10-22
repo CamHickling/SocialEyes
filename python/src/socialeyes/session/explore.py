@@ -194,7 +194,8 @@ def write_exploration(out: Path, tables: dict[str, pd.DataFrame], manifest: dict
                         for l, m, o in missing)
     banner = ("<p class=unblind><b>Unblinded:</b> the real condition names are shown.</p>" if unblind else
               "<p class=blind><b>Blinded.</b> Conditions are shown as codes in a shuffled order. Unblind only once your "
-              "analysis plan is fixed: <code>socialeyes export --unblind</code>, or tick <i>Unblind</i> under Data in the app.</p>")
+              "analysis plan is fixed: tick <i>Unblind the exploration page</i> under Data in the app and make the tables "
+              "again (or <code>socialeyes export --unblind</code>).</p>")
     page = f"""<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
 <title>Data exploration</title>
 <style>

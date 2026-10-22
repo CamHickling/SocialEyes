@@ -464,15 +464,25 @@ dots, 5/9/13 points, used to measure gaze accuracy), `questionnaire` (items of
 kind `vas`, `likert`, `choice`, `text`, `number`), `feed` (exactly one),
 `image_rating`, `recognition` (old/new test with `foils` and/or the
 `alternate_version` of a seen image as lures) and `end` (must be last).
-`display_calibration` tunes the recording to the room: a laptop running
+**Screen brightness and scene camera exposure** are fixed per study, because sessions run on
+the phone and glasses alone: `display.brightness` and `neon.scene_exposure`, which the app applies
+(the exposure once the recording runs; Companion only takes it then) and puts back afterwards.
+Choose them with a `settings_test` step (a setup test, not for participants: the app steps through
+brightness x exposure itself, with the study's tags in the bars around a post photo; score it with
+`python -m socialeyes.gaze.settings_test <neon folder> <session folder>`). On the Motorola Edge 40
+Pro, 21 Oct 2026: brightness 0.30 with auto exposure aiming darker (`{mode: auto, brightness: -32}`)
+placed the phone in every frame with nothing blown out, while manual exposure cut the scene video's
+frame rate (`studies/settings_test`, `studies/pilot_neon`).
+`display_calibration` is retired (kept so older studies still run; validate warns): it tuned the
+recording to the room with a laptop running
 `socialeyes calibrate-display <phone ip>` (same Wi-Fi as the phone, or the
 phone's hotspot) watches Companion's scene video while the phone shows the
 on-screen tags around a post image, tries screen brightness x scene camera
 exposure (about 30 s), and keeps the setting that reads the tags best without
 blowing out the screen, nearest the phone's own brightness. The app keeps it for
 the rest of the session and puts the scene camera back at the end; the
-researcher can skip the step. `--check` only tests both connections.
-`display.brightness` sets a fixed screen brightness for the whole session instead.
+researcher can skip the step. `--check` only tests both connections. It never measured the scene
+video's frame rate, which its manual exposures lowered.
 `tag_ladder` is a setup test, not for participants: it shows tags in several
 sizes and distances from the screen edges while the phone is held in different
 ways, so a Neon recording shows which tag size these glasses and this phone need

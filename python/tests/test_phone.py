@@ -79,14 +79,32 @@ def test_blockers():
     assert not blocked(readiness(phone(free_bytes=1 * 2**30), study(), APK))
     assert not blocked(readiness(phone(free_bytes=1 * 2**30), study(needs_camera=True), APK))
     assert blocked(readiness(phone(free_bytes=1 * 2**30), study(needs_camera=True, records_camera=True), APK))
-    # a changed study can't replace one whose sessions are still on the phone ...
-    changed = phone(studies={"example": "b" * 64}, sessions={"example": 2})
+
+
+def test_a_changed_study_waits_only_for_sessions_not_copied_yet(tmp_path, monkeypatch):
+    from socialeyes import settings
+
+    monkeypatch.setenv("SOCIALEYES_SETTINGS", str(tmp_path / "settings.json"))
+    monkeypatch.setattr(settings, "workspace", lambda: tmp_path / "ws")
+    ids = {"example": [("P001", "P001-a"), ("P002", "P002-a")]}
+    # a changed study can't replace one whose sessions aren't on this computer yet ...
+    changed = phone(studies={"example": "b" * 64}, sessions={"example": 2}, session_ids=ids)
     c = readiness(changed, study(), APK)
     assert blocked(c) and any("2 session(s)" in x.text for x in c)
-    # ... but loading the identical version again is fine
-    assert not blocked(readiness(phone(studies={"example": "a" * 64}, sessions={"example": 2}), study(), APK))
-    # and other studies' sessions don't matter
-    assert not blocked(readiness(phone(studies={"example": "b" * 64}, sessions={"pilot": 3}), study(), APK))
+    copied = settings.data_dir("example") / "P001" / "P001-a"
+    copied.mkdir(parents=True)
+    (copied / "session.json").write_text("{}", encoding="utf-8")
+    assert any("1 session(s)" in x.text for x in readiness(changed, study(), APK))
+    # ... sessions copied off stay on the phone until cleared, and don't block (21 Oct)
+    copied = settings.data_dir("example") / "P002" / "P002-a"
+    copied.mkdir(parents=True)
+    (copied / "session.json").write_text("{}", encoding="utf-8")
+    assert not blocked(readiness(changed, study(), APK))
+    # loading the identical version again is fine, and other studies' sessions don't matter
+    assert not blocked(readiness(phone(studies={"example": "a" * 64}, sessions={"example": 2},
+                                       session_ids={"example": [("P009", "x")]}), study(), APK))
+    assert not blocked(readiness(phone(studies={"example": "b" * 64}, sessions={"pilot": 3},
+                                       session_ids={"pilot": [("P001", "y")]}), study(), APK))
 
 
 def test_missing_app_is_installed_not_blocking():

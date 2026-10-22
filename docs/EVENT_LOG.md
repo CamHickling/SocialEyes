@@ -142,6 +142,7 @@ the type. Unknown types must be ignored by readers, so the app can add new ones.
 | type | fields | when |
 |---|---|---|
 | `step_start` | `step_id`, `step_type` | a procedure step is shown |
+| `step_skipped` | `step_id`, `step_type`, `reason` (`no_eye_tracking`) | a step that only serves the eye tracker (marker calibration, validation, display calibration, settings test, tag ladder, tag bars) is left out because the researcher went on without eye tracking |
 | `step_end` | `step_id`, `reason` (`continue`, `done_button`, `time_limit`) | it is left |
 | `trial_start` | `step_id`, `trial` (0-based), `image_id` | image_rating / recognition trial shown |
 | `items_shown` | `step_id`, `item_ids` (in display order), optional `trial` | a page of questionnaire / rating items appears |

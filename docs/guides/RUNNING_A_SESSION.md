@@ -25,10 +25,11 @@ Words in **bold** are buttons or screens in the SocialEyes app (phone) or deskto
 2. Tap **Start the next participant: P0xx** and write that id on the run sheet. Don't reuse an id;
    the app asks if you pick one that has been used.
 3. Eye tracking: on the **eye tracker check**, tick each item and tap **Start recording**. If the
-   glasses won't connect and the study allows it, **Continue without eye tracking** and note it.
+   glasses won't connect and the study allows it, **Continue without eye tracking** and note it (the calibration and dot steps are then left out).
 4. If pinning is on, tap **Got it** on Android's pinning message.
 5. Hand over the phone; give the instructions your protocol says. Stay out of view of the screen.
-6. When the phone shows **Thank you!**, take it back. Note anything unusual (interruptions, the
+6. When the phone shows **Thank you!**, take it back and press **Back** to return to the study's
+   screen, ready for the next participant. Note anything unusual (interruptions, the
    glasses slipping, a question asked) on the run sheet.
 
 **If something goes wrong**

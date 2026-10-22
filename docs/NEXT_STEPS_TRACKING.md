@@ -89,19 +89,22 @@ Test report (summary, method, charts plain vs smart, tables, Tests, screenshots;
 ## Next, in order
 
 1. ~~**Rerun the older analyses**~~: done 18 Oct, see "18 Oct: the older analyses rerun" above.
-2. **Real layout: 16h5 10 mm tags in the feed's own bars.** A `markers.on_screen` layout option
-   (e.g. `layout: bars`, `family: tag16h5`, `size_mm: 10`) drawn by FeedScreen's top bar and tab bar,
-   reusing `ui/TagBars.kt`'s geometry; keep the bars visible over stories, reels and the comment
-   sheet. Make `socialeyes gaze` read the family from the `marker_layout` event.
-3. **A phone-only settings test** (built 21 Oct: `settings_test` step, `studies/settings_test`,
-   `python -m socialeyes.gaze.settings_test <neon> <session>`; app 0.3.3; needs a recording): a step that cycles screen brightness × scene
-   camera setting itself (like tag_bars cycles variants), e.g. 0.30/0.45/0.60 × auto, auto biased
-   darker, manual 1000/2000 µs, with the 16h5 10 mm bars; held normally and at arm's length. Logs
-   each setting; the analysis reports reads, blown-out content and frame rate per setting. Also
-   shows whether manual exposure drops the scene video to 10 fps.
-4. **Pick the settings** from that and put them in the study defaults; then one real feed recording.
-5. Retire the laptop display calibration (`socialeyes calibrate-display`, `display_calibration` step)
-   once fixed settings are confirmed.
+2. ~~**Real layout: 16h5 10 mm tags in the feed's own bars.**~~ Done 16 Oct (9b10bc3).
+3. ~~**A phone-only settings test**~~: done 21 Oct (`settings_test` step, `studies/settings_test`,
+   `python -m socialeyes.gaze.settings_test <neon> <session>`). Brightness 0.30 with Companion's auto
+   exposure aiming darker (brightness -32 of -64..64) placed the phone in 100% of frames held normally
+   and at arm's length with nothing blown out; plain auto blew out half the photo; manual exposure cut
+   the scene video to 18-20 fps (once 5).
+4. ~~**Pick the settings**~~: done 21 Oct, and the tags: 16h5 10 mm, 3 mm from the side edges, 2 mm
+   from the top/bottom (`studies/tag_edges`: 3 mm reads as well as 5 mm on the curved edges, one-handed
+   too; 8 mm loses the phone at arm's length). Companion only takes camera settings while recording,
+   so the app sets the exposure just after the start. One real feed recording (`studies/pilot_neon`):
+   97.6% of feed time on the screen. Its validation dots had no tags, so accuracy at these settings is
+   still to measure: record pilot_neon again (it now has tags during validation).
+5. ~~Retire the laptop display calibration~~: retired 21 Oct. The step still runs for older studies;
+   validate warns, and the builder no longer offers it.
+6. **Next with the glasses**: pilot_neon again for accuracy at the chosen settings; a 15-20 minute
+   session (heat, frame rate); unplug the glasses mid-session; a second wearer or another room.
 
 ## Without the glasses (added 16 Oct)
 

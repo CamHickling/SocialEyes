@@ -304,5 +304,10 @@ class StudyPackage(val dir: File, val manifest: StudyManifest) {
                 ?.sortedBy { it.name }
                 ?.map { it to runCatching { load(it) } }
                 .orEmpty()
+
+        /** The study most recently loaded from the computer (its checksum file is rewritten on every
+         *  load), so the phone shows the study the researcher just loaded, not the first by name. */
+        fun latest(studies: List<Pair<File, Result<StudyPackage>>>): File? =
+            studies.filter { it.second.isSuccess }.maxByOrNull { File(it.first, "files.sha256").lastModified() }?.first
     }
 }

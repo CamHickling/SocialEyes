@@ -570,25 +570,26 @@ const Core = (() => {
     const lines = [
       `${study.title || study.id}: what to do next`,
       "",
-      "The builder wrote study.yaml and CSV files with one row for every piece of",
-      "content your design needs. Replace the placeholder texts and add the files:",
+      "SocialEyes wrote study.yaml and CSV files (open them in Excel) with one row for every",
+      "piece of content your design needs, filled with placeholders. Replace them and add the files:",
       "",
       "1. Images: put every file listed in images.csv into images/ (or change the",
       "   paths). Avatars for accounts.csv go into avatars/." + (files["stories.csv"] ? " Story images into stories/." : "") +
         (files["reels.csv"] ? " Reel videos into reels/." : ""),
-      "2. AOIs: every image of a critical post needs an AOI file, by default named",
-      "   after the image: aois/crit01.json for images/crit01.jpg (see \"AOIs\" in the README).",
-      "3. Texts: handles and names in accounts.csv, captions and like counts in posts.csv" +
+      "2. Texts: handles and names in accounts.csv, captions and like counts in posts.csv" +
         (files["comments.csv"] ? ",\n   the comments in comments.csv" : "") + (files["captions.csv"] ? ", caption variants in captions.csv" : "") + ".",
-      "4. Check and build:",
-      `     socialeyes validate studies/${study.id}`,
-      `     socialeyes compile studies/${study.id}`,
+      "3. AOIs (areas of interest) for every image of a critical post: in the SocialEyes app,",
+      "   Design > Content > Draw AOIs draws face and body ones; check them, and correct or add",
+      "   others in LabelMe.",
+      "4. Check it: Design > Content lists the files still missing, and Save > Check study runs",
+      "   every check. Then Phone > Load onto phone, and try it yourself.",
       "",
       `Design: ${designSummary(study)}`,
       `Critical posts: ${crit || content.critical}, fillers: ${content.fillers}. Balanced block: ${blockSize(study)} participant(s).`,
       "",
-      "File formats: docs/STUDY_DESIGN.md. Never change `seed` or the post order once",
-      "data collection has started.",
+      "What every CSV column means: the guide \"Study files\" (on the app's Studies page).",
+      "Never change `seed` or the post order once data collection has started.",
+      `(Command line: socialeyes validate studies/${study.id}, then socialeyes compile.)`,
     ];
     return lines.join("\n") + "\n";
   }

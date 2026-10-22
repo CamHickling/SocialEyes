@@ -92,6 +92,7 @@ class PhoneState:
     font_scale: Optional[float] = None
     studies: dict = field(default_factory=dict)    # study id -> package hash on the phone (None: unknown)
     sessions: dict = field(default_factory=dict)   # study id -> sessions still on the phone
+    session_ids: dict = field(default_factory=dict)  # study id -> [(participant id, session uid)] on the phone
 
 
 def parse_package(dumpsys: str) -> tuple[bool, Optional[int], Optional[str], Optional[bool]]:
@@ -129,6 +130,27 @@ def parse_study_hashes(sha256sum_out: str, listing: str) -> dict:
     return studies
 
 
+def parse_session_ids(find_out: str) -> dict:
+    """`find data -mindepth 3 -maxdepth 3 -type d` -> {study id: [(participant id, session uid)]}."""
+    out: dict = {}
+    for line in find_out.splitlines():
+        parts = line.strip().rstrip("/").split("/")
+        if len(parts) >= 3 and parts[-3] and "No such file" not in line:
+            out.setdefault(parts[-3], []).append((parts[-2], parts[-1]))
+    return out
+
+
+def not_copied(study_id: str, ids: list) -> list:
+    """The phone's sessions of a study that aren't on this computer yet (unloading writes a session's
+    folder only once every file matched the phone's), leaving out withdrawn participants'."""
+    from .. import settings
+    from ..session import register
+
+    data = settings.data_dir(study_id)
+    withdrawn = register.withdrawn_ids(data / register.REGISTER)
+    return [(p, u) for p, u in ids if p not in withdrawn and not (data / p / u / "session.json").is_file()]
+
+
 def parse_sessions(find_out: str) -> dict:
     """`find data -mindepth 3 -maxdepth 3 -type d` -> {study id: number of session folders}."""
     counts: dict = {}
@@ -157,7 +179,9 @@ def read_phone(adb: Adb) -> PhoneState:
     studies = f"{APP_FILES}/studies"
     s.studies = parse_study_hashes(adb.shell(f"cd {studies} 2>/dev/null && sha256sum */{CHECKSUM_FILE} 2>/dev/null"),
                                    adb.shell(f"ls -1 {studies} 2>/dev/null"))
-    s.sessions = parse_sessions(adb.shell(f"find {APP_FILES}/data -mindepth 3 -maxdepth 3 -type d 2>/dev/null"))
+    found = adb.shell(f"find {APP_FILES}/data -mindepth 3 -maxdepth 3 -type d 2>/dev/null")
+    s.sessions = parse_sessions(found)
+    s.session_ids = parse_session_ids(found)
     return s
 
 
@@ -236,14 +260,14 @@ def readiness(phone: PhoneState, study: Optional[StudyInfo] = None, apk: Optiona
                      f"socialeyes validate): {study_errors[0]}")
     if study is not None:
         on_phone = phone.studies.get(study.id, False)
-        waiting = phone.sessions.get(study.id, 0)
+        waiting = len(not_copied(study.id, phone.session_ids.get(study.id, [])))
         if on_phone is False:
             add("info", f"Loads study {study.id} (version {study.version}).")
         elif on_phone == study.package_sha256:
             add("ok", f"This exact version of {study.id} is already on the phone.")
         elif waiting:
-            add("block", f"The phone holds {waiting} session(s) of {study.id} that haven't been copied off. "
-                         "Unload the data before loading a changed study.")
+            add("block", f"The phone holds {waiting} session(s) of {study.id} that aren't on this computer yet. "
+                         "Copy them from the phone (Data) before loading a changed study.")
         else:
             add("info", f"Replaces the different version of {study.id} that is on the phone.")
         if study.needs_camera and phone.app_installed and not phone.camera_granted:
@@ -370,6 +394,8 @@ def load(study_dir: Path | str, serial: Optional[str] = None, update_app: bool =
                 adb.shell(f"pm grant {PACKAGE} android.permission.CAMERA", check=True)
         if r.phone.studies.get(study.id) == study.package_sha256:
             step(f"{study.id} is already on the phone; nothing to copy.")
+            # the phone shows the study loaded last first (by its checksum file's time)
+            adb.shell(f"touch {APP_FILES}/studies/{study.id}/{CHECKSUM_FILE}")
         else:
             step(f"Copying {study.id} to the phone…")
             _push_verified(adb, study, progress)

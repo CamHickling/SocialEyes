@@ -697,6 +697,10 @@ def _check_design(b: StudyBundle, rep: Report) -> None:
     feed_at = next((k for k, s in enumerate(study.procedure) if s.type == "feed"), None)
     if photos and feed_at is not None and photos[0] > feed_at:
         rep.warnings.append("the profile_photo step comes after the feed, so the photo is never seen in the feed")
+    for s in study.procedure:
+        if s.type == "display_calibration":
+            rep.warnings.append(f"step {s.id}: display_calibration is retired (it needs a laptop during the session); "
+                                "fix display.brightness and neon.scene_exposure instead, chosen with a settings_test step")
     tagged = study.markers.on_screen.steps
     untagged = [s.id for s in study.procedure if s.type == "validation" and s.id not in tagged]
     if tagged and untagged:

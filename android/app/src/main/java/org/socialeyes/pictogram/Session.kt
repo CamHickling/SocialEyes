@@ -105,6 +105,14 @@ class Session(
             log.finish("completed") // procedure without an end step
             return
         }
+        // the researcher went on without the glasses: steps that only serve the eye tracker are
+        // skipped, so the participant doesn't calibrate or tap dots for nothing (21 Oct review)
+        if (neon == null && pkg.study.neon.autoRecord && step.type in EYE_TRACKER_STEPS) {
+            log.event("step_skipped", fields = arrayOf("step_id" to step.id, "step_type" to step.type, "reason" to "no_eye_tracking"))
+            stepIndex++
+            startStep()
+            return
+        }
         log.event("step_start", fields = arrayOf("step_id" to step.id, "step_type" to step.type))
         neon?.mark("step_start ${step.id}")
         // front camera: record during the study's chosen steps only
@@ -117,6 +125,10 @@ class Session(
 
     companion object {
         const val FORMAT_VERSION = 1
+
+        /** Steps that only make sense with the Neon recording. */
+        val EYE_TRACKER_STEPS = setOf("marker_calibration", "validation", "display_calibration", "settings_test",
+            "tag_ladder", "tag_bars")
 
         fun dataRoot(activity: Activity) = File(activity.getExternalFilesDir(null), "data")
 

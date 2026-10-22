@@ -125,6 +125,9 @@ def main() -> None:
          "--paths", ROOT / "python" / "src",
          "--add-data", f"{ROOT / 'builder' / 'index.html'}{sep}builder",
          *[a for f in ("LICENSE", "NOTICE") for a in ("--add-data", f"{ROOT / f}{sep}.")],
+         # the researcher's guides (desktop/guides.py turns them into pages)
+         *[a for f in ("docs/guides/FIRST_STUDY.md", "docs/guides/RUNNING_A_SESSION.md", "docs/STUDY_DESIGN.md")
+           for a in ("--add-data", f"{ROOT / f}{sep}guides")],
          "--add-data", f"{stage / 'example'}{sep}example",
          "--add-data", f"{stage / 'app'}{sep}app",
          "--add-binary", f"{stage / 'adb'}{sep}adb",

@@ -70,6 +70,13 @@ class Api:
         return chosen[0] if chosen else None
 
     @_reply
+    def guides(self) -> list:
+        """The researcher's guides as pages to open: [{title, path}]."""
+        from .guides import guide_pages
+
+        return guide_pages()
+
+    @_reply
     def open_folder(self, folder: str) -> dict:
         return {"study": read_study(folder), "check": check_folder(folder), "sessions": len(sessions_of(folder))}
 
@@ -164,6 +171,10 @@ class Api:
         analysed = sum((analysis / v.parent.name / v.name / "face_summary.json").is_file() for v in videos)
         sessions = [p.parent for p in data.glob("*/*/session.json") if not p.parent.parent.name.startswith(".")]
         gaze = sum((analysis / s.parent.name / s.name / "fixations.csv").is_file() for s in sessions)
+        from ..phone.unload import _recording_id, neon_recording
+
+        recorded = [s for s in sessions if _recording_id(s)]
+        copied = sum(neon_recording(s) is not None for s in recorded)
         heatmaps = analysis / "heatmaps" / "index.html"
         from ..session import retention
 
@@ -183,7 +194,8 @@ class Api:
                 "register": rows, "phone": phone, "storage": storage, "retention": due,
                 "clear_after_unload": bool(settings.study(sid).get("clear_after_unload")),
                 "faces": {"videos": len(videos), "analysed": analysed},
-                "gaze": {"sessions": gaze, "heatmaps": str(heatmaps) if heatmaps.is_file() else None}}
+                "gaze": {"sessions": gaze, "recorded": len(recorded), "copied": copied,
+                         "heatmaps": str(heatmaps) if heatmaps.is_file() else None}}
 
     @_reply
     def data_set_folder(self, folder: str, which: str, path: str | None) -> bool:
@@ -245,6 +257,13 @@ class Api:
         from ..face.analyze import study_faces
 
         return study_faces(folder, blur=blur, progress=self._progress)
+
+    @_reply
+    def data_gaze(self, folder: str, redo: bool = False) -> dict:
+        """Analyses the eye tracking of the sessions whose Neon recording is copied and not analysed yet."""
+        from ..gaze.pipeline import study_gaze
+
+        return study_gaze(folder, redo=bool(redo), progress=self._progress)
 
     @_reply
     def data_heatmaps(self, folder: str, by: str = "cell") -> dict:

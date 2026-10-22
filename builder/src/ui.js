@@ -29,7 +29,7 @@
     // Phone tab: result of the last phone check / load, and the choices on the tab
     phone: { result: null, serial: "", devices: [], updateApp: false, progress: null, error: null },
     // Data tab: the study's folders and register, the phone's sessions, the last unload
-    data: { status: null, unload: null, export: null, faces: null, heatmaps: null, blur: false, by: "cell", unblind: false, error: null },
+    data: { status: null, unload: null, export: null, faces: null, gaze: null, heatmaps: null, blur: false, by: "cell", unblind: false, error: null },
     studies: { list: null, newId: "", error: null },
     files: { result: null, missingOnly: true, error: null },   // the study folder's files (Design > Content)
     aois: { result: null, overwrite: false, error: null },     // the last automatic AOIs (Design > Content)
@@ -61,7 +61,8 @@
   const unsaved = () => ui.desktop && ui.study && ui.folder !== null && C.toYaml(ui.study) !== ui.savedYaml;
   /** Switching away would lose something: unsaved changes, or a new study never saved (desktop app). */
   const wouldLose = () => unsaved() || (ui.desktop && ui.study && ui.folder === null);
-  const clock = (d) => d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  // without a trailing full stop ("9:56 p.m." in some locales), as it is followed by one
+  const clock = (d) => d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }).replace(/\.$/, "");
 
   // ------------------------------------------------------------ guidance texts
 
@@ -82,7 +83,7 @@
     instructions: ["Instructions", "A screen of text with a Continue button."],
     marker_calibration: ["Marker calibration", "Shows AprilTags on screen and a sync flash so the scene camera can map gaze onto the screen. Do one before and one after the feed."],
     tag_ladder: ["Tag size check", "Setup test, not for participants: tags in several sizes and edge distances while the phone is held in different ways, to choose the on-screen tag size for these glasses and phone (sizes, insets and holds are set in study.yaml)."],
-    display_calibration: ["Display calibration", "Finds the screen brightness and Neon scene camera exposure at which the on-screen tags read best without blowing out the screen. A laptop runs socialeyes calibrate-display during it (about 30 s); the researcher can skip it. Put it before the first marker calibration."],
+    display_calibration: ["Display calibration (retired)", "Retired: fix display.brightness and neon.scene_exposure instead, chosen with a Settings test step. Kept so older studies still run. It found the screen brightness and Neon scene camera exposure at which the on-screen tags read best without blowing out the screen. A laptop runs socialeyes calibrate-display during it (about 30 s); the researcher can skip it. Put it before the first marker calibration."],
     settings_test: ["Settings test", "Setup test with the Neon, not for participants: the app steps through screen brightness x scene camera exposure itself (no laptop) with the study's tags in the bars, to choose display.brightness and neon.scene_exposure for phone-only sessions (levels and exposures are set in study.yaml). Score it with python -m socialeyes.gaze.settings_test."],
     validation: ["Validation", "Dots to look at and tap: measures eye-tracking accuracy on the phone."],
     camera_check: ["Camera check", "Researcher-run framing check for the front camera. Shows a guide and whether a face is detected, never the video."],
@@ -95,7 +96,9 @@
   };
 
   /** Setup steps, offered under "Add step" only with advanced settings on. */
-  const ADVANCED_STEPS = ["tag_ladder", "display_calibration", "settings_test"];
+  const ADVANCED_STEPS = ["tag_ladder", "settings_test"];
+  /** Kept for older studies, never offered under "Add step". */
+  const RETIRED_STEPS = ["display_calibration"];
 
   const KIND_INFO = { vas: "Slider (VAS)", likert: "Likert scale", choice: "Multiple choice", text: "Free text", number: "Number" };
 
@@ -507,7 +510,7 @@
         ${open ? `${help(info[1])}${advanced("Step id", false, `<div class="grid">${field({ path: `procedure.${i}.id`, label: "Step id", kind: "text", help: "Names the step in the data." })}</div>`)}${stepFields(s, i)}` : ""}
       </div>`;
     }).join("");
-    const types = C.STEP_TYPES.filter((t) => t !== "end" && (ui.advanced || !ADVANCED_STEPS.includes(t)));
+    const types = C.STEP_TYPES.filter((t) => t !== "end" && !RETIRED_STEPS.includes(t) && (ui.advanced || !ADVANCED_STEPS.includes(t)));
     if (!ui.advanced) ui.hidden.push(...ADVANCED_STEPS.map((t) => ({ label: `${STEP_INFO[t][0]} step`, changed: false })));
     return `
       <h2>Procedure</h2>
@@ -657,7 +660,7 @@
            <div class="row">${btn("save-new", "Save to a new folder…", "primary", ui.busy ? "disabled" : "")}</div>`}
       ${ui.busy ? `<p class="hint">${esc(ui.busy)}</p>` : ""}
       ${s ? `<p class="hint">Saved at ${clock(s.at)}: wrote ${s.written.map((f) => `<code>${esc(f)}</code>`).join(", ")}${s.kept.length ? `; kept your existing ${s.kept.map((f) => `<code>${esc(f)}</code>`).join(", ")}` : ""}.</p>` : ""}
-      ${ui.hadComments ? `<p class="hint"><b>This study.yaml has comments (# …); saving doesn't keep them</b> (the old file stays as <code>study.yaml.bak</code>).</p>` : ""}
+      ${ui.hadComments ? `<p class="hint">Saving writes the study file in the app's own layout; notes typed into the file by hand are not kept, but the previous file stays next to it as <code>study.yaml.bak</code>.</p>` : ""}
       <p class="hint">Your CSV files are never overwritten: saving only creates the ones that don't exist yet.</p>
       ${filePreview(files)}`;
   }
@@ -870,7 +873,13 @@
       if (r.error) P.error = r.error;
       // without a phone reading (e.g. unplugged), keep the last check on screen with what was done
       P.result = r.phone ? r : r0 && r0.phone ? { ...r0, steps: r.steps, loaded: false } : null;
-      if (r.loaded) P.updateApp = false;
+      if (r.loaded) {
+        P.updateApp = false;
+        // the checks were made before loading: "Loads study …" has happened now
+        P.result.checks = P.result.checks.map((c) => c.level === "info" && /^Loads study /.test(c.text)
+          ? { level: "ok", text: c.text.replace(/^Loads study /, "Study ").replace(/\.$/, " is on the phone.") }
+          : c.level === "info" && /^Installs|^Updates/.test(c.text) ? { level: "ok", text: c.text } : c);
+      }
     } catch (e) { P.error = e.message; }
     P.progress = null;
     render();
@@ -898,7 +907,8 @@
         <td>${s.n_sessions || "–"}${s.last_session ? `<br><span class="hint">last ${esc(s.last_session.slice(0, 10))}</span>` : ""}</td>
         <td class="end">${btn(`study-open:${i}`, "Open", "", dis)}</td>
       </tr>`).join("")}</tbody></table></div>`
-      : `<p class="hint">No studies yet.</p>`;
+      : `<p class="hint">No studies yet. The quickest start: copy the example below (a complete 2 x 2 x 2 study with placeholder images) and open the guide <i>Your first study</i>. Or start a new study from scratch.</p>`;
+    html += guidesLine();
     const d = !ui.study && readDraft(STORE);
     if (d && d.study && !d.folder) {
       html += `<p class="hint">A new study wasn't saved last time: <b>${esc(d.study.title || d.study.id || "Untitled study")}</b>${d.at ? ` (${esc(new Date(d.at).toLocaleString())})` : ""}. ${btn("resume", "Continue it", "link", dis)}</p>`;
@@ -906,7 +916,7 @@
     html += `
       <div class="row new-study">${btn("studies-new-blank", "New study", "primary", dis)}
         <span class="hint">or copy the example as</span>
-        <input type="text" id="new-study-id" placeholder="study id" value="${esc(S.newId)}">${btn("studies-copy", "Copy", "", dis)}
+        <input type="text" id="new-study-id" placeholder="study id, e.g. body_image_1" title="Letters, digits, _ and - (no spaces): it names the study's folder and data" value="${esc(S.newId)}">${btn("studies-copy", "Copy", "", dis)}
         ${btn("open-folder", "Open a folder…", "link", dis)}</div>
       <p class="hint">${btn("open-path:" + L.root, esc(L.root), "link")} ${btn("studies-refresh", "Refresh", "link", dis)}</p>`;
     return html;
@@ -917,7 +927,16 @@
     S.error = null;
     try { S.list = await bridge("studies_list", "Checking the studies…"); }
     catch (e) { S.error = e.message; }
+    if (!S.guides) {
+      try { S.guides = await bridge("guides", null); } catch (e) { S.guides = []; }
+    }
     render();
+  }
+
+  /** Studies: links to the researcher's guides (they open in the browser). */
+  function guidesLine() {
+    const g = ui.studies.guides || [];
+    return g.length ? `<p class="hint">Guides: ${g.map((x) => btn("open-path:" + x.path, esc(x.title), "link")).join(" · ")}</p>` : "";
   }
 
   /** Open a study folder in the Design tab (asks first if the current study has unsaved changes). */
@@ -1073,7 +1092,7 @@
         const [cls, ic, msg] = s.error ? ["error", "✕", `not unloaded: ${s.error}`]
           : s.deleted ? [s.warnings.length ? "warning" : "ok", s.warnings.length ? "!" : "✓",
             `copied and checked${s.second_copy ? ", second copy checked" : ""}, deleted from the phone${s.warnings.length ? `. ${s.warnings.length} warning(s): ${s.warnings.join("; ")}` : ""}`]
-          : s.copied ? ["ok", "✓", `copied and checked${s.second_copy ? ", second copy checked" : ""}; ${s.kept_reason}`]
+          : s.copied ? ["ok", "✓", `copied and checked${s.second_copy ? ", second copy checked" : ""}${s.neon ? `; Neon recording ${s.neon}` : ""}; ${s.kept_reason}`]
           : ["info", "→", s.kept_reason || "left on the phone"];
         return `<li class="${cls}"><div class="msg"><span class="ic">${ic}</span><span><b>${esc(s.participant_id)}</b> ${esc(s.session_uid)}: ${esc(msg)}</span></div></li>`;
       }).join("")}</ul>`;
@@ -1109,7 +1128,7 @@
     const items = (st.storage || []).map((s) => s.cloud
       ? `<span class="status warning" title="${esc(s.path)}">${esc(s.folder)}: inside ${esc(s.cloud)}, so it uploads itself</span>`
       : s.encrypted === true ? `<span class="status ok" title="${esc(s.path)}">${esc(s.folder)}: on an encrypted drive</span>`
-      : s.encrypted === false ? `<span class="status warning" title="${esc(s.path)}">${esc(s.folder)}: not on an encrypted drive</span>`
+      : s.encrypted === false ? `<span class="status warning" title="${esc(s.path)}">${esc(s.folder)}: not on an encrypted drive. Participants' data is safest on one (BitLocker, or your university's secure storage): choose the folder under Folders below, or check what your ethics approval asks for.</span>`
       : "");
     return items.some(Boolean) ? `<p class="hint">${items.join(" ")}</p>` : "";
   }
@@ -1153,7 +1172,7 @@
   /** Data: face videos and eye tracking, for studies that have them. */
   function analysisSection(st) {
     const D = ui.data, f = st.faces || {}, g = st.gaze || {}, dis = ui.busy ? "disabled" : "";
-    if (!f.videos && !g.sessions) return "";
+    if (!f.videos && !g.sessions && !g.recorded) return "";
     let html = `<h3>Analysis</h3>`;
     if (f.videos) {
       const left = f.videos - f.analysed;
@@ -1163,6 +1182,17 @@
       const r = D.faces;
       if (r) html += `<p class="hint">Analysed ${r.analysed}${r.blurred ? `, blurred ${r.blurred}` : ""}${r.skipped.length
         ? `. Couldn't do ${r.skipped.length}: ${r.skipped.map((x) => esc(`${x.folder.split(/[\\/]/).slice(-2).join("/")} (${x.why})`)).join("; ")}` : ""}. Make tables to add the face columns.</p>`;
+    }
+    if (g.recorded) {
+      const left = g.copied - g.sessions, missing = g.recorded - g.copied;
+      html += `<div class="row">${btn("data-gaze", "Analyse eye tracking", "", dis || (left > 0 ? "" : "disabled"))}
+        <span class="hint">${g.sessions} of ${g.recorded} session${g.recorded === 1 ? "" : "s"} analysed${left > 0 ? ` · a few minutes each` : ""}${missing
+          ? ` · ${missing} Neon recording${missing === 1 ? "" : "s"} not copied yet: Copy from the phone with Companion's phone connected` : ""}</span></div>`;
+      const r = D.gaze;
+      if (r) {
+        html += `<p class="hint">Analysed ${r.analysed}.${r.skipped.length ? ` Couldn't do ${r.skipped.length}: ${r.skipped.map((x) => esc(`${x.session} (${x.why})`)).join("; ")}.` : ""}</p>`;
+        if (r.results.length) html += `<ul class="checks">${r.results.map((x) => `<li class="${x.warnings.length ? "warning" : "ok"}"><div class="msg"><span class="ic">${x.warnings.length ? "!" : "✓"}</span><span>${esc(x.session)}: feed ${x.feed_mapped == null ? "–" : Math.round(x.feed_mapped * 100) + "%"} on screen; accuracy ${x.accuracy_deg == null ? "–" : x.accuracy_deg.toFixed(2) + "°"}${x.offset_applied ? " after the offset" : " (no offset: validation dots not scored)"}; ${x.fixations == null ? "no fixations" : x.fixations + " fixations"}${x.warnings.length ? ". " + esc(x.warnings.join("; ")) : ""}</span></div></li>`).join("")}</ul>`;
+      }
     }
     if (g.sessions) {
       const factors = (ui.study && ui.study.factors || []).map((x) => x.name);
@@ -1174,7 +1204,7 @@
       const h = D.heatmaps;
       if (h && h.skipped.length) html += `<p class="hint">Left out ${h.skipped.length} session(s) without fixations.</p>`;
     }
-    return html + (ui.busy && ui.phone.progress && ["Analysing faces…", "Making heatmaps…"].includes(ui.busy) ? `<p class="hint">${esc(ui.phone.progress)}</p>` : "");
+    return html + (ui.busy && ui.phone.progress && ["Analysing faces…", "Analysing eye tracking…", "Making heatmaps…"].includes(ui.busy) ? `<p class="hint">${esc(ui.phone.progress)}</p>` : "");
   }
 
   async function dataFaces() {
@@ -1182,6 +1212,16 @@
     D.error = null;
     ui.phone.progress = "Starting…";
     try { D.faces = await bridge("data_faces", "Analysing faces…", ui.folder, D.blur); }
+    catch (e) { D.error = e.message; }
+    ui.phone.progress = null;
+    await dataRefresh();
+  }
+
+  async function dataGaze() {
+    const D = ui.data;
+    D.error = null;
+    ui.phone.progress = "Starting…";
+    try { D.gaze = await bridge("data_gaze", "Analysing eye tracking…", ui.folder); }
     catch (e) { D.error = e.message; }
     ui.phone.progress = null;
     await dataRefresh();
@@ -1392,7 +1432,7 @@
     ui.sessions = 0;
     ui.protect = null;
     ui.phone.result = null;
-    ui.data = { status: null, unload: null, export: null, faces: null, heatmaps: null, blur: false, by: "cell", unblind: false, error: null };
+    ui.data = { status: null, unload: null, export: null, faces: null, gaze: null, heatmaps: null, blur: false, by: "cell", unblind: false, error: null };
     ui.files.result = null;
     ui.aois = { result: null, overwrite: false, error: null };
     ui.preview = { result: null, pid: null, conditions: false, error: null };
@@ -1616,6 +1656,7 @@
       case "data-unload": dataUnload(); return;
       case "data-export": dataExport(); return;
       case "data-faces": dataFaces(); return;
+      case "data-gaze": dataGaze(); return;
       case "data-clear-phone":
         if (confirm("Delete from the phone the sessions whose copy on this computer (and second copy) still matches it? Anything else stays on the phone.")) dataCall("data_clear", "Clearing the phone…", ui.phone.serial || null).then(() => { ui.data.unload = ui.data.last; render(); });
         return;

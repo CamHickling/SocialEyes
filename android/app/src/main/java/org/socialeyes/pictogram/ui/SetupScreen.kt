@@ -80,7 +80,7 @@ fun SetupScreen(
     onPinSessions: (Boolean) -> Unit = {},
 ) {
     var studies by remember { mutableStateOf(StudyPackage.findAll(studiesDir)) }
-    var selectedDir by remember { mutableStateOf(studies.firstOrNull { it.second.isSuccess }?.first) }
+    var selectedDir by remember { mutableStateOf(StudyPackage.latest(studies)) }
     var participant by remember { mutableStateOf<String?>(null) }
     var confirmRepeat by remember { mutableStateOf(false) }
     val pkg = studies.firstOrNull { it.first == selectedDir }?.second?.getOrNull()
@@ -194,7 +194,7 @@ fun SetupScreen(
 
                 OutlinedButton(onClick = {
                     studies = StudyPackage.findAll(studiesDir)
-                    if (studies.none { it.first == selectedDir }) selectedDir = studies.firstOrNull { it.second.isSuccess }?.first
+                    if (studies.none { it.first == selectedDir }) selectedDir = StudyPackage.latest(studies)
                 }) { Text("Reload studies") }
                 val context = LocalContext.current
                 if (ShortcutManagerCompat.isRequestPinShortcutSupported(context)) {
