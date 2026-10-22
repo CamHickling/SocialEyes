@@ -35,6 +35,11 @@ data class Preflight(
     val camera: Map<String, CameraControl>?,
     /** Camera settings the study asks for (empty: leave as is). */
     val exposureChange: Map<String, String>,
+    /** The study's camera settings, to apply once the recording runs: Companion only takes (and
+     *  reports) scene camera settings while its scene camera streams (21 Oct, Motorola + Neon). */
+    val exposureAfterStart: Map<String, String> = emptyMap(),
+    /** When that was done, ms after the recording started (null: set before it, or not at all). */
+    val exposureSetAfterMs: Long? = null,
     /** Template answers to send, item id -> values, and the template titles they fill. */
     val templateAnswers: Map<String, List<String>>,
     val templateFilled: List<String>,
@@ -135,10 +140,14 @@ object NeonSetup {
 
         val camera = runCatching { client.cameraState() }.getOrNull()
         var change = emptyMap<String, String>()
+        var afterStart = emptyMap<String, String>()
         neon.sceneExposure?.let { e ->
             if (camera == null) {
-                problems += "The study sets the scene camera exposure, but Companion didn't report its camera settings " +
-                    "(update Companion, or check the glasses' scene camera)."
+                // Companion answers camera controls only while the scene camera streams, which before a
+                // recording it may not: set them as soon as the recording runs instead
+                afterStart = exposureValues(e)
+                warnings += "Companion's scene camera isn't streaming yet, so the study's exposure is set " +
+                    "just after the recording starts (its first few seconds keep Companion's own)."
             } else {
                 val (c, p) = exposureChange(exposureValues(e), camera)
                 change = c
@@ -159,6 +168,7 @@ object NeonSetup {
                     "those values won't be filled in."
             }
         }
-        return Preflight(status, camera, change, answers, filled, problems, warnings)
+        return Preflight(status, camera, change, exposureAfterStart = afterStart, templateAnswers = answers,
+            templateFilled = filled, problems = problems, warnings = warnings)
     }
 }

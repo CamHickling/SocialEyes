@@ -93,7 +93,8 @@ Test report (summary, method, charts plain vs smart, tables, Tests, screenshots;
    (e.g. `layout: bars`, `family: tag16h5`, `size_mm: 10`) drawn by FeedScreen's top bar and tab bar,
    reusing `ui/TagBars.kt`'s geometry; keep the bars visible over stories, reels and the comment
    sheet. Make `socialeyes gaze` read the family from the `marker_layout` event.
-3. **A phone-only settings test** (needs the glasses): a step that cycles screen brightness × scene
+3. **A phone-only settings test** (built 21 Oct: `settings_test` step, `studies/settings_test`,
+   `python -m socialeyes.gaze.settings_test <neon> <session>`; app 0.3.3; needs a recording): a step that cycles screen brightness × scene
    camera setting itself (like tag_bars cycles variants), e.g. 0.30/0.45/0.60 × auto, auto biased
    darker, manual 1000/2000 µs, with the 16h5 10 mm bars; held normally and at arm's length. Logs
    each setting; the analysis reports reads, blown-out content and frame rate per setting. Also

@@ -82,6 +82,7 @@ class NeonLink private constructor(
             if (preflight.exposureChange.isNotEmpty()) {
                 putJsonObject("scene_camera_set") { preflight.exposureChange.forEach { (k, v) -> put(k, v) } }
             }
+            preflight.exposureSetAfterMs?.let { put("scene_camera_set_after_ms", it) }
             if (preflight.templateFilled.isNotEmpty()) put("template_filled", JsonArray(preflight.templateFilled.map(::JsonPrimitive)))
             if (checklist.isNotEmpty()) put("checklist", buildJsonArray {
                 checklist.forEach { (item, ok) -> add(buildJsonObject { put("item", item); put("confirmed", ok) }) }
@@ -207,9 +208,39 @@ class NeonLink private constructor(
                 if (restore.isNotEmpty()) runCatching { client.setCamera(restore) }
                 throw NeonNotReady("Neon Companion couldn't start a recording: ${e.message}")
             }
-            return NeonLink(client, id, preflight.copy(status = status, warnings = warnings), checklist, calibration,
-                preflight.exposureChange.isNotEmpty(), t)
+            var applied = preflight
+            if (preflight.exposureAfterStart.isNotEmpty()) applied = exposureAfterStart(client, preflight, warnings, t)
+            return NeonLink(client, id, applied.copy(status = status, warnings = warnings), checklist, calibration,
+                applied.exposureChange.isNotEmpty(), t)
         }
+
+        /** The study's scene camera exposure, set once the recording has the scene camera streaming
+         *  (up to [AFTER_START_WAIT_MS]); what it found is kept so the session can put it back. */
+        private fun exposureAfterStart(client: NeonClient, preflight: Preflight, warnings: MutableList<String>, startedNs: Long): Preflight {
+            val deadline = System.currentTimeMillis() + AFTER_START_WAIT_MS
+            var camera: Map<String, CameraControl>? = null
+            while (camera == null && System.currentTimeMillis() < deadline) {
+                camera = runCatching { client.cameraState() }.getOrNull()
+                if (camera == null) Thread.sleep(250)
+            }
+            if (camera == null) {
+                warnings += "Couldn't set the scene camera exposure: Companion's scene camera didn't answer within " +
+                    "${AFTER_START_WAIT_MS / 1000} s of the recording starting."
+                return preflight
+            }
+            val (change, problems) = NeonSetup.exposureChange(preflight.exposureAfterStart, camera)
+            warnings += problems
+            return try {
+                if (change.isNotEmpty()) client.setCamera(change)
+                preflight.copy(camera = camera, exposureChange = change,
+                    exposureSetAfterMs = (Clocks.elapsedNs() - startedNs) / 1_000_000)
+            } catch (e: IOException) {
+                warnings += "Couldn't set the scene camera exposure: ${e.message}"
+                preflight.copy(camera = camera)
+            }
+        }
+
+        private const val AFTER_START_WAIT_MS = 5000L
 
         private const val OK = "ok"
 

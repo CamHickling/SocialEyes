@@ -182,7 +182,7 @@ private fun FeedContent(session: Session, step: Step, onDone: (reason: String) -
     // sheet leave both bars uncovered.
     val tagCfg = pkg.study.markers.onScreen
     val barTags = if (tagCfg.layout == "bars" && step.id in tagCfg.steps) {
-        rememberBarTags(tagCfg.family, pkg.study.markers.screenTagIds, tagCfg.sizeMm)
+        rememberBarTags(tagCfg.family, pkg.study.markers.screenTagIds, tagCfg.sizeMm, tagCfg.sideInsetMm, tagCfg.edgeGapMm)
     } else null
     val density = LocalDensity.current
     val topBarH = maxOf(topStrip + 52.dp, with(density) { (barTags?.barPx ?: 0f).toDp() })
@@ -220,9 +220,16 @@ private fun FeedContent(session: Session, step: Step, onDone: (reason: String) -
         },
     ) {
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        // top bar: wordmark, notifications, messages, at the bottom of the (sometimes taller) bar
+        // top bar: wordmark, notifications, messages, at the bottom of the bar; with bar tags,
+        // halfway between there and the tags' centre line, so the row lines up with the tags
+        // without leaving a gap under it (chosen 21 Oct from the mockups)
+        val rowTop = barTags?.let { t ->
+            val atBottom = topBarH - 52.dp
+            val onTags = with(density) { (t.edgePx + t.tagPx / 2).toDp() } - 26.dp
+            maxOf(0.dp, (atBottom + onTags) / 2)
+        }
         Column(Modifier.fillMaxWidth().height(topBarH)) {
-        Spacer(Modifier.weight(1f))
+        if (rowTop != null) Spacer(Modifier.height(rowTop)) else Spacer(Modifier.weight(1f))
         Row(
             Modifier.fillMaxWidth().height(52.dp).padding(start = maxOf(14.dp, clear), end = maxOf(6.dp, clear)),
             verticalAlignment = Alignment.CenterVertically,

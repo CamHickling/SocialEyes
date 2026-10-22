@@ -80,6 +80,11 @@ class OnScreenTags(_Strict):
     size_mm: float = Field(12.0, ge=4, le=20)
     """Black-border edge length on the screen. 9 mm was at the Neon scene camera's detection limit
     with the phone held low (CAM-210), so 12 mm by default."""
+    side_inset_mm: float = Field(5.0, ge=0, le=12)
+    """layout bars: from the left/right screen edge to the tags' black border. 3 mm read as well as
+    5 mm on the Edge 40 Pro's curved edges, one-handed too (tag_edges, 21 Oct 2026)."""
+    edge_gap_mm: float = Field(2.0, ge=0, le=12)
+    """layout bars: from the top/bottom screen edge to the tags' black border."""
 
 
 class DataPolicy(_Strict):
@@ -357,10 +362,16 @@ class TagBarsVariant(_Strict):
     """How light the tag's dark cells are drawn (0 = black, 0.4 = 40% grey): less striking, less contrast."""
     tag_ids: list[int] = []
     """Filled in by the step: four ids of the family (top-left, top-right, bottom-right, bottom-left)."""
+    side_inset_mm: Optional[float] = Field(None, ge=0, le=12)
+    """This variant's distance from the left/right screen edge to the black border (default: the step's)."""
+    edge_gap_mm: Optional[float] = Field(None, ge=0, le=12)
+    """This variant's distance from the top/bottom screen edge to the black border (default: the step's)."""
 
     @property
     def label(self) -> str:
-        return f"{self.family[3:]} {self.size_mm:g} mm" + (f" grey {self.grey:.0%}" if self.grey else "")
+        return (f"{self.family[3:]} {self.size_mm:g} mm" + (f" grey {self.grey:.0%}" if self.grey else "")
+                + (f", {self.side_inset_mm:g} mm in" if self.side_inset_mm is not None else "")
+                + (f", gap {self.edge_gap_mm:g} mm" if self.edge_gap_mm is not None else ""))
 
 
 class TagBarsStep(_Step):
@@ -488,6 +499,58 @@ class DisplayCalibrationStep(_Step):
     """How long to wait for the laptop before offering Skip."""
 
 
+class SettingsTestExposure(_Strict):
+    """One Neon scene camera setting a `settings_test` step tries."""
+
+    mode: Literal["auto", "manual"]
+    exposure_us: Optional[int] = Field(None, ge=1, le=1_000_000)
+    auto_bias: Optional[float] = Field(None, ge=-1, le=1)
+    """Auto only: shifts the auto exposure's target brightness from Companion's current value
+    towards its minimum (-1) or maximum (+1); -0.5 is halfway down (darker)."""
+
+    @model_validator(mode="after")
+    def _check(self):
+        if self.mode == "manual" and (self.exposure_us is None or self.auto_bias is not None):
+            raise ValueError("settings_test exposures: manual needs exposure_us (and no auto_bias)")
+        if self.mode == "auto" and self.exposure_us is not None:
+            raise ValueError("settings_test exposures: exposure_us only applies to mode manual")
+        return self
+
+
+class SettingsTestStep(_Step):
+    """Which fixed screen brightness and Neon scene camera exposure to use in phone-only sessions
+    (CAM-165). For each hold (a way of holding the phone) the screen shows the study's on-screen
+    tags in the top bar and tab bar (markers.on_screen family and size) around a post photo, and
+    steps through every `brightness` x `exposures` for `setting_s` seconds each, `rounds` times per
+    hold, the order reversing each round. The app sets each one itself (no laptop), logs a
+    `display_setting` and a `marker_layout` (with `ladder`, as tag_bars', the setting as the
+    variant), and puts the brightness and scene camera back as they were when the step ends.
+    `python -m socialeyes.gaze.settings_test` reports tags read, frames placing the phone, the
+    photo blown out and the scene video's frame rate per setting. Needs the Neon recording."""
+
+    type: Literal["settings_test"]
+    holds: list[str] = Field(default_factory=lambda: [
+        "Hold the phone the way you normally would.",
+        "Hold the phone at arm's length: stretch your arm out fully.",
+    ], min_length=1, max_length=8)
+    brightness: list[float] = Field([0.30, 0.45, 0.60], min_length=1, max_length=8)
+    exposures: list[SettingsTestExposure] = Field(default_factory=lambda: [
+        SettingsTestExposure(mode="auto"),
+        SettingsTestExposure(mode="auto", auto_bias=-0.5),
+        SettingsTestExposure(mode="manual", exposure_us=1000),
+        SettingsTestExposure(mode="manual", exposure_us=2000),
+    ], min_length=1, max_length=8)
+    setting_s: float = Field(5.0, ge=2, le=30)
+    rounds: int = Field(2, ge=1, le=4)
+
+    @field_validator("brightness")
+    @classmethod
+    def _levels(cls, v: list[float]) -> list[float]:
+        if not all(0.05 <= b <= 1 for b in v):
+            raise ValueError("settings_test brightness levels must be between 0.05 and 1")
+        return v
+
+
 class EndStep(_Step):
     type: Literal["end"]
     text: str = "Thank you! Please hand the phone back to the researcher."
@@ -500,6 +563,7 @@ Step = Annotated[
         TagLadderStep,
         TagBarsStep,
         DisplayCalibrationStep,
+        SettingsTestStep,
         CameraCheckStep,
         ProfilePhotoStep,
         ValidationStep,

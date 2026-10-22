@@ -75,6 +75,7 @@ fun SessionScreen(session: Session, onExit: () -> Unit) {
                     "tag_ladder" -> TagLadderStep(session, step) { session.next() }
                     "tag_bars" -> TagBarsStep(session, step) { session.next() }
                     "display_calibration" -> DisplayCalibrationStep(session, step) { session.next() }
+                    "settings_test" -> SettingsTestStep(session, step) { session.next() }
                     "validation" -> ValidationStep(session, step) { session.next() }
                     "profile_photo" -> ProfilePhotoStep(session, step) { session.next() }
                     "camera_check" -> CameraCheckStep(session, step) { session.next() }

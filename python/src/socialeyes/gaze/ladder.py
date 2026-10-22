@@ -29,7 +29,7 @@ SETTLE_MS = 300.0   # skip frames this soon after the layout changes (the screen
 READABLE = 0.85     # detection rate counted as "readable"
 
 OBS_COLUMNS = ["hold", "phase", "frame", "tag_id", "kind", "value_mm", "size_mm", "apparent_px", "detected",
-               "distance_mm", "family", "grey", "variant", "corner"]
+               "distance_mm", "family", "grey", "variant", "corner", "placed", "reproj_px"]
 
 
 @dataclass
@@ -92,7 +92,8 @@ def observe(frames: Iterable[tuple[int, int, np.ndarray]], arr: Arrangement, tra
             yield [arr.hold, arr.phase, fi, i, inf["kind"], float(inf["value_mm"]), float(inf["size_mm"]), side,
                    i in res.detected, pose.distance_mm if pose is not None else float("nan"),
                    inf.get("family", "tag36h11"), float(inf.get("grey", 0)),
-                   inf.get("variant", ""), inf.get("corner", "")]
+                   inf.get("variant", ""), inf.get("corner", ""),
+                   pose is not None, float(res.reproj_px) if pose is not None else float("nan")]
 
 
 def analyse(rec: NeonRecording, session: Session, smart: bool = True) -> pd.DataFrame:
@@ -130,14 +131,16 @@ def bars_table(obs: pd.DataFrame, bars: dict[str, dict] | None = None) -> pd.Dat
     b["top"] = b["corner"].str.startswith("top")
     per_frame = b.groupby(["variant", "hold", "phase", "frame"]).apply(
         lambda f: pd.Series({"top": bool((f["detected"] & f["top"]).any()), "bottom": bool((f["detected"] & ~f["top"]).any()),
-                             "any": bool(f["detected"].any())}), include_groups=False).reset_index()
+                             "any": bool(f["detected"].any()), "placed": bool(f["placed"].any()),
+                             "reproj_px": float(f["reproj_px"].median())}), include_groups=False).reset_index()
     rows = []
     for (v, h), f in per_frame.groupby(["variant", "hold"]):
         t = b[(b["variant"] == v) & (b["hold"] == h)]
         rows.append({"variant": v, "hold": h, "frames": len(f), "tag_read": t["detected"].mean(),
                      "top_and_bottom": (f["top"] & f["bottom"]).mean(), "none": 1 - f["any"].mean(),
+                     "placed": f["placed"].mean(), "reproj_px": f["reproj_px"].median(),
                      "family": t["family"].iloc[0], "size_mm": t["size_mm"].iloc[0], "grey": t["grey"].iloc[0],
-                     **{k: (bars or {}).get(v, {}).get(k) for k in ("top_bar_dp", "tab_bar_dp")}})
+                     **{k: (bars or {}).get(v, {}).get(k) for k in ("top_bar_dp", "tab_bar_dp", "side_inset_mm", "edge_gap_mm")}})
     return pd.DataFrame(rows)
 
 
@@ -147,16 +150,18 @@ def report(obs: pd.DataFrame, focal_px: float, holds: dict[int, str] | None = No
     lines = []
     table = bars_table(obs, bars)
     if len(table):
-        lines.append("tag_bars: share of frames with a top AND a bottom tag read (tag reads overall), per hold")
+        lines.append("tag_bars, per hold: frames placing the phone / with a top AND a bottom tag read / median pose")
+        lines.append("reprojection error (scene px; poses above 2 px are rejected: tags off the flat screen, e.g. on a")
+        lines.append("curved edge, raise it)")
         hs = sorted(table["hold"].unique())
-        lines.append(f"  {'variant':24s} {'bars dp (top/tab)':18s}" + "".join(f"  hold {h:<16d}" for h in hs))
-        order = table.groupby("variant")["top_and_bottom"].mean().sort_values(ascending=False).index
+        lines.append(f"  {'variant':34s} {'bars dp':8s}" + "".join(f"  hold {h:<18d}" for h in hs))
+        order = table.groupby("variant")["placed"].min().sort_values(ascending=False).index
         for v in order:
             t = table[table["variant"] == v].set_index("hold")
             dims = f"{t['top_bar_dp'].iloc[0] or 0:.0f}/{t['tab_bar_dp'].iloc[0] or 0:.0f}"
-            cells = "".join(f"  {t.loc[h, 'top_and_bottom']:4.0%} ({t.loc[h, 'tag_read']:4.0%})       " if h in t.index
-                            else " " * 24 for h in hs)
-            lines.append(f"  {v:24s} {dims:18s}{cells}")
+            cells = "".join(f"  {t.loc[h, 'placed']:4.0%} {t.loc[h, 'top_and_bottom']:4.0%} {t.loc[h, 'reproj_px']:4.2f} px "
+                            if h in t.index else " " * 26 for h in hs)
+            lines.append(f"  {v:34s} {dims:8s}{cells}")
         lines.append("  (the feed's own bars are 52+strip / 50 dp; frames per cell: about 4 s x rounds x 30 fps)")
         obs = obs[obs["kind"] != "bars"]
     rate = lambda d: f"{d['detected'].mean():4.0%} ({len(d)})"  # noqa: E731

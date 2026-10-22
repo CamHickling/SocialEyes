@@ -119,6 +119,9 @@ data class OnScreenTagsConfig(
     val layout: String = "bands",
     val family: String = "tag36h11",
     @SerialName("size_mm") val sizeMm: Double = 12.0,
+    /** layout bars: the tags' black border from the left/right and the top/bottom screen edges. */
+    @SerialName("side_inset_mm") val sideInsetMm: Double = 5.0,
+    @SerialName("edge_gap_mm") val edgeGapMm: Double = 2.0,
 )
 
 @Serializable
@@ -277,7 +280,7 @@ class StudyPackage(val dir: File, val manifest: StudyManifest) {
         val logging = study.logging
         if (logging.flag("screen_recording", false)) add("logging.screen_recording (not recorded yet)")
         val supportedSteps = setOf(
-            "instructions", "marker_calibration", "tag_ladder", "display_calibration", "validation", "questionnaire", "feed", "image_rating", "recognition",
+            "instructions", "marker_calibration", "tag_ladder", "tag_bars", "display_calibration", "settings_test", "validation", "questionnaire", "feed", "image_rating", "recognition",
             "profile_photo", "camera_check", "end",
         )
         steps.filter { it.type !in supportedSteps }.forEach {

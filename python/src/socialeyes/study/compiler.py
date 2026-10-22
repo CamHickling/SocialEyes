@@ -696,6 +696,9 @@ def _check_design(b: StudyBundle, rep: Report) -> None:
     feed_at = next((k for k, s in enumerate(study.procedure) if s.type == "feed"), None)
     if photos and feed_at is not None and photos[0] > feed_at:
         rep.warnings.append("the profile_photo step comes after the feed, so the photo is never seen in the feed")
+    if any(s.type == "settings_test" for s in study.procedure) and not study.neon.auto_record:
+        rep.warnings.append("a settings_test step sets the Neon scene camera, which needs neon.auto_record; "
+                            "without it the step is skipped")
     if photos and cam.enabled and (cam.steps == "all" or any(ids[k] in cam.steps for k in photos)):
         rep.warnings.append("logging.front_camera records during the profile_photo step, but the camera can only "
                             "do one at a time; leave that step out of logging.front_camera.steps")

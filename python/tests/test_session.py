@@ -435,15 +435,18 @@ def test_on_screen_tags_reach_the_app(example, tmp_path):
     edit_file(example / "study.yaml", "procedure:", "markers:\n  on_screen:\n    steps: [feed]\n\nprocedure:")
     out, _ = compile_study(example, tmp_path / "build")
     study = json.loads((out / "study.json").read_text(encoding="utf-8"))["study"]
-    assert study["markers"]["on_screen"] == {"steps": ["feed"], "layout": "bands", "family": "tag36h11", "size_mm": 12.0}
+    assert study["markers"]["on_screen"] == {"steps": ["feed"], "layout": "bands", "family": "tag36h11", "size_mm": 12.0,
+                                             "side_inset_mm": 5.0, "edge_gap_mm": 2.0}
 
 
 def test_bar_tags_reach_the_app(example, tmp_path):
     edit_file(example / "study.yaml", "procedure:",
-              "markers:\n  on_screen:\n    steps: [feed]\n    layout: bars\n    family: tag16h5\n    size_mm: 10\n\nprocedure:")
+              "markers:\n  on_screen:\n    steps: [feed]\n    layout: bars\n    family: tag16h5\n    size_mm: 9\n"
+              "    side_inset_mm: 3\n    edge_gap_mm: 1.5\n\nprocedure:")
     out, _ = compile_study(example, tmp_path / "build")
     study = json.loads((out / "study.json").read_text(encoding="utf-8"))["study"]
-    assert study["markers"]["on_screen"] == {"steps": ["feed"], "layout": "bars", "family": "tag16h5", "size_mm": 10.0}
+    assert study["markers"]["on_screen"] == {"steps": ["feed"], "layout": "bars", "family": "tag16h5", "size_mm": 9.0,
+                                             "side_inset_mm": 3.0, "edge_gap_mm": 1.5}
     assert all((out / "tags" / f"tag16h5_{i}.png").exists() for i in study["markers"]["screen_tag_ids"])
 
 

@@ -1,0 +1,95 @@
+# Phone-only settings test for the Neon glasses (Linear CAM-165, CAM-219).
+# Sessions run on the phone and glasses alone, so the screen brightness and the Neon scene camera
+# exposure have to be fixed per study (display.brightness, neon.scene_exposure). This study's
+# settings_test step has the app step through brightness 0.30 / 0.45 / 0.60 x scene camera auto,
+# auto biased darker, manual 1000 us and 2000 us, 5 s each, twice per hold (normally, then at
+# arm's length), with the 16h5 10 mm tags in the bars around a post photo; then a 1-minute feed.
+# About 4 minutes in all. Analyse with:
+#   python -m socialeyes.gaze.settings_test <neon recording folder> <session folder>
+# Posts are copied from studies/tag_bars (itself from studies/example).
+id: settings_test
+title: Neon settings test, phone only (CAM-165)
+version: 1
+seed: 20251001                 # change it and every plan changes; never change it mid-study
+
+platform:
+  name: Pictogram              # never use a real platform's name or logo
+  theme: light
+  participant_handle: you      # name the participant's own comments appear under
+
+labels:
+  edited:
+    text: "This image has been digitally altered"
+    style: banner
+
+factors:
+  - name: edit
+    design: within
+    levels: [original, retouched]
+    sets:
+      image_version: "{level}"           # picks the image whose version is original/retouched
+  - name: label
+    design: within
+    levels: [none, edited]
+    sets:
+      label: {none: null, edited: edited}
+  - name: comments
+    design: between
+    levels: [neutral, appearance]
+    # applies_to: all would also switch the comments of filler posts; every
+    # filler would then need a neutral and an appearance comment set.
+    applies_to: critical
+    sets:
+      comment_variant: "{level}"
+
+feed:
+  order: shuffle
+  lead_in_fillers: 2
+  max_run_same_cell: 2
+  min_fillers_between_critical: 1
+  done_button_after_s: 20
+  time_limit_s: 60
+  allow_likes: true
+  allow_comment_typing: true   # participants can comment and reply (text and draft edits are logged)
+
+logging:                       # besides gaze; see docs/EVENT_LOG.md
+  touches: true                # raw touch points
+  sensors: false
+  screen_recording: false      # pilots only: Android asks permission every session
+  front_camera:                # face video for expression analysis; add a camera_check
+    enabled: false             # step before the recorded steps
+    resolution: 720p
+    fps: 30
+    steps: [feed]
+
+neon:
+  template:                    # filled in Companion's recording template, if it has these fields
+    Participant: "{participant_id}"
+    Study: "{study_id}"
+
+markers:                       # the tags chosen on 12 Oct, in the feed's own bars
+  on_screen: {steps: [feed], layout: bars, family: tag16h5, size_mm: 10}
+
+procedure:
+  - {id: welcome, type: instructions, title: Settings test,
+     text: "The screen will show a photo between two bars with small black squares in their corners, getting brighter and darker. Each time, hold the phone as asked and keep looking at the screen until it changes. It takes about four minutes."}
+  - id: settings
+    type: settings_test
+    setting_s: 5                 # each setting 5 s, twice per hold (forwards, then backwards)
+    rounds: 2
+    brightness: [0.30, 0.45, 0.60]
+    exposures:
+      - {mode: auto}
+      - {mode: auto, auto_bias: -0.5}    # auto exposure aiming darker (halfway to Companion's minimum)
+      - {mode: manual, exposure_us: 1000}
+      - {mode: manual, exposure_us: 2000}
+    holds:
+      - Hold the phone the way you normally would.
+      - "Hold the phone at arm's length: stretch your arm out fully."
+  - {id: feed, type: feed, instructions: "Now scroll the feed as you normally would for a minute."}
+  - {id: end, type: end}
+
+participants:
+  n_plans: 8
+  id_prefix: T
+  id_digits: 2

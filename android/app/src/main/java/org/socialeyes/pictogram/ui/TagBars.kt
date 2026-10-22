@@ -59,11 +59,16 @@ internal val FAMILY_CELLS = mapOf("tag36h11" to 8, "tag25h9" to 7, "tag16h5" to 
 private val CORNERS = listOf("top_left", "top_right", "bottom_right", "bottom_left")
 
 /** One tag_bars variant: four tags (TL, TR, BR, BL) of a family, size and grey level. */
-internal data class BarVariant(val family: String, val sizeMm: Double, val grey: Double, val ids: List<Int>) {
+internal data class BarVariant(val family: String, val sizeMm: Double, val grey: Double, val ids: List<Int>,
+                                val sideInsetMm: Double? = null, val edgeGapMm: Double? = null) {
     val cells: Int get() = FAMILY_CELLS.getValue(family)
+    /** As the study's TagBarsVariant.label, so the session's variants match the study's. */
     val label: String
-        get() = "${family.removePrefix("tag")} ${if (sizeMm % 1.0 == 0.0) sizeMm.toInt().toString() else sizeMm.toString()} mm" +
-            if (grey > 0) " grey ${(grey * 100).roundToInt()}%" else ""
+        get() = "${family.removePrefix("tag")} ${mm(sizeMm)} mm" +
+            (if (grey > 0) " grey ${(grey * 100).roundToInt()}%" else "") +
+            (sideInsetMm?.let { ", ${mm(it)} mm in" } ?: "") + (edgeGapMm?.let { ", gap ${mm(it)} mm" } ?: "")
+
+    private fun mm(v: Double) = if (v % 1.0 == 0.0) v.toInt().toString() else v.toString()
 }
 
 internal fun barVariants(step: Step): List<BarVariant> =
@@ -73,7 +78,8 @@ internal fun barVariants(step: Step): List<BarVariant> =
         val family = o["family"]?.jsonPrimitive?.content ?: "tag16h5"
         val size = o["size_mm"]?.jsonPrimitive?.doubleOrNull ?: return@mapNotNull null
         if (ids.size != 4 || family !in FAMILY_CELLS) null
-        else BarVariant(family, size, o["grey"]?.jsonPrimitive?.doubleOrNull ?: 0.0, ids)
+        else BarVariant(family, size, o["grey"]?.jsonPrimitive?.doubleOrNull ?: 0.0, ids,
+            o["side_inset_mm"]?.jsonPrimitive?.doubleOrNull, o["edge_gap_mm"]?.jsonPrimitive?.doubleOrNull)
     }
 
 /** The variants' order in one hold: `rounds` rounds, alternately forwards and backwards (and the
@@ -124,7 +130,9 @@ private fun BarsLayout(session: Session, step: Step, hold: Int, phase: Int, v: B
     val primary = MaterialTheme.colorScheme.onBackground
     fun Float.asDp(): Dp = with(density) { this@asDp.toDp() }
 
-    val tags = rememberBarTags(v.family, v.ids, v.sizeMm, step.double("side_inset_mm") ?: 5.0, step.double("edge_gap_mm") ?: 2.0)
+    val insetMm = v.sideInsetMm ?: step.double("side_inset_mm") ?: 5.0
+    val gapMm = v.edgeGapMm ?: step.double("edge_gap_mm") ?: 2.0
+    val tags = rememberBarTags(v.family, v.ids, v.sizeMm, insetMm, gapMm)
     // each bar grows only if its tags need it
     val sync = pkg.study.display.syncPatch
     val topStrip = if (sync.enabled) maxOf(24, sync.sizeDp + 16).dp else 0.dp
@@ -155,7 +163,7 @@ private fun BarsLayout(session: Session, step: Step, hold: Int, phase: Int, v: B
                     },
                     "bars" to mapOf(
                         "variant" to v.label, "top_bar_dp" to topBarH.value, "tab_bar_dp" to tabBarH.value,
-                        "feed_px" to feedPx,
+                        "feed_px" to feedPx, "side_inset_mm" to insetMm, "edge_gap_mm" to gapMm,
                     ),
                 ),
             ),

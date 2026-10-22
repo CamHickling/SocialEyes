@@ -1,0 +1,106 @@
+# End-to-end pilot with the Neon glasses (Linear CAM-165, CAM-211): the example study (2 x 2 x 2,
+# placeholder images) with the settings chosen on 21 Oct, phone only:
+#   - screen brightness 0.30 and Companion's auto exposure aiming darker (settings_test T01)
+#   - 16h5 10 mm tags 3 mm from the side edges, 2 mm from the top/bottom (tag_edges T01); the
+#     question this session answers: what share of the feed time is mapped to the screen
+#   - validation dots before and after the feed, for gaze accuracy and drift at these settings
+# Then: socialeyes gaze -> fixations -> Make tables (gaze columns) -> Make heatmaps.
+id: pilot_neon
+title: End-to-end pilot with the Neon (example study, final settings)
+version: 1
+seed: 20251001                 # change it and every plan changes; never change it mid-study
+
+platform:
+  name: Pictogram              # never use a real platform's name or logo
+  theme: light
+  participant_handle: you      # name the participant's own comments appear under
+
+markers:                       # AprilTags in the feed's top bar and tab bar, so the Neon can find the phone
+  on_screen: {steps: [feed], layout: bars, family: tag16h5, size_mm: 10, side_inset_mm: 3, edge_gap_mm: 2}
+
+display:
+  brightness: 0.30             # settings test 21 Oct: best with the scene camera below
+
+neon:
+  scene_exposure:              # Companion's auto exposure aiming darker: its brightness control runs
+    mode: auto                 # -64..64 on the Neon, so -32 is halfway down ("auto -50%" in the test)
+    brightness: -32
+
+labels:
+  edited:
+    text: "This image has been digitally altered"
+    style: banner
+
+factors:
+  - name: edit
+    design: within
+    levels: [original, retouched]
+    sets:
+      image_version: "{level}"           # picks the image whose version is original/retouched
+  - name: label
+    design: within
+    levels: [none, edited]
+    sets:
+      label: {none: null, edited: edited}
+  - name: comments
+    design: between
+    levels: [neutral, appearance]
+    # applies_to: all would also switch the comments of filler posts; every
+    # filler would then need a neutral and an appearance comment set.
+    applies_to: critical
+    sets:
+      comment_variant: "{level}"
+
+feed:
+  order: shuffle
+  lead_in_fillers: 2
+  max_run_same_cell: 2
+  min_fillers_between_critical: 1
+  done_button_after_s: 60
+  time_limit_s: null
+  allow_likes: true
+  allow_comment_typing: true   # participants can comment and reply (text and draft edits are logged)
+
+logging:                       # besides gaze; see docs/EVENT_LOG.md
+  touches: true                # raw touch points
+  sensors: false               # accelerometer / gyroscope
+  screen_recording: false      # pilots only: Android asks permission every session
+  front_camera:                # face video for expression analysis; add a camera_check
+    enabled: false             # step before the recorded steps
+    resolution: 720p
+    fps: 30
+    steps: [feed]
+
+procedure:
+  - {id: welcome, type: instructions, title: Welcome,
+     text: "Please browse the feed as you normally would."}
+  - {id: photo, type: profile_photo}  # optional selfie as profile picture; kept in memory only, deleted after the session
+  - {id: cal1, type: marker_calibration, duration_s: 4}
+  - {id: val1, type: validation, points: 9}
+  - id: pre
+    type: questionnaire
+    title: Right now...
+    items:
+      - {id: body_sat_pre, kind: vas, text: "How satisfied are you with your body right now?",
+         min_label: "Not at all", max_label: "Extremely"}
+  - {id: feed, type: feed}
+  - {id: cal2, type: marker_calibration}
+  - {id: val2, type: validation, points: 9}   # accuracy after the feed, for drift
+  - id: post
+    type: questionnaire
+    items:
+      - {id: body_sat_post, kind: vas, text: "How satisfied are you with your body right now?",
+         min_label: "Not at all", max_label: "Extremely"}
+  - id: ratings
+    type: image_rating
+    posts: critical
+    items:
+      - {id: attractive, kind: likert, points: 7, text: "How attractive is this person?"}
+      - {id: realistic, kind: likert, points: 7, text: "How realistic is this image?"}
+  - {id: recog, type: recognition, lures: both, foils: [foil01, foil02], confidence: true}
+  - {id: end, type: end}
+
+participants:
+  n_plans: 16                  # 2 balanced blocks of 8 (2 groups x 4 lists)
+  id_prefix: P
+  id_digits: 3

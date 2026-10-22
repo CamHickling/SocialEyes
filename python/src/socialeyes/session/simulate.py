@@ -292,6 +292,10 @@ class _Sim:
             elif kind == "display_calibration":
                 self.wait(rng.uniform(15, 30))
                 self.emit("display_calibration", step_id=step["id"], status="skipped")
+            elif kind == "settings_test":  # no scene video to score, as the app does without the Neon
+                self.wait(rng.uniform(2, 4))
+                self.emit("settings_test", step_id=step["id"], status="skipped", reason="no_neon")
+                self.tap(540, 2250)
             elif kind == "camera_check":
                 face_s = step.get("min_face_s", 3.0) + rng.uniform(0.5, 3.0)
                 self.wait(face_s)
