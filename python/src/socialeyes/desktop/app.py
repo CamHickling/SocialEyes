@@ -54,7 +54,7 @@ class Api:
 
     def __init__(self):
         self._window = None  # set once the window exists; underscore keeps it out of the JS bridge
-        self._storage: dict = {}  # folder -> drive encryption and cloud sync, asked once per run
+        self._storage: dict = {}  # folder -> cloud-sync service, looked up once per run
 
     @_reply
     def app_info(self) -> dict:
@@ -184,7 +184,7 @@ class Api:
                 continue
             key = str(path)
             if key not in self._storage:  # asking Windows takes a moment: once per folder per run
-                self._storage[key] = {"encrypted": retention.bitlocker(path), "cloud": retention.cloud_folder(path)}
+                self._storage[key] = {"cloud": retention.cloud_folder(path)}
             storage.append({"folder": name, "path": key, **self._storage[key]})
         try:
             due = retention.due(folder)

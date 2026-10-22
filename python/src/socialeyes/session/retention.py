@@ -14,7 +14,6 @@ import datetime as dt
 import json
 import os
 import shutil
-import subprocess
 from pathlib import Path
 from typing import Optional
 
@@ -116,25 +115,6 @@ def delete_due(study_dir: Path | str, what: str, today: Optional[dt.date] = None
 # ---------------------------------------------------------------- where the data lives
 
 
-def bitlocker(path: Path) -> Optional[bool]:
-    """Whether Windows reports the drive holding ``path`` as BitLocker-encrypted (no admin rights
-    needed); None when it can't say (other systems, network drives)."""
-    if os.name != "nt":
-        return None
-    drive = Path(path).resolve().drive
-    if not drive or drive.startswith("\\\\"):
-        return None
-    cmd = (f"(New-Object -ComObject Shell.Application).NameSpace('{drive}\\').Self."
-           "ExtendedProperty('System.Volume.BitLockerProtection')")
-    try:
-        out = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", cmd], capture_output=True,
-                             text=True, timeout=15, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)).stdout.strip()
-    except (OSError, subprocess.SubprocessError):
-        return None
-    # 1 on, 3 encrypting, 6 on (locked); 0 / 2 off or not available; 4 decrypting, 5 suspended
-    return {"1": True, "3": True, "6": True, "0": False, "2": False, "4": False, "5": False}.get(out)
-
-
 def cloud_folder(path: Path) -> Optional[str]:
     """The cloud-sync service whose folder holds ``path``, if any (files there upload themselves)."""
     p = Path(path).resolve()
@@ -154,7 +134,7 @@ def cloud_folder(path: Path) -> Optional[str]:
 
 
 def storage(study_dir: Path | str) -> list[dict]:
-    """The data folder and second copy: path, encrypted drive (True/False/None), cloud-sync service."""
+    """The data folder and second copy: path, and the cloud-sync service whose folder holds it, if any."""
     from ..phone.unload import study_id_of
 
     sid = study_id_of(study_dir)
@@ -162,5 +142,5 @@ def storage(study_dir: Path | str) -> list[dict]:
     for name, path in (("data", settings.data_dir(sid)), ("second copy", settings.second_copy_dir(sid))):
         if path is None:
             continue
-        out.append({"folder": name, "path": str(path), "encrypted": bitlocker(path), "cloud": cloud_folder(path)})
+        out.append({"folder": name, "path": str(path), "cloud": cloud_folder(path)})
     return out

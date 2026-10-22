@@ -1119,17 +1119,15 @@
         <p>Sessions: <span class="folder">${esc(st.data_dir)}</span> ${btn("data-pick:data", "Change…", "link", dis)}</p>
         <p>Second copy: ${st.second_copy_dir ? `<span class="folder">${esc(st.second_copy_dir)}</span> ${btn("data-pick:second", "Change…", "link", dis)}${btn("data-clear:second", "Stop", "link danger", dis)}`
           : `none ${btn("data-pick:second", "Choose a folder…", "link", dis)}`}</p>
-        <p class="hint">A second copy of every session, e.g. on an encrypted or university drive. Set for this computer only.</p>
+        <p class="hint">A second copy of every session, e.g. on a university drive. Set for this computer only.</p>
       </details>`;
     return html;
   }
 
-  /** Data: whether the data folders are on an encrypted drive, or inside a cloud-sync folder. */
+  /** Data: a warning when a data folder is inside a cloud-sync folder (its files upload themselves). */
   function storageLine(st) {
     const items = (st.storage || []).map((s) => s.cloud
       ? `<span class="status warning" title="${esc(s.path)}">${esc(s.folder)}: inside ${esc(s.cloud)}, so it uploads itself</span>`
-      : s.encrypted === true ? `<span class="status ok" title="${esc(s.path)}">${esc(s.folder)}: on an encrypted drive</span>`
-      : s.encrypted === false ? `<span class="status warning" title="${esc(s.path)}">${esc(s.folder)}: not on an encrypted drive. Participants' data is safest on one (BitLocker, or your university's secure storage): choose the folder under Folders below, or check what your ethics approval asks for.</span>`
       : "");
     return items.some(Boolean) ? `<p class="hint">${items.join(" ")}</p>` : "";
   }

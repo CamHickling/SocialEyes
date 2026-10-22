@@ -920,7 +920,7 @@ SocialEyes is open on the phone may still be recording, so it always stays until
 app and unload again.
 
 The data folder is `data/<study id>` unless you choose another one, for example an
-encrypted or university drive. That choice, and the optional second copy, belong to
+university drive. That choice, and the optional second copy, belong to
 this computer, not the study:
 
 ```powershell
@@ -1101,13 +1101,10 @@ SocialEyes is built to lose nothing by accident, and to keep a record of every p
   The Data page and `socialeyes retention <study>` show what is due; nothing is deleted until you
   confirm (`--delete sessions` or `--delete face-videos`, or the page's buttons). Deletions are
   logged in `withdrawals.csv`, and the register keeps the rows (status `deleted`).
-- **Where the data lives.** The Data page and `socialeyes retention` say whether the data folder
-  and second copy are on an encrypted drive (BitLocker; Windows reports it without admin rights)
-  and warn if either is inside a cloud-sync folder (OneDrive, Dropbox, Google Drive), whose files
-  upload themselves. SocialEyes doesn't encrypt files itself: a lost password would lose the data,
-  and Excel, R and SPSS couldn't open the tables. Keep the data on an IT-managed encrypted drive or
-  a university drive instead. Participants appear only by id, and the profile photo is never
-  stored.
+- **Where the data lives.** The Data page and `socialeyes retention` warn if the data folder or
+  second copy is inside a cloud-sync folder (OneDrive, Dropbox, Google Drive), whose files upload
+  themselves; where the data is kept is the lab's choice. Participants appear only by id, and the
+  profile photo is never stored.
 
 ---
 
@@ -1132,8 +1129,7 @@ Roughly in order:
 - [x] **Withdrawal, retention and storage checks**: two-step withdrawal (held, then deleted
       permanently; undo in between) with a status per participant in the register and a log;
       sessions stay on the phone until safely copied ones are cleared; retention reminders from
-      `data:` in study.yaml; a check for encrypted drives and cloud-sync folders (no encryption by
-      SocialEyes itself)
+      `data:` in study.yaml; a warning for data folders inside cloud-sync folders
 - [x] **Blinded exploration** instead of model templates: `exploration.html` with every export
       shows data quality and distributions with the conditions behind codes until you unblind;
       SocialEyes fits no models, so the analysis stays the researcher's, run once, as planned
@@ -1194,7 +1190,7 @@ Roughly in order:
         arrived intact (checksums), keeping the phone's copy until you clear safely copied
         sessions (since 18 Oct 2026; deleting right away was the first design); run the quality checks and show a summary; keep a session
         register per study (participant, date, phone, completed, warnings; flags participant
-        IDs used twice); optionally make a second copy (e.g. a network or encrypted drive);
+        IDs used twice); optionally make a second copy (e.g. a network drive);
         once Neon is integrated, also collect the matching Neon recording
   - [x] **Protection once data exists**: when a study has sessions, warn about or lock
         changes that would break it (seed, post order, image file names, comment order) and

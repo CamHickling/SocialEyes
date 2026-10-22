@@ -93,7 +93,7 @@ def data_dir(study_id: str) -> Path:
 
 def export_dir(study_id: str) -> Path:
     """Where `socialeyes export` writes the study's tables: inside its data folder, so they stay on
-    the same (perhaps encrypted) drive as the sessions."""
+    the same drive as the sessions."""
     return data_dir(study_id) / "export"
 
 

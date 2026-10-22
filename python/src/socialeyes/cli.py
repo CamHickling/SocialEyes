@@ -445,9 +445,8 @@ def cmd_retention(args) -> int:
         print(f"error: {e}", file=sys.stderr)
         return 1
     for st in R.storage(args.study):
-        enc = {True: "on an encrypted drive", False: "NOT on an encrypted drive", None: "drive encryption unknown"}[st["encrypted"]]
-        cloud = f"; inside {st['cloud']}, so it uploads itself" if st["cloud"] else ""
-        print(f"{st['folder']}: {st['path']} ({enc}{cloud})")
+        cloud = f" (inside {st['cloud']}, so it uploads itself)" if st["cloud"] else ""
+        print(f"{st['folder']}: {st['path']}{cloud}")
     if not d["keep_until"] and d["face_video_days"] is None:
         print("No retention rules (data: keep_until / face_video_days in study.yaml).")
     else:
