@@ -38,7 +38,7 @@ def exported(tmp_path_factory):
         w = csv.DictWriter(fh, fieldnames=cols)
         w.writeheader()
         w.writerows(rows)
-    r = export_study(EXAMPLE, data, root / "out", build_for=lambda _f: build)
+    r = export_study(EXAMPLE, data, root / "out", build_for=lambda _f: build, unblind=True)
     tables = {t: pd.read_csv(root / "out" / f"{t}.csv", encoding="utf-8-sig", keep_default_na=False, na_values=[""])
               for t in TABLES}
     return build, data, r, tables, root
@@ -169,13 +169,26 @@ def test_desktop_export_uses_the_study_folders(exported, tmp_path, monkeypatch):
     assert settings.export_dir("example") == copy / "export"
 
 
-def test_exploration_is_blinded_until_unblinded(exported, tmp_path):
-    build, data, r, _, root = exported
-    page = (root / "out" / "exploration.html").read_text(encoding="utf-8")
+def test_exploration_and_tables_are_blinded_until_unblinded(exported, tmp_path):
+    build, data, _, _, root = exported
+    r = export_study(EXAMPLE, data, tmp_path / "blind", build_for=lambda _f: build)
+    page = (tmp_path / "blind" / "exploration.html").read_text(encoding="utf-8")
     assert r.exploration.endswith("exploration.html") and not r.unblinded
     assert "Blinded." in page and "condition A" in page and "group X" in page
     levels = ["original", "retouched", "edited", "neutral", "appearance", "edit=", "label=", "comments="]
     assert not [w for w in levels if w in page.replace("by_session", "")]  # no condition name gives anything away
+    # the tables too (22 Oct): no level name in any cell, the page's codes, and a note
+    for t in TABLES:
+        text = (tmp_path / "blind" / f"{t}.csv").read_text(encoding="utf-8-sig").split("\n", 1)[1]
+        assert not [w for w in levels if w in text], t
+    items = pd.read_csv(tmp_path / "blind" / "by_item.csv", encoding="utf-8-sig")
+    crit = items[items["role"] == "critical"]
+    assert set(crit["condition"]) <= {f"condition {c}" for c in "ABCDEFGH"}
+    assert all(c in page for c in set(crit["condition"]))                 # the same codes as the page
+    assert items["image_id"].isna().all() and set(items["edit"].dropna()) <= {"edit P", "edit Q"}
+    assert (tmp_path / "blind" / "BLINDED.txt").is_file()
+    book = pd.read_csv(tmp_path / "blind" / "codebook.csv", encoding="utf-8-sig")
+    assert "coded until unblinded" in book.set_index(["table", "column"]).loc[("by_item", "edit"), "description"]
     assert "Image time on screen" in page and "Rating: attractive" in page and "Questionnaire: body_sat_pre" in page
     assert len(list((root / "out" / "exploration").glob("*.png"))) >= 10
     # the same codes every time

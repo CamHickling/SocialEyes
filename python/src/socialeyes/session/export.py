@@ -210,16 +210,25 @@ def export_study(study_dir: Path | str, data_dir: Path | str, out_dir: Path | st
         out = Path(out_dir)
         out.mkdir(parents=True, exist_ok=True)
         tables = _frames(manifest, sessions, items, names, comments)
-        for name, df in tables.items():
+        from .explore import BLINDED_NOTE, blind_tables, write_exploration
+
+        study = manifest["study"]
+        # the CSVs hide the conditions until unblinding, like the exploration page (chosen 22 Oct);
+        # the page codes them itself, from the real tables
+        written = tables if unblind else blind_tables(tables, study)
+        for name, df in written.items():
             path = out / f"{name}.csv"
             df.to_csv(path, index=False, encoding="utf-8-sig", lineterminator="\n")
             r.files.append(str(path))
         path = out / "codebook.csv"
-        _write_codebook(path, manifest, tables)
+        _write_codebook(path, manifest, written, blinded=not unblind)
         r.files.append(str(path))
-        from .explore import write_exploration
-
-        study = manifest["study"]
+        note = out / "BLINDED.txt"
+        if unblind:
+            note.unlink(missing_ok=True)
+        else:
+            note.write_text(BLINDED_NOTE, encoding="utf-8")
+            r.files.append(str(note))
         r.exploration = str(write_exploration(
             out, tables, manifest, {"ratings": [c for c, _, _ in _rating_columns(study)],
                                     "questionnaire": [c for c, _, _ in _questionnaire_columns(study)]}, unblind))
@@ -661,7 +670,7 @@ def _by_condition(items: pd.DataFrame, cols: dict) -> pd.DataFrame:
 # ---------------------------------------------------------------- codebook
 
 
-def _write_codebook(path: Path, manifest: dict, tables: dict[str, pd.DataFrame]) -> None:
+def _write_codebook(path: Path, manifest: dict, tables: dict[str, pd.DataFrame], blinded: bool = False) -> None:
     study = manifest["study"]
     desc: dict[str, tuple[str, str]] = {c: (d, v) for c, d, v in _ID + _SESSION + _ITEM + _CONDITION + _FACE}
     desc["gaze_fixations"] = ("Fixations on the post's image (from socialeyes gaze; blank: no eye tracking)", "count")
@@ -700,13 +709,28 @@ def _write_codebook(path: Path, manifest: dict, tables: dict[str, pd.DataFrame])
         desc[f"{pre}_fa_alternate"] = (f"Recognition ({st['id']}): share of unseen versions of seen posts called old",
                                        "0-1")
         desc[f"{pre}_fa_foil"] = (f"Recognition ({st['id']}): share of never-shown foil images called old", "0-1")
+    if blinded:   # explore.blind_tables: codes until unblinding
+        from .explore import LEAKING
+
+        desc["condition"] = ("Condition (cell and group), coded as on the exploration page until unblinded",
+                             "condition A, B, ...")
+        for c in ("group", "group_key"):
+            desc[c] = (desc.get(c, ("", ""))[0] + " (coded until unblinded)", "group X, Y, ...")
+        desc["cell"] = (desc.get("cell", ("", ""))[0] + " (coded until unblinded)", "cell a, b, ...")
+        for f in study["factors"]:
+            desc[factor_col(f["name"])] = (f"{f['design'].capitalize()}-subjects factor {f['name']} (coded until unblinded)",
+                                           f"{f['name']} P, Q, ...")
+        for c in {c for cols in LEAKING.values() for c in cols}:
+            d, v = comment_desc.get(c) or desc.get(c, ("", ""))
+            desc[c] = (d + " (empty while the tables are blinded: it gives the condition away)", v)
+            comment_desc.pop(c, None)
     with path.open("w", encoding="utf-8-sig", newline="") as fh:
         w = csv.writer(fh, lineterminator="\n")
         w.writerow(["table", "column", "description", "values"])
         for name in TABLES:
             for c in tables[name].columns:
                 d, v = comment_desc[c] if name == "by_comment" and c in comment_desc else desc.get(c, ("", ""))
-                if name == "by_condition" and c not in {k for k, _, _ in _ID + _CONDITION} and c not in {
+                if name == "by_condition" and c not in {k for k, _, _ in _ID + _CONDITION} | {"condition"} and c not in {
                         factor_col(f["name"]) for f in study["factors"]}:
                     if v.startswith("1 = yes"):
                         d, v = f"Share of the cell's posts with by_item {c} = 1", "0-1"

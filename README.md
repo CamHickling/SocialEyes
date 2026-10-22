@@ -588,7 +588,11 @@ before the analysis without seeing the results:
 
 It fits no models and runs no tests. Unblind (`socialeyes export --unblind`, or tick
 **Unblind** under Data in the app, which asks first) only once your analysis plan, including the
-exclusion rules, is fixed. The tables themselves always have the real condition names.
+exclusion rules, is fixed. Until then the tables are blinded the same way: a `condition` column
+with the page's codes, `group` / `group_key`, `cell` and every factor's levels as codes, and the
+columns whose values give a condition away (`image_id`, `label_shown`, `comment_variant`,
+`comment_id`, `reply_to`) left empty; `BLINDED.txt` in the export folder says so, and the codebook
+marks each one. Unblinding makes the tables again with the real names.
 
 ### Face camera analysis
 

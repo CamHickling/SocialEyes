@@ -46,14 +46,15 @@ phone**.
 ## 5. Look at the data, without looking at the results
 
 1. **Data**, then **Make tables**. This writes, in the `export` folder of the study's data folder:
-   - `by_session.csv`, `by_item.csv`, `by_condition.csv`: one row per session, per post seen, and per
-     condition, ready for Excel, SPSS or R
+   - `by_session.csv`, `by_item.csv`, `by_condition.csv`, `by_comment.csv`: one row per session, per
+     post seen, per condition and per comment, ready for Excel, SPSS or R. Until you unblind, they
+     show the conditions as codes too (`BLINDED.txt` says which columns)
    - `codebook.csv`: what every column means
    - `exploration.html`: data quality and each measure's distribution, with the conditions shown
      as **condition A, B, …** so you can check the data without seeing the results
 2. Write your analysis plan, including which sessions you will exclude and why (the exploration
    page lists the sessions with problems, but never excludes any).
-3. Only then: tick **Unblind the exploration page** and **Make tables** again, and run your planned
+3. Only then: tick **Unblind the tables and the exploration page** and **Make tables** again, and run your planned
    analysis on the tables. SocialEyes fits no models: the analysis is yours, run once, as planned.
 
 ## 6. Eye tracking and the face camera (optional)

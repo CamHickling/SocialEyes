@@ -49,6 +49,70 @@ def _codes(keys: list[str], seed: str, prefix: str, alphabet: str) -> dict[str, 
     return {k: f"{prefix} {alphabet[i] if i < len(alphabet) else i + 1}" for i, k in enumerate(order)}
 
 
+# columns that give a post's or comment's condition away by their values, blanked in blinded tables
+LEAKING = {"by_item": ["image_id", "label_shown", "comment_variant"],
+           "by_comment": ["comment_variant", "comment_id", "reply_to"]}
+
+
+def condition_keys(df: pd.DataFrame) -> pd.Series:
+    """Each row's condition, as the exploration page names it: cell | group levels (fillers: '')."""
+    text = lambda col: df[col].fillna("").astype(str) if col in df else pd.Series("", index=df.index)  # noqa: E731
+    keys = (text("cell") + " | " + text("group_key")).str.strip(" |")
+    return keys.where(text("cell") != "", "")
+
+
+def blind_tables(tables: dict, study: dict) -> dict:
+    """Copies of the export tables with the conditions hidden until unblinding (chosen 22 Oct): the
+    page's condition and group codes (a new `condition` column, `group_key`, `group`), each factor's
+    levels as codes, the cell as a code, and the columns whose values give a condition away blanked."""
+    from .export import factor_col
+
+    sid = study["id"]
+    items = tables.get("by_item", pd.DataFrame())
+    crit = items[items["role"] == "critical"] if len(items) else items
+    cond = _codes(sorted(set(condition_keys(crit))), sid + "/conditions", "condition", string.ascii_uppercase)
+    sessions = tables.get("by_session", pd.DataFrame())
+    groups = sorted(set(sessions["group_key"].fillna(""))) if len(sessions) else []
+    grp = _codes(groups, sid + "/groups", "group", "XYZWVUTS")
+    levels = {f["name"]: _codes([str(v) for v in f["levels"]], f"{sid}/levels/{f['name']}", f["name"], "PQRSTUVW")
+              for f in study.get("factors", [])}
+    cells = sorted({str(c) for df in tables.values() if "cell" in df for c in df["cell"].dropna() if str(c)})
+    cell = _codes(cells, sid + "/cells", "cell", string.ascii_lowercase)
+    out = {}
+    for name, df in tables.items():
+        d = df.copy()
+        if "cell" in d and "role" in d or name == "by_condition":
+            keys = condition_keys(d)
+            d.insert(d.columns.get_loc("cell") if "cell" in d else len(d.columns), "condition",
+                     keys.map(lambda k: cond.get(k, "") if k else ""))
+        if "group_key" in d:
+            coded = d["group_key"].fillna("").astype(str).map(lambda g: grp.get(g, g))
+            d["group_key"] = coded
+            if "group" in d:
+                d["group"] = coded
+        for f, codes in levels.items():
+            col = factor_col(f)
+            if col in d:
+                d[col] = d[col].map(lambda v: codes.get(str(v), v) if isinstance(v, str) and v else v)
+        if "cell" in d:
+            d["cell"] = d["cell"].map(lambda c: cell.get(str(c), c) if isinstance(c, str) and c else c)
+        for col in LEAKING.get(name, []):
+            if col in d:
+                d[col] = ""
+        out[name] = d
+    return out
+
+
+BLINDED_NOTE = """These tables are blinded: conditions, groups, cells and factor levels are shown as codes,
+the same codes as exploration.html, and the columns whose values give a condition away
+(image_id, label_shown, comment_variant, comment_id, reply_to) are left empty.
+
+Write your analysis plan first, including which sessions you will exclude and why. Then tick
+"Unblind the tables and the exploration page" under Data in the SocialEyes app and make the tables again (or run
+socialeyes export --unblind): the tables and the page then show the real names.
+"""
+
+
 def _flags(s: pd.DataFrame) -> pd.DataFrame:
     """Per session, every reason someone might exclude it (none applied here)."""
     s = s.sort_values(["participant_id", "started"]).copy()
@@ -194,7 +258,7 @@ def write_exploration(out: Path, tables: dict[str, pd.DataFrame], manifest: dict
                         for l, m, o in missing)
     banner = ("<p class=unblind><b>Unblinded:</b> the real condition names are shown.</p>" if unblind else
               "<p class=blind><b>Blinded.</b> Conditions are shown as codes in a shuffled order. Unblind only once your "
-              "analysis plan is fixed: tick <i>Unblind the exploration page</i> under Data in the app and make the tables "
+              "analysis plan is fixed: tick <i>Unblind the tables and the exploration page</i> under Data in the app and make the tables "
               "again (or <code>socialeyes export --unblind</code>).</p>")
     page = f"""<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
 <title>Data exploration</title>

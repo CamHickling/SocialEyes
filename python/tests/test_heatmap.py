@@ -144,7 +144,8 @@ def test_export_gaze_columns(built, tmp_path):
     res = tmp_path / "analysis" / "P001" / "P001-sim"
     res.mkdir(parents=True)
     fx.to_csv(res / "fixations.csv", index=False)
-    export_study(EXAMPLE, data, tmp_path / "out", build_for=lambda _f: build, analysis_dir=tmp_path / "analysis")
+    export_study(EXAMPLE, data, tmp_path / "out", build_for=lambda _f: build, analysis_dir=tmp_path / "analysis",
+                     unblind=True)
     items = pd.read_csv(tmp_path / "out" / "by_item.csv", encoding="utf-8-sig").set_index("post_id")
     row = items.loc[crit["post_id"]]
     assert row["gaze_fixations"] == 2 and row["gaze_image_ms"] == 500 and row["gaze_face_ms"] == 300
@@ -200,7 +201,8 @@ def test_export_gaze_per_comment(built, tmp_path):
     res = tmp_path / "analysis" / "P001" / "P001-sim"
     res.mkdir(parents=True)
     fx.to_csv(res / "fixations.csv", index=False)
-    r = export_study(EXAMPLE, data, tmp_path / "out", build_for=lambda _f: build, analysis_dir=tmp_path / "analysis")
+    r = export_study(EXAMPLE, data, tmp_path / "out", build_for=lambda _f: build, analysis_dir=tmp_path / "analysis",
+                     unblind=True)
     assert not r.skipped
     items = pd.read_csv(tmp_path / "out" / "by_item.csv", encoding="utf-8-sig").set_index("post_id")
     assert items.loc[crit["post_id"], "gaze_sheet_ms"] == 500

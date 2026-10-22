@@ -49,7 +49,7 @@ def outputs(tmp_path_factory):
         out[f"{pid}/gestures.csv"] = r["strokes"]["gesture"].value_counts().sort_index().rename_axis("gesture").reset_index()
         out[f"{pid}/touch_targets.csv"] = r["touch_targets"].groupby(["post_id", "aoi"], dropna=False).size() \
             .rename("samples").reset_index()
-    export_study(EXAMPLE, data, root / "export", build_for=lambda _f: build)
+    export_study(EXAMPLE, data, root / "export", build_for=lambda _f: build, unblind=True)   # real names: the numbers are what is checked
     for t in ("by_session", "by_item", "by_condition", "codebook"):
         out[f"export/{t}.csv"] = pd.read_csv(root / "export" / f"{t}.csv", encoding="utf-8-sig", keep_default_na=False,
                                              na_values=[""])

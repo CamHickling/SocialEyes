@@ -1078,7 +1078,7 @@
         ${btn("data-open:data", "Open data folder", "link", dis)}${btn("data-refresh", "Refresh", "link", dis)}</div>
       ${ph.error ? `<p class="hint">${esc(ph.error)}</p>` : ""}
       ${busy && ui.phone.progress ? `<p class="hint">${esc(ui.phone.progress)}</p>` : ""}
-      ${rows.length ? `<label class="check"><input type="checkbox" id="data-unblind" ${D.unblind ? "checked" : ""}> <span>Unblind the exploration page (real condition names)</span></label>` : ""}
+      ${rows.length ? `<label class="check"><input type="checkbox" id="data-unblind" ${D.unblind ? "checked" : ""}> <span>Unblind the tables and the exploration page (real condition names)</span></label>` : ""}
       ${x && x.exploration ? `<p>${btn("open-path:" + x.exploration, x.unblinded ? "Open the exploration page (unblinded)" : "Open the exploration page (blinded)", "link")}</p>` : ""}
       ${x && x.out_dir ? `<p class="hint">Tables (by session, by item, by condition, and a codebook) for ${x.sessions} session${x.sessions === 1 ? "" : "s"} in ${btn("data-open-export", esc(x.out_dir), "link")}${x.skipped.length
         ? `. Skipped ${x.skipped.length}: ${x.skipped.map((s) => esc(`${s.folder.split(/[\\/]/).slice(-2).join("/")} (${s.why})`)).join("; ")}` : ""}</p>` : ""}`;
@@ -1780,7 +1780,7 @@
     if (el.id === "preview-conditions") { ui.preview.conditions = el.checked; render(); return; }
     if (el.id === "data-blur") { ui.data.blur = el.checked; render(); return; }
     if (el.id === "data-unblind") {
-      if (el.checked && !confirm("Unblinding shows which condition is which. Do it only once your analysis plan is fixed. Unblind the next exploration page?")) { el.checked = false; return; }
+      if (el.checked && !confirm("Unblinding shows which condition is which. Do it only once your analysis plan is fixed. Unblind the next tables and exploration page?")) { el.checked = false; return; }
       ui.data.unblind = el.checked; return;
     }
     if (el.id === "data-by") { ui.data.by = el.value; return; }
