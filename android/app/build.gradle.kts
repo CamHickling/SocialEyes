@@ -16,8 +16,8 @@ android {
         // 29: per-pointer raw touch coordinates and the thermal status API
         minSdk = 29
         targetSdk = 35
-        versionCode = 11
-        versionName = "0.3.8"
+        versionCode = 12
+        versionName = "0.3.9"
     }
 
     // Release signing key: kept out of git in android/keystore.properties (see README,

@@ -41,7 +41,7 @@ const Core = (() => {
     settings_test: { setting_s: 5, rounds: 2 },
     camera_check: { min_face_s: 3, instructions: "Hold the phone as you normally would and look at the screen." },
     profile_photo: { text: "Take a photo for your profile picture. It is only used during this session and is deleted afterwards.", allow_skip: true },
-    validation: { points: 9, target_dp: 28, instructions: "Look at each dot and tap it." },
+    validation: { points: 9, target_dp: 28, instructions: "Look at each dot and tap it.", live_check: true },
     questionnaire: { title: "", items: [], randomize: false },
     feed: { instructions: "" },
     image_rating: { title: "", posts: "critical", items: [] },

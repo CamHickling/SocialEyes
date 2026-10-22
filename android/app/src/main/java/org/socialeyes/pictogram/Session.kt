@@ -22,6 +22,7 @@ import org.socialeyes.pictogram.log.MotionSensors
 import org.socialeyes.pictogram.log.ScreenRect
 import org.socialeyes.pictogram.log.SessionLog
 import org.socialeyes.pictogram.log.TouchRecorder
+import org.socialeyes.pictogram.neon.GazeStream
 import org.socialeyes.pictogram.neon.NeonLink
 import org.socialeyes.pictogram.study.Plan
 import org.socialeyes.pictogram.study.Step
@@ -41,6 +42,9 @@ class Session(
     val steps: List<Step> = pkg.steps
     val startNs: Long = Clocks.elapsedNs()
     val touches = TouchRecorder(log) { currentStep?.id ?: "" }
+
+    /** Companion's live gaze, for the check after each validation (ValidationCheck); with the Neon only. */
+    val gaze: GazeStream? = neon?.let { GazeStream(clockNs = Clocks::elapsedNs) }
 
     var stepIndex by mutableIntStateOf(0)
         private set
@@ -62,6 +66,7 @@ class Session(
 
     fun begin() {
         sensors?.start()
+        gaze?.start()
         brightness?.let { log.event("display_setting", fields = arrayOf("brightness" to it, "source" to "study")) }
         startStep()
     }
@@ -71,6 +76,7 @@ class Session(
         profilePhoto = null
         camera?.release() // closes the open video file
         sensors?.stop()
+        gaze?.stop()
         neon?.stop(reason)
     }
 

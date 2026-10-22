@@ -401,7 +401,8 @@
       case "settings_test": return `<div class="grid">${f("setting_s", "Seconds per setting", "float", { min: 2, max: 30 })}${f("rounds", "Rounds per hold", "int", { min: 1, max: 4, help: "Each round reverses the order." })}</div>`;
       case "camera_check": return `<div class="grid">${f("min_face_s", "Face in view for (s)", "float", { min: 0.5, max: 30, adv: true })}${f("instructions", "Instructions", "text", { wide: true })}</div>`;
       case "profile_photo": return `${f("text", "Text", "textarea")}${f("allow_skip", "Participants can skip it", "bool")}`;
-      case "validation": return `<div class="grid">${f("points", "Dots", "select", { num: true, options: [[5, "5"], [9, "9"], [13, "13"]] })}${f("target_dp", "Dot size (dp)", "int", { min: 12, max: 80, adv: true })}${f("instructions", "Instructions", "text", { wide: true })}</div>`;
+      case "validation": return `<div class="grid">${f("points", "Dots", "select", { num: true, options: [[5, "5"], [9, "9"], [13, "13"]] })}${f("target_dp", "Dot size (dp)", "int", { min: 12, max: 80, adv: true })}${f("instructions", "Instructions", "text", { wide: true })}</div>
+          ${f("live_check", "Check the eye tracking right after the dots", "bool", { help: "With the Neon: if gaze didn't follow the dots (or isn't arriving, or the glasses say they're off), the researcher is asked to re-seat the glasses and redo the dots, before the participant goes on." })}`;
       case "questionnaire":
       case "image_rating": {
         const items = s.items || [];

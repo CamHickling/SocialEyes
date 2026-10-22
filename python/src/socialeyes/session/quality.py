@@ -114,6 +114,18 @@ def session_quality(s: Session, build_sha256: str | None = None) -> dict:
                             "the session used the default screen brightness and scene exposure")
         if val("restored") is False:
             warnings.append(f"display calibration {e['step_id']!r}: the previous settings couldn't be put back")
+    validation_checks = []
+    for _, e in s.events_of("validation_check").iterrows():
+        reasons = e.get("reasons") if isinstance(e.get("reasons"), list) else []
+        validation_checks.append({"step_id": e["step_id"], "attempt": int(e["attempt"]), "passed": bool(e["passed"]),
+                                  "followed": int(e["followed"]), "dots": int(e["dots"]), "action": e["action"],
+                                  "reasons": reasons})
+        if e["action"] == "continue_anyway":
+            warnings.append(f"eye tracking check after {e['step_id']!r} failed and the session went on: "
+                            + ("; ".join(reasons) or "no reason given"))
+    redos = sum(1 for c in validation_checks if c["action"] == "redo")
+    if redos:
+        warnings.append(f"validation dots redone {redos} time(s) after a failed eye tracking check")
     camera = camera_quality(s)
     if camera:
         warnings += camera.pop("warnings")
@@ -150,6 +162,7 @@ def session_quality(s: Session, build_sha256: str | None = None) -> dict:
         "thermal_max": thermal_max,
         "camera_checks": camera_checks,
         "display_calibration": display_calibrations,
+        "validation_checks": validation_checks,
         "camera": camera,
         "sensors": sensors,
         "event_types": dict(sorted(ev["type"].value_counts().to_dict().items())) if len(types) else {},

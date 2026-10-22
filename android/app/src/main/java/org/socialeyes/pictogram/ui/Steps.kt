@@ -39,7 +39,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import org.socialeyes.pictogram.Session
+import org.socialeyes.pictogram.log.Clocks
 import org.socialeyes.pictogram.log.ScreenRect
+import org.socialeyes.pictogram.neon.CheckResult
+import org.socialeyes.pictogram.neon.DotGaze
+import org.socialeyes.pictogram.neon.ValidationCheck
 import org.socialeyes.pictogram.study.Step
 
 /** Centered text with an optional button; used for instructions, end and placeholder screens. */
@@ -144,6 +148,39 @@ fun MarkerCalibrationStep(session: Session, step: Step, onContinue: () -> Unit) 
 fun ValidationStep(session: Session, step: Step, onContinue: () -> Unit) {
     val points = session.pkg.manifest.validationPoints[step.id].orEmpty()
     var started by remember { mutableStateOf(false) }
+    var attempt by remember { mutableIntStateOf(1) }
+    var check by remember { mutableStateOf<CheckResult?>(null) }
+    val windows = remember { mutableListOf<DotGaze>() }
+    val gaze = session.gaze
+    val liveCheck = gaze != null && step.raw["live_check"]?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.content != "false" } ?: true
+
+    fun logCheck(r: CheckResult, action: String) = session.log.event("validation_check", fields = arrayOf(
+        "step_id" to step.id, "attempt" to attempt, "dots" to r.dots, "followed" to r.followed,
+        "rate_hz" to Math.round(r.rateHz * 10) / 10.0, "worn_share" to Math.round(r.wornShare * 1000) / 1000.0,
+        "passed" to r.passed, "reasons" to r.reasons, "action" to action))
+
+    check?.let { r ->
+        if (r.passed) {
+            LaunchedEffect(r) {
+                logCheck(r, "continue")
+                delay(1200)
+                onContinue()
+            }
+            MessageScreen("", "\u2713  Eye tracking looks good.", button = null) {}
+        } else {
+            CheckFailedScreen(r, onRedo = {
+                logCheck(r, "redo")
+                attempt++
+                windows.clear()
+                check = null
+                started = false
+            }, onContinueAnyway = {
+                logCheck(r, "continue_anyway")
+                onContinue()
+            })
+        }
+        return
+    }
     if (!started) {
         MessageScreen("", step.str("instructions") ?: "Look at each dot and tap it.", button = "Start") { started = true }
         return
@@ -155,14 +192,16 @@ fun ValidationStep(session: Session, step: Step, onContinue: () -> Unit) {
 
     val view = LocalView.current
     val targetPx = with(LocalDensity.current) { (step.int("target_dp") ?: 28).dp.toPx() }
-    var index by remember { mutableIntStateOf(0) }
+    var index by remember(attempt) { mutableIntStateOf(0) }
+    var shownNs by remember(attempt) { mutableStateOf(0L) }
     var origin by remember { mutableStateOf(Offset.Zero) } // the box's top-left on screen
     var boxSize by remember { mutableStateOf(Offset.Zero) }
 
     fun target(i: Int) = Offset(points[i][0].toFloat() * boxSize.x, points[i][1].toFloat() * boxSize.y)
 
     if (boxSize != Offset.Zero) {
-        LaunchedEffect(index) {
+        LaunchedEffect(index, attempt) {
+            shownNs = Clocks.elapsedNs()
             val c = target(index) + origin
             session.log.event(
                 "validation_target",
@@ -190,9 +229,15 @@ fun ValidationStep(session: Session, step: Step, onContinue: () -> Unit) {
                         fields = arrayOf("step_id" to step.id, "index" to index, "x_px" to p.x, "y_px" to p.y, "on_target" to onTarget),
                     )
                     if (!onTarget) return@detectTapGestures
+                    if (gaze != null) {   // the gaze before this tap, for the live check
+                        val tapNs = Clocks.elapsedNs()
+                        val from = maxOf(tapNs - CHECK_WINDOW_NS, shownNs)
+                        val c = target(index) + origin
+                        windows += DotGaze(c.x.toDouble(), c.y.toDouble(), gaze.between(from, tapNs), (tapNs - from) / 1e9)
+                    }
                     if (index + 1 < points.size) index++ else {
                         index = points.size
-                        onContinue()
+                        if (liveCheck) check = ValidationCheck.evaluate(windows.toList()) else onContinue()
                     }
                 }
             },
@@ -203,3 +248,25 @@ fun ValidationStep(session: Session, step: Step, onContinue: () -> Unit) {
         drawCircle(Color.White, radius = targetPx / 8, center = c)
     }
 }
+
+/** Gaze in this long before each validation tap goes into the live check (as in socialeyes gaze). */
+private const val CHECK_WINDOW_NS = 500_000_000L
+
+/** For the researcher: why the eye tracking check after the dots failed, and what to do. */
+@Composable
+private fun CheckFailedScreen(r: CheckResult, onRedo: () -> Unit, onContinueAnyway: () -> Unit) {
+    Column(
+        Modifier.fillMaxSize().padding(32.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text("Please hand the phone to the researcher.", fontSize = 18.sp, textAlign = TextAlign.Center)
+        Spacer(Modifier.height(8.dp))
+        Text("Eye tracking check", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+        r.reasons.forEach { Text("! $it", fontSize = 15.sp, textAlign = TextAlign.Center) }
+        Text("Re-seat the glasses if needed, then redo the dots.", fontSize = 14.sp, textAlign = TextAlign.Center)
+        Button(onClick = onRedo) { Text("Redo validation") }
+        androidx.compose.material3.TextButton(onClick = onContinueAnyway) { Text("Continue anyway") }
+    }
+}
+

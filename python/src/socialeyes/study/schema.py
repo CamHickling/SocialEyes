@@ -459,6 +459,10 @@ class ValidationStep(_Step):
     points: Literal[5, 9, 13] = 9
     target_dp: int = Field(28, ge=12, le=80)
     instructions: str = "Look at each dot and tap it."
+    live_check: bool = True
+    """With the Neon recording: right after the dots, the app checks Companion's live gaze (rate,
+    worn, and that gaze followed the dots) and, if it failed, asks the researcher to redo the dots
+    or continue anyway (`validation_check` events). Accuracy in degrees comes afterwards."""
 
 
 class QuestionnaireStep(_Step):

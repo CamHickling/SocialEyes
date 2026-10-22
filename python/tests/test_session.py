@@ -552,3 +552,21 @@ def test_session_stopped_before_the_feed_exports(tmp_path):
     assert r.skipped == [] and r.sessions == 1
     items = pd.read_csv(tmp_path / "out" / "by_item.csv", encoding="utf-8-sig")
     assert items["liked"].sum() == 0 and items["seen"].sum() == 0
+
+
+def test_failed_eye_tracking_checks_are_reported(tmp_path):
+    # the live check after validation (CAM-219): redone once, then the researcher went on anyway
+    build, _ = compile_study(EXAMPLE, tmp_path / "build")
+    out = simulate_session(build, "P001", tmp_path / "s", seed=2)
+    lines = (out / "events.jsonl").read_text(encoding="utf-8").splitlines()
+    t = json.loads(lines[-1])["t_ns"]
+    for k, action in enumerate(["redo", "continue_anyway"], 1):
+        lines.insert(-1, json.dumps({"t_ns": t - 1000 + k, "type": "validation_check", "step_id": "val1", "attempt": k,
+                                     "dots": 9, "followed": 3, "rate_hz": 199.5, "worn_share": 1.0, "passed": False,
+                                     "reasons": ["gaze followed 3 of 9 dots: the glasses may sit badly or have slipped"],
+                                     "action": action}))
+    (out / "events.jsonl").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    q = session_quality(load_session(out))
+    assert [c["action"] for c in q["validation_checks"]] == ["redo", "continue_anyway"]
+    assert any("eye tracking check after 'val1' failed and the session went on: gaze followed 3 of 9" in w for w in q["warnings"])
+    assert any("redone 1 time(s)" in w for w in q["warnings"])

@@ -460,7 +460,9 @@ framing check for the optional front camera; never shows the video),
 `profile_photo` (optional selfie as the participant's profile picture, with `text`
 and `allow_skip`; see below),
 `validation` (look-and-tap
-dots, 5/9/13 points, used to measure gaze accuracy), `questionnaire` (items of
+dots, 5/9/13 points, used to measure gaze accuracy; with the Neon, right after the dots the app
+checks Companion's live gaze: arriving at full rate, glasses worn, and gaze following the dots, and
+if not asks the researcher to re-seat the glasses and redo them, `live_check`), `questionnaire` (items of
 kind `vas`, `likert`, `choice`, `text`, `number`), `feed` (exactly one),
 `image_rating`, `recognition` (old/new test with `foils` and/or the
 `alternate_version` of a seen image as lures) and `end` (must be last).
