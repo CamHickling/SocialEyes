@@ -745,12 +745,16 @@
     const icon = { error: "✕", warning: "!", tip: "i" };
     const order = { error: 0, warning: 1, tip: 2 };
     list.sort((a, b) => order[a.level] - order[b.level]);
+    // a planned count (critical posts) means nothing once posts.csv exists: its rows decide
+    for (const c of list) if (c.fix && c.fix.planning && hasTable("posts")) delete c.fix;
+    ui.fixes = list.map((c) => c.fix || null);
+    const fixBtn = (c, i) => c.fix ? `<div class="fix">${btn(`fix:${i}`, esc(c.fix.label), "link", ui.busy ? "disabled" : "")}</div>` : "";
     side.innerHTML = `
       ${ui.desktop ? "" : `<h3>${esc(ui.study.title || ui.study.id || "Untitled")}</h3>`}
       <p class="design-line">${esc(C.designSummary(ui.study))}</p>
       ${ui.advanced ? `<dl class="stats"><dt>Cells</dt><dd>${C.cells(ui.study)}</dd><dt>Groups</dt><dd>${C.groups(ui.study)}</dd><dt>Block</dt><dd>${C.blockSize(ui.study)}</dd><dt>Steps</dt><dd>${(ui.study.procedure || []).length}</dd></dl>` : ""}
       <h3>Checks</h3>
-      ${list.length ? `<ul class="checks">${list.map((c) => `<li class="${c.level}"><button type="button" data-action="goto:${c.section}"><span class="ic">${icon[c.level]}</span><span>${esc(c.msg)}</span></button></li>`).join("")}</ul>`
+      ${list.length ? `<ul class="checks">${list.map((c, i) => `<li class="${c.level}"><button type="button" data-action="goto:${c.section}"><span class="ic">${icon[c.level]}</span><span>${esc(c.msg)}</span></button>${fixBtn(c, i)}</li>`).join("")}</ul>`
         : ui.desktop && folderClean() ? "" : `<p class="ok-box">All good.</p>`}
       ${ui.desktop ? folderChecks(!list.length) : ""}`;
     const counts = {};
@@ -759,6 +763,15 @@
       const n = counts[b.dataset.section];
       b.querySelector(".count").textContent = n ? String(n) : "";
     });
+  }
+
+  /** A way to the place that settles one of the compiler's messages (missing files, AOIs). */
+  function folderFix(m) {
+    if (!ui.desktop || !ui.folder) return "";
+    const dis = ui.busy ? "disabled" : "";
+    if (/AOI/.test(m)) return `<div class="fix">${btn("aois-edit", "Edit AOIs…", "link", dis)}</div>`;
+    if (/not found|is missing/.test(m) && /\.(png|jpe?g|webp|mp4|mov|m4v)\b/i.test(m)) return `<div class="fix">${btn("fix-files", "Add files from a folder…", "link", dis)}</div>`;
+    return "";
   }
 
   /** The saved folder checked, with nothing to report and nothing unsaved. */
@@ -777,7 +790,7 @@
     return `${head}
       ${unsaved() ? `<p class="hint"><span class="pill">unsaved changes</span> These checks are of the saved files. ${btn("save", "Save", "link", ui.busy ? "disabled" : "")}</p>` : ""}
       ${!k ? `<p class="hint">Not checked yet.</p>`
-        : items.length ? `<ul class="checks">${items.map(([lv, ic, m]) => `<li class="${lv}"><div class="msg"><span class="ic">${ic}</span><span>${esc(m)}</span></div></li>`).join("")}</ul>`
+        : items.length ? `<ul class="checks">${items.map(([lv, ic, m]) => `<li class="${lv}"><div class="msg"><span class="ic">${ic}</span><span>${esc(m)}</span></div>${folderFix(m)}</li>`).join("")}</ul>`
         : `<p class="ok-box">Images, AOIs and CSV files all check out.</p>`}
       <p class="hint">${k ? `Checked at ${clock(k.at)}. ` : ""}${btn("check-folder", ui.busy === "Checking…" ? "Checking…" : "Check study", "link", ui.busy ? "disabled" : "")}</p>`;
   }
@@ -1508,12 +1521,8 @@
     return base + k;
   }
 
-  const STEP_ID_BASE = { instructions: "info", marker_calibration: "cal", tag_ladder: "ladder", display_calibration: "dcal", validation: "val", camera_check: "camcheck", profile_photo: "photo",
-    settings_test: "settings", questionnaire: "q", feed: "feed", image_rating: "ratings", recognition: "recog", end: "end" };
-
   function newStep(type) {
-    const ids = (ui.study.procedure || []).map((s) => s.id);
-    const s = { id: uniqueId(STEP_ID_BASE[type] + (["feed", "end", "photo", "camcheck"].includes(STEP_ID_BASE[type]) ? "" : "1"), ids), type };
+    const s = { id: C.stepId(type, (ui.study.procedure || []).map((x) => x.id)), type };
     if (type === "instructions") s.text = "";
     if (type === "questionnaire" || type === "image_rating") s.items = [{ id: uniqueId(type === "questionnaire" ? "item1" : "rating1", []), kind: type === "questionnaire" ? "vas" : "likert", text: "", ...(type === "image_rating" ? { points: 7 } : {}) }];
     if (type === "recognition") { s.lures = "both"; if (!ui.content.foils) ui.content.foils = 4; s.foils = []; }
@@ -1777,6 +1786,15 @@
         window.AoiEditor.open({ call: bridge, folder: ui.folder, onClose: (saved) => { if (saved) filesRefresh(); } });
         return;
       case "images-pick": imagesPick(); return;
+      case "fix": {
+        const fix = ui.fixes && ui.fixes[Number(args[0])];
+        if (!fix) return;
+        C.applyFix(ui.study, ui.content, fix);
+        if (fix.op === "insert_step") ui.openStep = null;
+        render();
+        return;
+      }
+      case "fix-files": ui.section = "content"; render(); imagesPick(); return;
       case "images-copy": imagesCopy(); return;
       case "images-report": imagesReport(); return;
       case "images-resize": imagesResize(); return;

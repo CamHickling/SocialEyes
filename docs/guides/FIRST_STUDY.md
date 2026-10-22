@@ -25,7 +25,8 @@ done on the command line (`socialeyes --help`); the README has the details.
    screens participants go through: tick **Pre-test survey**, **Post-test survey**, **Image ratings**,
    **Recognition test**, **Stories** and **Reels** under *Parts of the session*, then open each step
    to write its questions), **Recording**, **Participants**. The panel on the right lists
-   problems as you go; each one links to the step it's about.
+   problems as you go; each one links to the step it's about, and many have a button that fixes
+   them ("Use 16 plans", "Add a camera check"; Undo takes a fix back).
 3. **Save**. This creates the study folder with CSV files to fill in and a `NEXT_STEPS.txt`.
 4. Fill in the CSV files (posts, captions, comments) and add your images, avatars and videos:
    **Add from a folder…** in the **Content** step copies them in, matched by name, and shows which

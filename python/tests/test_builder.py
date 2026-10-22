@@ -185,3 +185,35 @@ def test_validation_without_tags_is_warned():
     s["markers"]["on_screen"]["steps"] = ["val1", "feed"]
     warnings = core("Core.checks(data, null).filter(c => c.level === 'warning').map(c => c.msg)", s)
     assert not any("add them to" in m for m in warnings), warnings
+
+
+def test_fix_buttons_settle_their_checks_and_the_study_still_validates(tmp_path):
+    """Each fixable check's fix, applied one at a time as the researcher clicks them, leaves no
+    fixable check behind, and the study written afterwards passes the compiler's schema."""
+    r = core("""(() => {
+      const t = Core.newStudy("example"), s = t.study, c = t.content;
+      s.participants.n_plans = 13; c.critical = 7; s.feed.lead_in_fillers = 20;
+      s.procedure = s.procedure.filter((x) => !["marker_calibration", "validation"].includes(x.type));
+      Core.set(s, "logging.front_camera", { enabled: true, steps: ["feed", "nope"] });
+      Core.set(s, "logging.screen_recording", true);
+      s.procedure.push(s.procedure.shift());
+      const offered = Core.checks(s, c).filter((x) => x.fix).map((x) => x.fix.label);
+      for (let i = 0; i < 30; i++) {
+        const x = Core.checks(s, c).find((k) => k.fix);
+        if (!x) break;
+        Core.applyFix(s, c, x.fix);
+      }
+      Core.syncFoils(s, c);
+      return { offered, left: Core.checks(s, c).filter((x) => x.level !== "tip").map((x) => x.msg),
+               study: s, content: c, files: Core.studyFiles(s, c, true) };
+    })()""")
+    assert {"Use 16 plans", "Use 8 critical posts", "Move the end screen to the end", "Turn screen recording off",
+            'Remove "nope"', "Add a camera check"} <= set(r["offered"])
+    assert r["left"] == []
+    s = r["study"]
+    assert s["participants"]["n_plans"] == 16 and r["content"]["critical"] == 8
+    assert s["procedure"][-1]["type"] == "end"
+    steps = [x["id"] for x in s["procedure"]]
+    assert steps.index("camcheck") < steps.index("feed") and steps.index("val1") < steps.index("feed")
+    assert "val1" in s["markers"]["on_screen"]["steps"]
+    Study.model_validate(yaml.safe_load(r["files"]["study.yaml"]))

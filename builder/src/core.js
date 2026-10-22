@@ -213,14 +213,18 @@ const Core = (() => {
     return lo > 0 && lo !== hi ? `${lo} or ${hi}` : String(Math.max(hi, m));
   }
 
+  /** The next multiple of `m` from `n` (at least `m`). */
+  const upTo = (n, m) => Math.max(m, Math.ceil(n / m) * m);
+
   /**
-   * Problems and advice, each {level: "error" | "warning" | "tip", section, msg}.
+   * Problems and advice, each {level: "error" | "warning" | "tip", section, msg, fix?}.
    * Errors are what `socialeyes validate` would reject; warnings are allowed but
-   * probably unintended; tips are suggestions.
+   * probably unintended; tips are suggestions. `fix` ({label, op, ...}, see applyFix) is a
+   * change that settles it, offered as a button.
    */
   function checks(study, content) {
     const out = [];
-    const add = (level, section, msg) => out.push({ level, section, msg });
+    const add = (level, section, msg, fix) => out.push(fix ? { level, section, msg, fix } : { level, section, msg });
     const id = String(study.id || "");
     if (!id) add("error", "basics", "The study needs an id.");
     else if (!IDENT.test(id.replace(/-/g, "_"))) add("error", "basics", "The study id may only contain letters, digits, '-' and '_' (and must not start with a digit).");
@@ -271,17 +275,24 @@ const Core = (() => {
     if (content) {
       if (content.critical < 1 && fs.length) add("error", "content", "The factors need at least one critical post to act on.");
       if (c > 1 && content.critical % c !== 0)
-        add("warning", "content", `${content.critical} critical posts can't be split evenly over ${c} within-subject cells; use a multiple of ${c} (e.g. ${nearby(content.critical, c)}).`);
+        add("warning", "content", `${content.critical} critical posts can't be split evenly over ${c} within-subject cells; use a multiple of ${c} (e.g. ${nearby(content.critical, c)}).`,
+          { label: `Use ${upTo(content.critical, c)} critical posts`, op: "set", path: "content.critical", value: upTo(content.critical, c), planning: true });
       const lead = Number(get(study, "feed.lead_in_fillers")) || 0;
-      if (lead > content.fillers) add("warning", "feed", `The feed starts with ${lead} fillers but there are only ${content.fillers}.`);
+      if (lead > content.fillers)
+        add("warning", "feed", `The feed starts with ${lead} fillers but there are only ${content.fillers}.`,
+          { label: `Start with ${content.fillers}`, op: "set", path: "feed.lead_in_fillers", value: content.fillers });
       const gap = Number(get(study, "feed.min_fillers_between_critical")) || 0;
       const neededFillers = lead + gap * Math.max(content.critical - 1, 0);
-      if (gap && neededFillers > content.fillers)
-        add("warning", "feed", `With ${gap} filler(s) between critical posts and ${lead} at the top, the feed needs at least ${neededFillers} fillers (you have ${content.fillers}).`);
+      if (gap && neededFillers > content.fillers) {
+        const fits = content.critical > 1 ? Math.max(0, Math.floor((content.fillers - Math.min(lead, content.fillers)) / (content.critical - 1))) : gap;
+        add("warning", "feed", `With ${gap} filler(s) between critical posts and ${lead} at the top, the feed needs at least ${neededFillers} fillers (you have ${content.fillers}).`,
+          { label: `Use ${fits} between critical posts`, op: "set", path: "feed.min_fillers_between_critical", value: fits });
+      }
     }
     const n = Number(get(study, "participants.n_plans")) || 0;
     if (b > 1 && n % b !== 0)
-      add("warning", "participants", `${n} participant plans aren't a multiple of the balanced block of ${b} (${groups(study)} group(s) x ${c} cell(s)); use ${nearby(n, b)}.`);
+      add("warning", "participants", `${n} participant plans aren't a multiple of the balanced block of ${b} (${groups(study)} group(s) x ${c} cell(s)); use ${nearby(n, b)}.`,
+        { label: `Use ${upTo(n, b)} plans`, op: "set", path: "participants.n_plans", value: upTo(n, b) });
 
     // procedure
     const steps = study.procedure || [];
@@ -307,61 +318,119 @@ const Core = (() => {
       if (s.type === "recognition") {
         const lures = s.lures || "both";
         if (lures !== "alternate_version" && !(s.foils || []).length)
-          add("error", "procedure", `${what}: "${lures}" lures need foil images (never-shown images); set the number of foils under Content.`);
+          add("error", "procedure", `${what}: "${lures}" lures need foil images (never-shown images); set the number of foils under Content.`,
+            { label: "Add 4 foil images", op: "foils", n: Math.max(4, (content && content.foils) || 0) });
         if (lures !== "foils" && !Object.keys(needs(study, "critical")).includes("image_version"))
           add("warning", "procedure", `${what}: "alternate version" lures need a factor that switches image versions.`);
       }
     });
     const feeds = steps.filter((s) => s.type === "feed").length;
-    if (feeds !== 1) add("error", "procedure", feeds ? "The procedure can have only one feed step." : "The procedure needs a feed step.");
-    if (!steps.length || steps[steps.length - 1].type !== "end") add("error", "procedure", "The last step must be the end screen.");
+    if (feeds !== 1) add("error", "procedure", feeds ? "The procedure can have only one feed step." : "The procedure needs a feed step.",
+      feeds ? undefined : { label: "Add a feed step", op: "insert_step", type: "feed", before: "end" });
+    if (!steps.length || steps[steps.length - 1].type !== "end")
+      add("error", "procedure", "The last step must be the end screen.",
+        { label: steps.some((s) => s.type === "end") ? "Move the end screen to the end" : "Add an end screen", op: "end_last" });
     const feedAt = steps.findIndex((s) => s.type === "feed");
     const onScreen = get(study, "markers.on_screen.steps") || [];
-    for (const sid of onScreen) if (!ids.includes(sid)) add("error", "recording", `On-screen tags: there is no step "${sid}".`);
+    for (const sid of onScreen) if (!ids.includes(sid))
+      add("error", "recording", `On-screen tags: there is no step "${sid}".`,
+        { label: `Remove "${sid}"`, op: "set", path: "markers.on_screen.steps", value: onScreen.filter((x) => x !== sid) });
     if (get(study, "markers.on_screen.layout") === "bars") {
       const other = onScreen.filter((sid) => { const s = steps.find((x) => x.id === sid); return s && s.type !== "feed" && s.type !== "validation"; });
       if (other.length) add("tip", "recording", `On-screen tags: only the feed has bars to put tags in; ${other.join(", ")} will show them in bands above and below.`);
     }
     const untagged = steps.filter((s) => s.type === "validation" && !onScreen.includes(s.id)).map((s) => s.id);
     if (onScreen.length && untagged.length)
-      add("warning", "recording", `On-screen tags: add them to ${untagged.join(", ")} too. Without them its dots can't be scored, and gaze isn't corrected for the wearer's offset.`);
+      add("warning", "recording", `On-screen tags: add them to ${untagged.join(", ")} too. Without them its dots can't be scored, and gaze isn't corrected for the wearer's offset.`,
+        { label: `Add tags to ${untagged.join(", ")}`, op: "set", path: "markers.on_screen.steps", value: onScreen.concat(untagged) });
     const fam = get(study, "markers.on_screen.family") || "tag36h11";
     const nIds = { tag36h11: 587, tag25h9: 35, tag16h5: 30 }[fam];
     if (onScreen.length && nIds && (get(study, "markers.screen_tag_ids") || [0, 1, 2, 3]).some((t) => t >= nIds))
-      add("error", "recording", `On-screen tags: ${fam} only has tags 0 to ${nIds - 1}; change the screen tag ids.`);
+      add("error", "recording", `On-screen tags: ${fam} only has tags 0 to ${nIds - 1}; change the screen tag ids.`,
+        { label: "Use tags 0 to 3", op: "set", path: "markers.screen_tag_ids", value: [0, 1, 2, 3] });
     if (feedAt >= 0 && !onScreen.includes(steps[feedAt].id) && !steps.slice(0, feedAt).some((s) => s.type === "marker_calibration"))
-      add("tip", "procedure", "Add a marker calibration before the feed: the gaze mapping uses it (and one after the feed to check for drift).");
+      add("tip", "procedure", "Add a marker calibration before the feed: the gaze mapping uses it (and one after the feed to check for drift).",
+        { label: "Add a marker calibration before the feed", op: "insert_step", type: "marker_calibration", before: steps[feedAt].id });
     const dcal = steps.findIndex((s) => s.type === "display_calibration");
     if (dcal >= 0 && get(study, "neon.auto_record") === false)
-      add("error", "procedure", "Display calibration sets the eye tracker's camera, so it needs \"Start and stop the Neon recording from the app\" (Recording).");
+      add("error", "procedure", "Display calibration sets the eye tracker's camera, so it needs \"Start and stop the Neon recording from the app\" (Recording).",
+        { label: "Start the recording from the app", op: "set", path: "neon.auto_record", value: true });
     const firstCal = steps.findIndex((s) => s.type === "marker_calibration" || s.type === "feed");
     if (dcal >= 0 && firstCal >= 0 && dcal > firstCal)
       add("warning", "procedure", "Put the display calibration before the first marker calibration and the feed, so they are recorded with its settings.");
     if (feedAt >= 0 && !steps.some((s) => s.type === "validation"))
-      add("tip", "procedure", "A validation step measures eye-tracking accuracy on the phone for each participant.");
+      add("tip", "procedure", "A validation step measures eye-tracking accuracy on the phone for each participant.",
+        { label: "Add a validation step before the feed", op: "insert_step", type: "validation", before: steps[feedAt].id, tags: onScreen.length > 0 });
 
     // recording
     const cam = get(study, "logging.front_camera") || {};
     if (cam.enabled && get(study, "logging.screen_recording"))
-      add("error", "recording", "The front camera and screen recording can't both be on (two video encoders make the feed stutter).");
+      add("error", "recording", "The front camera and screen recording can't both be on (two video encoders make the feed stutter).",
+        { label: "Turn screen recording off", op: "set", path: "logging.screen_recording", value: false });
     if (cam.enabled) {
       const camSteps = cam.steps === undefined ? ["feed"] : cam.steps;
       if (Array.isArray(camSteps)) {
-        for (const sid of camSteps) if (!ids.includes(sid)) add("error", "recording", `Front camera: there is no step "${sid}" to record.`);
+        for (const sid of camSteps) if (!ids.includes(sid))
+          add("error", "recording", `Front camera: there is no step "${sid}" to record.`,
+            { label: `Remove "${sid}"`, op: "set", path: "logging.front_camera.steps", value: camSteps.filter((x) => x !== sid) });
         if (!camSteps.length) add("warning", "recording", "The front camera is on but no step is chosen to record.");
       }
       const first = Array.isArray(camSteps) ? Math.min(...camSteps.map((sid) => ids.indexOf(sid)).filter((x) => x >= 0)) : 0;
-      if (!steps.slice(0, Number.isFinite(first) ? first : steps.length).some((s) => s.type === "camera_check"))
-        add("tip", "recording", "Add a camera check step before the recorded steps, so you know the face is in view.");
+      if (!steps.slice(0, Number.isFinite(first) ? first : steps.length).some((s) => s.type === "camera_check")) {
+        const at = Number.isFinite(first) && steps[first] ? steps[first].id : feedAt >= 0 ? steps[feedAt].id : "end";
+        add("tip", "recording", "Add a camera check step before the recorded steps, so you know the face is in view.",
+          { label: "Add a camera check", op: "insert_step", type: "camera_check", before: at });
+      }
     }
     const exp = get(study, "neon.scene_exposure");
     if (exp && exp.mode !== "auto" && !exp.exposure_us)
       add("error", "recording", "Scene camera: a fixed exposure needs an exposure time.");
     if (exp && get(study, "neon.auto_record") === false)
-      add("error", "recording", "Scene camera exposure is set when the app starts the Neon recording, so it needs \"Start and stop the Neon recording from the app\".");
-    if (get(study, "logging.screen_recording"))
-      add("warning", "recording", "Screen recording is meant for pilots: Android asks for permission every session and it costs performance.");
+      add("error", "recording", "Scene camera exposure is set when the app starts the Neon recording, so it needs \"Start and stop the Neon recording from the app\".",
+        { label: "Start the recording from the app", op: "set", path: "neon.auto_record", value: true });
+    if (get(study, "logging.screen_recording") && !cam.enabled)
+      add("warning", "recording", "Screen recording is meant for pilots: Android asks for permission every session and it costs performance.",
+        { label: "Turn screen recording off", op: "set", path: "logging.screen_recording", value: false });
     return out;
+  }
+
+  const STEP_ID_BASE = { instructions: "info", marker_calibration: "cal", tag_ladder: "ladder", display_calibration: "dcal", validation: "val", camera_check: "camcheck", profile_photo: "photo",
+    settings_test: "settings", questionnaire: "q", feed: "feed", image_rating: "ratings", recognition: "recog", end: "end" };
+
+  /** A step id not yet taken: "cal1", "cal2", ... ("feed", "end", "photo", "camcheck" without a number first). */
+  function stepId(type, taken) {
+    const base = STEP_ID_BASE[type] || type;
+    let id = ["feed", "end", "photo", "camcheck"].includes(base) ? base : base + "1";
+    for (let k = 2; taken.includes(id); k++) id = base + k;
+    return id;
+  }
+
+  /**
+   * Applies a check's fix to the study (and the planning counts in `content`), in place.
+   * ops: set {path, value} ("content.x" for a count); insert_step {type, before, tags};
+   * end_last; foils {n}.
+   */
+  function applyFix(study, content, fix) {
+    const steps = study.procedure = study.procedure || [];
+    const ids = () => steps.map((s) => s.id);
+    if (fix.op === "set") {
+      if (fix.path.startsWith("content.")) content[fix.path.slice(8)] = fix.value;
+      else set(study, fix.path, clone(fix.value));
+    } else if (fix.op === "insert_step") {
+      const s = { id: stepId(fix.type, ids()), type: fix.type };
+      let at = steps.findIndex((x) => x.id === fix.before || (fix.before === "end" && x.type === "end"));
+      if (at < 0) at = steps.length && steps[steps.length - 1].type === "end" ? steps.length - 1 : steps.length;
+      steps.splice(at, 0, s);
+      if (fix.tags) set(study, "markers.on_screen.steps", (get(study, "markers.on_screen.steps") || []).concat([s.id]));
+    } else if (fix.op === "end_last") {
+      const i = steps.findIndex((s) => s.type === "end");
+      steps.push(i >= 0 ? steps.splice(i, 1)[0] : { id: stepId("end", ids()), type: "end" });
+    } else if (fix.op === "foils") {
+      content.foils = fix.n;
+      syncFoils(study, content);
+    } else {
+      throw new Error(`unknown fix ${fix.op}`);
+    }
   }
 
   // ------------------------------------------------------------ YAML writer
@@ -662,7 +731,7 @@ const Core = (() => {
   return {
     DEFAULTS, STEP_DEFAULTS, STEP_TYPES, ATTRIBUTES, ITEM_KINDS, TEMPLATES,
     clone, get, set, newStudy, contentFor, cells, groups, blockSize, attributeValues, needs, designSummary,
-    checks, toYaml, skeletons, nextSteps, studyFiles, syncFoils, zip, crc32,
+    checks, applyFix, stepId, toYaml, skeletons, nextSteps, studyFiles, syncFoils, zip, crc32,
   };
 })();
 
