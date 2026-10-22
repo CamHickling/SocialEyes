@@ -189,10 +189,21 @@ def cmd_gaze(args) -> int:
         print(f"error: {e}", file=sys.stderr)
         return 1
     dev = session.device
-    gaze = map_gaze(rec, tracking, clock_offset_ns(session), dev["screen_width_px"], dev["screen_height_px"])
+    # accuracy at the validation dots, and the session's gaze offset from them (applied to all gaze)
+    from .gaze import validation
+
+    dots, offset, accuracy = validation.score(rec, session, tracking, clock_offset_ns(session))
+    if args.no_offset:
+        offset = None
+    accuracy["offset_applied"] = offset is not None
+    gaze = map_gaze(rec, tracking, clock_offset_ns(session), dev["screen_width_px"], dev["screen_height_px"],
+                    offset=offset)
     out = Path(args.out) if args.out else (Path("analysis_out") / (_study_id(args.session) or "unknown")
                                            / session.participant_id / (session.meta.get("session_uid") or Path(args.session).name))
     out.mkdir(parents=True, exist_ok=True)
+    dots.to_csv(out / "validation.csv", index=False)
+    (out / "validation.json").write_text(json.dumps(accuracy, indent=1), encoding="utf-8")
+    print(validation.report(accuracy))
     tracking.to_csv(out / "screen_tracking.csv", index=False)
     gaze.to_csv(out / "gaze_screen.csv", index=False)
     print(f"{session.participant_id}: phone tracked in {len(tracking)} scene frames")
@@ -573,6 +584,8 @@ def main(argv: list[str] | None = None) -> int:
                                    "(default: the copy kept when it was loaded)")
     g.add_argument("--max-bridge-ms", type=float, default=300.0,
                    help="longest stretch without readable tags bridged by optical flow (default 300)")
+    g.add_argument("--no-offset", action="store_true",
+                   help="leave gaze as recorded (by default it is corrected by the offset at the validation dots)")
     g.set_defaults(func=cmd_gaze)
 
     hm = sub.add_parser("heatmaps", help="fixation heatmaps over the post images, pooled by condition")

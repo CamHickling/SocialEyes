@@ -6,6 +6,7 @@ import pandas as pd
 
 from .neon import NeonRecording
 from .tracking import homographies
+from .validation import shift_gaze
 
 MAX_FRAME_GAP_MS = 40.0   # a gaze sample uses the nearest scene frame within this (frames are ~33 ms apart)
 
@@ -13,9 +14,11 @@ GAZE_COLUMNS = ["unix_ns", "t_ns", "step_id", "x_px", "y_px", "on_screen", "sour
 
 
 def map_gaze(rec: NeonRecording, tracking: pd.DataFrame, clock_offset_ns: int, screen_w: int, screen_h: int,
-             max_frame_gap_ms: float = MAX_FRAME_GAP_MS) -> pd.DataFrame:
+             max_frame_gap_ms: float = MAX_FRAME_GAP_MS, offset: np.ndarray | None = None) -> pd.DataFrame:
     """One row per gaze sample during the tracked steps (GAZE_COLUMNS). x_px / y_px are NaN
-    when no nearby frame had a mapping; on_screen says whether the point falls on the screen."""
+    when no nearby frame had a mapping; on_screen says whether the point falls on the screen.
+    `offset`: the session's gaze offset from its validation dots (validation.score), applied to
+    every sample first; None leaves gaze as recorded."""
     if tracking.empty:
         return pd.DataFrame(columns=GAZE_COLUMNS)
     ft = tracking["unix_ns"].to_numpy(np.int64)
@@ -23,7 +26,7 @@ def map_gaze(rec: NeonRecording, tracking: pd.DataFrame, clock_offset_ns: int, s
     has = np.isfinite(Hs[:, 0, 0])
     sel = (rec.gaze_t >= ft[0] - max_frame_gap_ms * 1e6) & (rec.gaze_t <= ft[-1] + max_frame_gap_ms * 1e6)
     gt = rec.gaze_t[sel]
-    g = rec.undistort(rec.gaze[sel])
+    g = shift_gaze(rec.undistort(rec.gaze[sel]), offset, rec.K)
     # nearest frame (by time) for each sample
     j = np.clip(np.searchsorted(ft, gt), 1, len(ft) - 1)
     j = np.where(np.abs(ft[j - 1] - gt) <= np.abs(ft[j] - gt), j - 1, j)

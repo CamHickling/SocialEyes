@@ -697,6 +697,11 @@ def _check_design(b: StudyBundle, rep: Report) -> None:
     feed_at = next((k for k, s in enumerate(study.procedure) if s.type == "feed"), None)
     if photos and feed_at is not None and photos[0] > feed_at:
         rep.warnings.append("the profile_photo step comes after the feed, so the photo is never seen in the feed")
+    tagged = study.markers.on_screen.steps
+    untagged = [s.id for s in study.procedure if s.type == "validation" and s.id not in tagged]
+    if tagged and untagged:
+        rep.warnings.append(f"markers.on_screen.steps leaves out validation step(s) {', '.join(untagged)}: without "
+                            "on-screen tags their dots can't be scored, and gaze isn't corrected for the wearer's offset")
     if any(s.type == "settings_test" for s in study.procedure) and not study.neon.auto_record:
         rep.warnings.append("a settings_test step sets the Neon scene camera, which needs neon.auto_record; "
                             "without it the step is skipped")

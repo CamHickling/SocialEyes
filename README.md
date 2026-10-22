@@ -618,6 +618,17 @@ detected, placed on the screen and, through the feed's scroll position at each m
 post image under it (in the image's own pixels) with the AOI it fell in. It places them with the
 exact build the session ran (kept when the study was loaded; `--build` gives another).
 
+**Accuracy and the wearer's offset.** Neon's gaze is off by a roughly constant angle per wearer
+and session (about 1.7° in CAM-210). `socialeyes gaze` scores every validation dot the participant
+tapped (gaze in the 500 ms before the tap against the dot) and takes the median offset over the
+dots, as an angle from the scene camera so it holds at any distance, and shifts all gaze by it
+before mapping (`--no-offset` leaves gaze as recorded). It prints the accuracy as recorded and after
+the offset (leave-one-out: each dot corrected by the others), per validation step too (drift between
+before and after the feed), and writes `validation.csv` (per dot) and `validation.json`. It warns
+when the offset is over 3°, the corrected accuracy over 1.5°, or fewer than 4 dots could be scored.
+The validation steps need on-screen tags (`markers.on_screen.steps`, as in the example study):
+without them the dots can't be placed and gaze stays uncorrected; the builder and `validate` warn.
+
 **Heatmaps.** Once sessions have `fixations.csv`:
 
 ```powershell

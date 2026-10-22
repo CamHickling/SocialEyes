@@ -81,7 +81,7 @@ const Core = (() => {
   const EXAMPLE = {
     id: "example", title: "Retouching labels and visual attention (example)", version: 1, seed: 20251001,
     platform: { name: "Pictogram", theme: "light", participant_handle: "you" },
-    markers: { on_screen: { steps: ["feed"], layout: "bars", family: "tag16h5", size_mm: 10, side_inset_mm: 3 } },
+    markers: { on_screen: { steps: ["val1", "feed"], layout: "bars", family: "tag16h5", size_mm: 10, side_inset_mm: 3 } },
     labels: { edited: { text: "This image has been digitally altered", style: "banner" } },
     factors: [
       { name: "edit", design: "within", levels: ["original", "retouched"], sets: { image_version: "{level}" } },
@@ -133,7 +133,7 @@ const Core = (() => {
     logging: { touches: true, sensors: false, screen_recording: false, front_camera: { enabled: false } },
     neon: { required: false },
     // the screen tags chosen with the Neon (CAM-165): in the feed's own top bar and tab bar
-    markers: { on_screen: { steps: ["feed"], layout: "bars", family: "tag16h5", size_mm: 10, side_inset_mm: 3 } },
+    markers: { on_screen: { steps: ["val1", "feed"], layout: "bars", family: "tag16h5", size_mm: 10, side_inset_mm: 3 } },
     procedure: [
       { id: "welcome", type: "instructions", title: "Welcome", text: "Please browse the feed as you normally would." },
       { id: "cal1", type: "marker_calibration", duration_s: 4 },
@@ -319,9 +319,12 @@ const Core = (() => {
     const onScreen = get(study, "markers.on_screen.steps") || [];
     for (const sid of onScreen) if (!ids.includes(sid)) add("error", "recording", `On-screen tags: there is no step "${sid}".`);
     if (get(study, "markers.on_screen.layout") === "bars") {
-      const other = onScreen.filter((sid) => { const s = steps.find((x) => x.id === sid); return s && s.type !== "feed"; });
+      const other = onScreen.filter((sid) => { const s = steps.find((x) => x.id === sid); return s && s.type !== "feed" && s.type !== "validation"; });
       if (other.length) add("tip", "recording", `On-screen tags: only the feed has bars to put tags in; ${other.join(", ")} will show them in bands above and below.`);
     }
+    const untagged = steps.filter((s) => s.type === "validation" && !onScreen.includes(s.id)).map((s) => s.id);
+    if (onScreen.length && untagged.length)
+      add("warning", "recording", `On-screen tags: add them to ${untagged.join(", ")} too. Without them its dots can't be scored, and gaze isn't corrected for the wearer's offset.`);
     const fam = get(study, "markers.on_screen.family") || "tag36h11";
     const nIds = { tag36h11: 587, tag25h9: 35, tag16h5: 30 }[fam];
     if (onScreen.length && nIds && (get(study, "markers.screen_tag_ids") || [0, 1, 2, 3]).some((t) => t >= nIds))

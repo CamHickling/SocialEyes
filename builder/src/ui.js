@@ -1558,13 +1558,22 @@
         if (ui.openStep === i) ui.openStep = j;
         break;
       }
-      case "del-step": S.procedure.splice(Number(args[0]), 1); ui.openStep = null; break;
+      case "del-step": {
+        const [gone] = S.procedure.splice(Number(args[0]), 1);
+        const tagged = getP("markers.on_screen.steps");
+        if (Array.isArray(tagged) && gone) setP("markers.on_screen.steps", tagged.filter((id) => id !== gone.id));
+        ui.openStep = null;
+        break;
+      }
       case "add-step": {
         const type = document.getElementById("new-step").value;
         const s = newStep(type);
         const endAt = S.procedure.length && S.procedure[S.procedure.length - 1].type === "end" ? S.procedure.length - 1 : S.procedure.length;
         S.procedure.splice(endAt, 0, s);
         if (type === "recognition") C.syncFoils(S, ui.content);
+        // a study with on-screen tags shows them during validation too, so its dots can be scored
+        const tagged = getP("markers.on_screen.steps");
+        if (type === "validation" && Array.isArray(tagged) && tagged.length) setP("markers.on_screen.steps", [...tagged, s.id]);
         ui.openStep = endAt;
         break;
       }

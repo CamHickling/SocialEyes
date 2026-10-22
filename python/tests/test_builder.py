@@ -169,8 +169,19 @@ def test_blank_study_has_only_the_baseline_feed():
 
 def test_blank_study_has_the_tags_in_the_feeds_bars():
     s = core("Core.newStudy('blank')")["study"]
-    assert s["markers"]["on_screen"] == {"steps": ["feed"], "layout": "bars", "family": "tag16h5", "size_mm": 10, "side_inset_mm": 3}
+    assert s["markers"]["on_screen"] == {"steps": ["val1", "feed"], "layout": "bars", "family": "tag16h5", "size_mm": 10, "side_inset_mm": 3}
     Study.model_validate(s)
-    s["markers"]["on_screen"]["steps"] = ["val1", "feed"]
+    s["markers"]["on_screen"]["steps"] = ["welcome", "val1", "feed"]
     tips = core("Core.checks(data, null).filter(c => c.level === 'tip').map(c => c.msg)", s)
-    assert any("only the feed has bars" in m and "val1" in m for m in tips), tips
+    assert any("only the feed has bars" in m and "welcome" in m and "val1" not in m for m in tips), tips
+
+
+def test_validation_without_tags_is_warned():
+    # its dots can't be scored, so gaze isn't corrected for the wearer's offset
+    s = core("Core.newStudy('blank')")["study"]
+    s["markers"]["on_screen"]["steps"] = ["feed"]
+    warnings = core("Core.checks(data, null).filter(c => c.level === 'warning').map(c => c.msg)", s)
+    assert any("add them to val1" in m for m in warnings), warnings
+    s["markers"]["on_screen"]["steps"] = ["val1", "feed"]
+    warnings = core("Core.checks(data, null).filter(c => c.level === 'warning').map(c => c.msg)", s)
+    assert not any("add them to" in m for m in warnings), warnings

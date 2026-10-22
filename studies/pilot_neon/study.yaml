@@ -16,7 +16,7 @@ platform:
   participant_handle: you      # name the participant's own comments appear under
 
 markers:                       # AprilTags in the feed's top bar and tab bar, so the Neon can find the phone
-  on_screen: {steps: [feed], layout: bars, family: tag16h5, size_mm: 10, side_inset_mm: 3, edge_gap_mm: 2}
+  on_screen: {steps: [val1, feed, val2], layout: bars, family: tag16h5, size_mm: 10, side_inset_mm: 3, edge_gap_mm: 2}
 
 display:
   brightness: 0.30             # settings test 21 Oct: best with the scene camera below
