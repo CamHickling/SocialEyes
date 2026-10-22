@@ -38,6 +38,7 @@ def render() -> str:
         "/*JSYAML*/": HERE / "vendor" / "js-yaml.min.js",
         "/*CORE*/": HERE / "src" / "core.js",
         "/*UI*/": HERE / "src" / "ui.js",
+        "/*AOIEDITOR*/": HERE / "src" / "aoieditor.js",
     }
     for marker, path in parts.items():
         code = _read(path).replace("</script", "<\\/script")

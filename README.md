@@ -707,15 +707,29 @@ whichever band they are in. Existing AOI files are kept (`--overwrite` replaces 
 image where no person is found gets none. It also writes a review page
 (`analysis_out/<study>/aoi_review/index.html`) with every image and its AOIs drawn on, and
 notes on what to check: a face found only by skin colour, several people, shoulders or hips
-hard to see. Correct the ones that are off in LabelMe (Option A below). It uses three MediaPipe
-models; the pose and segmentation models (25 MB) are downloaded the first time.
+hard to see. Correct the ones that are off in the AOI editor (Option A below). It uses three
+MediaPipe models; the pose and segmentation models (25 MB) are downloaded the first time.
 
-**Option A: LabelMe (recommended).** [LabelMe](https://github.com/wkentaro/labelme)
+**Option A: the AOI editor (recommended).** In the desktop app, **Design > Content > Edit
+AOIs…** shows each image (critical posts first, then the other feed images and the stories)
+with its AOIs. **Outline** draws an AOI around the thing you click: click more of it to add
+to the outline, Shift+click (or right-click) where it went too far, choose between the
+outlines it offers (from a part to the whole thing) and **Keep** it. It uses
+[MobileSAM](https://github.com/ChaoningZhang/MobileSAM) (a small Segment Anything model, 45 MB,
+downloaded the first time) on this computer, or MediaPipe's simpler interactive segmenter
+(in the installer) when SAM can't be downloaded. **Polygon** and **Rectangle** draw by hand,
+and **Select** moves points (drag a mid-point to add one, double-click a point to remove it).
+Name each AOI (`face`, `waist`, …; each name once per image); the order of the list is the
+order AOIs are tested in, so put small ones above the ones around them. **Copy from** copies
+the AOIs of the post's other version, to adjust. **Save** writes `aois/<image>.json` in
+LabelMe's format; the file it replaces is kept first in `aoi_history/`.
+
+**Option B: LabelMe.** [LabelMe](https://github.com/wkentaro/labelme)
 is a free annotation tool (`pip install labelme`). Open each image, draw
 polygons or rectangles, and give each one a name such as `face`, `waist` or
 `legs`. Save the `.json` next to the image. SocialEyes reads it directly.
 
-**Option B: hand-written JSON.**
+**Option C: hand-written JSON.**
 
 ```json
 {"width": 1080, "height": 1350,
@@ -1160,7 +1174,7 @@ Roughly in order:
 - [x] **Image AOIs for face and body** (`socialeyes aois`): automatic AOIs on every post image (face, hair,
       upper body, waist / stomach, legs, whole body) from local face, pose and
       segmentation models, written as AOI files the researcher reviews and edits (in
-      LabelMe, or the AOI drawing tool below); the same AOI names on original and edited
+      the AOI editor or LabelMe); the same AOI names on original and edited
       versions so they compare directly
 - [x] **Gaze heatmaps** (`socialeyes heatmaps`): fixation heatmaps over each post image, per participant and pooled
       by condition (e.g. retouched vs original, labelled vs not), with AOI outlines drawn on
@@ -1242,11 +1256,10 @@ Roughly in order:
       fallbacks for other camera drivers (the Pixel 3 needed a hidden preview stream);
       manufacturer battery savers that stop apps (Samsung, Xiaomi) handled by the loader's
       readiness check. Tablets and foldables are out of scope at first
-- [ ] *Stretch:* **AOI drawing tool**: open each critical image and draw rectangles or
-      polygons over the regions (face, waist, ...), name them, and the app writes the AOI
-      file with the right image size, optionally with a local **Segment Anything (SAM)**
-      assist that proposes a region's outline; also the place to review the automatic face
-      and body AOIs. Until then, draw AOIs in LabelMe
+- [x] **AOI editor** (Design > Content > Edit AOIs): open each image and draw polygons or
+      rectangles, or outline a region with a click (MobileSAM on this computer, MediaPipe's
+      interactive segmenter when SAM can't be downloaded), name them, and save the AOI file
+      (the old one kept in `aoi_history/`); also where the automatic AOIs are checked
 - [ ] *Stretch:* **generated content**: draft comments and account usernames automatically,
       optionally based on what each post's image shows, written into `comments.csv` /
       `accounts.csv` for the researcher to review and edit before compiling

@@ -1,5 +1,5 @@
 """Face and body AOIs drawn automatically on post images (`socialeyes aois`), for the researcher
-to review and correct in LabelMe.
+to review and correct in the AOI editor (desktop/aoi_editor.py) or LabelMe.
 
 Three MediaPipe models run on each image (on this computer, nothing is uploaded):
 
@@ -388,8 +388,9 @@ figcaption{{font-size:13px;color:var(--muted)}} ul{{margin:4px 0;padding-left:18
 </style>
 <h1>Automatic AOIs: check each image</h1>
 <p>{legend}</p>
-<p>Drawn by <code>socialeyes aois</code>. Correct any that are off in LabelMe (open the image's
-<code>aois/&lt;image&gt;.json</code>); a point gets the first AOI that contains it, in the order above.</p>
+<p>Drawn by <code>socialeyes aois</code>. Correct any that are off in the desktop app (Design &gt; Content &gt;
+Edit AOIs), or in LabelMe (open the image's <code>aois/&lt;image&gt;.json</code>); a point gets the first AOI that
+contains it, in the order above.</p>
 <div class=grid>{''.join(cards)}</div>
 """
     path = out / "index.html"

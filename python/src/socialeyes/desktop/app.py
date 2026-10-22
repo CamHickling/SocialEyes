@@ -9,6 +9,7 @@ from __future__ import annotations
 import functools
 import json
 import sys
+import threading
 import traceback
 from pathlib import Path
 
@@ -55,6 +56,8 @@ class Api:
     def __init__(self):
         self._window = None  # set once the window exists; underscore keeps it out of the JS bridge
         self._storage: dict = {}  # folder -> cloud-sync service, looked up once per run
+        self._outliner = None     # the AOI editor's click-to-outline, loaded on its first click
+        self._outline_lock = threading.Lock()
 
     @_reply
     def app_info(self) -> dict:
@@ -326,6 +329,55 @@ class Api:
                 "empty": [{"image": i, "why": w} for i, w in r.empty],
                 "check": [{"image": x.image, "note": n} for x in r.images if x.aois for n in x.notes],
                 "review": r.review}
+
+    @_reply
+    def aoi_images(self, folder: str) -> dict:
+        """The images AOIs can be drawn on, and how click-to-outline will work."""
+        from ..face.outline import Outliner
+        from .aoi_editor import aoi_images
+
+        o = self._outliner
+        return {"images": aoi_images(folder),
+                "outline": o.backend if o else ("sam" if Outliner.sam_ready() else "download")}
+
+    @_reply
+    def aoi_load(self, folder: str, image: str) -> dict:
+        from .aoi_editor import load
+
+        return load(folder, image)
+
+    @_reply
+    def aoi_save(self, folder: str, image: str, aois: list) -> dict:
+        from .aoi_editor import save
+
+        return save(folder, image, aois)
+
+    @_reply
+    def aoi_outline(self, folder: str, image: str, points: list) -> dict:
+        """Outlines for clicks [[x, y, keep], ...] on the image: {backend, note, outlines}."""
+        import cv2
+
+        from ..face.outline import Outliner
+
+        root = Path(folder)
+        with self._outline_lock:
+            if self._outliner is None:
+                if not Outliner.sam_ready():
+                    self._progress("Downloading the outlining model (45 MB, once)…")
+                self._outliner = Outliner()
+            o = self._outliner
+            path = root / image
+            stamp = (str(path), path.stat().st_mtime_ns)
+            if o._key != stamp:
+                self._progress("Reading the image…")
+                bgr = cv2.imread(str(path), cv2.IMREAD_COLOR)
+                if bgr is None:
+                    raise ValueError(f"can't read {image}")
+                o.set_image(bgr[:, :, ::-1].copy(), stamp)
+            note = None
+            if o.backend == "mediapipe" and o.why_not_sam:
+                note = f"Using the simpler outliner: SAM couldn't start ({o.why_not_sam})"
+            return {"backend": o.backend, "note": note, "outlines": o.outline([tuple(p) for p in points])}
 
     @_reply
     def open_path(self, path: str) -> bool:

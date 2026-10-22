@@ -5,8 +5,13 @@ Licensed under the Apache License, Version 2.0 (see LICENSE).
 
 This software includes or downloads third-party components under their own licences:
 
-- MediaPipe and its face landmarker, pose landmarker and selfie multiclass segmentation
-  models (Google LLC), Apache License 2.0.
+- MediaPipe and its face landmarker, pose landmarker, selfie multiclass segmentation and
+  interactive segmentation (magic touch) models (Google LLC), Apache License 2.0.
+- ONNX Runtime (Microsoft), MIT License.
+- MobileSAM (Chaoning Zhang et al., https://github.com/ChaoningZhang/MobileSAM), Apache
+  License 2.0, downloaded on first use as the ONNX export at
+  https://huggingface.co/Acly/MobileSAM (MIT License). MobileSAM builds on Segment Anything
+  (Meta Platforms), Apache License 2.0.
 - The phone app's wordmark font, Grand Hotel (Astigmatic, via Google Fonts), SIL Open Font
   License 1.1.
 - The Windows installer bundles adb from the Android SDK Platform-Tools (The Android Open

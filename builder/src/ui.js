@@ -1124,10 +1124,12 @@
   /** Design > Content: draw face and body AOIs on the critical posts' images (socialeyes aois). */
   function autoAois() {
     const A = ui.aois, r = A.result, dis = ui.busy ? "disabled" : "";
-    let html = `<h3>Face and body AOIs</h3>
-      <p class="hint">Draws <i>face</i>, <i>hair</i>, <i>upper_body</i>, <i>waist</i>, <i>legs</i> and <i>body</i> on each critical post's image, on this
-      computer. Check them on the review page and correct any in LabelMe.</p>
-      <div class="row">${btn("aois-draw", ui.busy === "Drawing AOIs…" ? "Drawing…" : "Draw AOIs", "", dis)}
+    let html = `<h3>AOIs (areas of interest)</h3>
+      <p class="hint">Draw and name the areas to measure gaze on, image by image: outline a thing with a click, or draw polygons and boxes.</p>
+      <div class="row">${btn("aois-edit", "Edit AOIs…", "", dis)}</div>
+      <p class="hint">Or draw <i>face</i>, <i>hair</i>, <i>upper_body</i>, <i>waist</i>, <i>legs</i> and <i>body</i> on every critical post's image
+      automatically, then check and correct them with Edit AOIs.</p>
+      <div class="row">${btn("aois-draw", ui.busy === "Drawing AOIs…" ? "Drawing…" : "Draw AOIs automatically", "", dis)}
         <label class="check"><input type="checkbox" id="aois-overwrite" ${A.overwrite ? "checked" : ""}> <span>Replace existing AOI files</span></label></div>
       ${ui.busy === "Drawing AOIs…" && ui.phone.progress ? `<p class="hint">${esc(ui.phone.progress)}</p>` : ""}`;
     if (A.error) html += `<p class="error-box">${esc(A.error)}</p>`;
@@ -1771,6 +1773,9 @@
         return;
       case "data-heatmaps": dataHeatmaps(); return;
       case "aois-draw": aoisDraw(); return;
+      case "aois-edit":
+        window.AoiEditor.open({ call: bridge, folder: ui.folder, onClose: (saved) => { if (saved) filesRefresh(); } });
+        return;
       case "images-pick": imagesPick(); return;
       case "images-copy": imagesCopy(); return;
       case "images-report": imagesReport(); return;

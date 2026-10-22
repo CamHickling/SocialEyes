@@ -134,6 +134,8 @@ def main() -> None:
          "--collect-submodules", "socialeyes",
          # the face analysis: MediaPipe's own model graphs and libraries, and its face model
          "--collect-all", "mediapipe",
+         # the AOI editor's click-to-outline (MobileSAM, downloaded on first use)
+         "--collect-all", "onnxruntime",
          "--add-data", f"{ROOT / 'python' / 'src' / 'socialeyes' / 'face' / 'models'}{sep}socialeyes/face/models",
          # matplotlib stays: MediaPipe imports it
          *[a for m in ("scipy", "tkinter", "IPython", "pytest", "jax", "jaxlib") for a in ("--exclude-module", m)],

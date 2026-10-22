@@ -63,7 +63,24 @@ def selftest(report: Path) -> None:
 
         return [round(float(v), 3) for v in colormaps["inferno"](0.5)]
 
+    # the AOI editor's click-to-outline: MediaPipe's (bundled) and ONNX Runtime, which runs SAM once downloaded
+    def outliner():
+        import numpy as np
+        import onnxruntime
+        from socialeyes.face.outline import Outliner
+
+        o = Outliner(prefer="mediapipe")
+        try:
+            img = np.full((120, 100, 3), 220, np.uint8)
+            img[40:80, 30:70] = 40
+            o.set_image(img)
+            return {"onnxruntime": onnxruntime.__version__, "outlines": len(o.outline([(50, 60, True)])),
+                    "sam_downloaded": Outliner.sam_ready()}
+        finally:
+            o.close()
+
     check("face_model", face_model)
+    check("outliner", outliner)
     check("body_models", body_models)
     check("heatmap_colours", colormap)
     report.write_text(json.dumps(results, indent=2), encoding="utf-8")

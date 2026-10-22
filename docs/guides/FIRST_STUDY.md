@@ -32,10 +32,12 @@ done on the command line (`socialeyes --help`); the README has the details.
    are still missing ("54 of 61 files ready"). **Check the images** flags any the wrong shape or
    size for the feed. Write where each came from in `sources.csv` (source, licence, credit,
    consent) for the ethics record.
-5. AOIs (areas of interest) for the critical posts' images: **Draw AOIs** in the **Content** step
-   draws face, hair, upper body, waist, legs and body automatically; check them on the review page
-   and correct any in [LabelMe](https://github.com/wkentaro/labelme). Other shapes can be drawn in
-   LabelMe from scratch.
+5. AOIs (areas of interest) for the critical posts' images: **Edit AOIs…** in the **Content**
+   step opens each image to draw and name them. **Outline** draws around whatever you click (a
+   face, a shirt, a person); **Polygon** and **Rectangle** draw by hand. **Draw AOIs
+   automatically** draws face, hair, upper body, waist, legs and body on every critical image at
+   once, to check and correct in the editor. Use the same AOI names on both versions of a post
+   (**Copy from** copies them across).
 6. **Check study** until it says everything checks out.
 
 ## 3. Try it yourself

@@ -44,6 +44,9 @@ if (-not $SkipConda) {
   # Face analysis (socialeyes face). --no-deps: see environment.yml.
   & (Join-Path $EnvDir 'python.exe') -m pip install --no-deps 'mediapipe==0.10.14'
   if ($LASTEXITCODE -ne 0) { throw "installing mediapipe failed" }
+  # the AOI editor's click-to-outline (MobileSAM); its other dependencies come with mediapipe
+  & (Join-Path $EnvDir 'python.exe') -m pip install --no-deps 'onnxruntime==1.31.0'
+  if ($LASTEXITCODE -ne 0) { throw "installing onnxruntime failed" }
 }
 
 if (-not $SkipAndroid) {
