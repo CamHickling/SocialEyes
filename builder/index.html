@@ -957,6 +957,8 @@ if (typeof module !== "undefined") module.exports = Core;
     data: { status: null, unload: null, export: null, faces: null, gaze: null, heatmaps: null, blur: false, by: "cell", unblind: false, error: null },
     studies: { list: null, newId: "", error: null },
     files: { result: null, missingOnly: true, error: null },   // the study folder's files (Design > Content)
+    // Design > Content: adding images from a folder, and the image check
+    images: { match: null, assign: {}, replace: false, copied: null, report: null, resized: null, error: null },
     aois: { result: null, overwrite: false, error: null },     // the last automatic AOIs (Design > Content)
     preview: { result: null, pid: null, conditions: false, error: null },   // Design > Preview (desktop)
     // undo/redo: the study (and content numbers) as JSON before each change; typing in one field is one step
@@ -1939,7 +1941,109 @@ if (typeof module !== "undefined") module.exports = Core;
       rows.push(`<li class="${missing.length ? "error" : "ok"}"><div class="msg"><span class="ic">${missing.length ? "✕" : "✓"}</span><span>${label}: ${all.length - missing.length} of ${all.length}${missing.length
         ? `. Missing ${missing.slice(0, 6).map((i) => `<code>${esc(i.file)}</code>`).join(", ")}${missing.length > 6 ? ` and ${missing.length - 6} more` : ""}` : ""}</span></div></li>`);
     }
-    return html + `<ul class="checks">${rows.join("")}</ul>` + autoAois();
+    return html + `<ul class="checks">${rows.join("")}</ul>` + sourcesLine(r) + addImages() + imageCheck() + autoAois();
+  }
+
+  /** Design > Content: where each file came from (sources.csv), for the ethics record. */
+  function sourcesLine(r) {
+    const s = r.sources;
+    if (!s) return "";
+    if (s.error) return `<p class="hint">Couldn't update sources.csv: ${esc(s.error)} (close it in Excel and refresh).</p>`;
+    const left = s.files - s.complete;
+    return `<p class="hint">Sources: <b>${s.complete} of ${s.files}</b> files have a source and licence in ${btn("open-path:" + s.path, "sources.csv", "link")}${left ? ` (fill in the other ${left}: source, licence, credit, consent)` : ""}.</p>`;
+  }
+
+  /** Design > Content: images and videos from a folder, matched to the study's files by name. */
+  function addImages() {
+    const I = ui.images, m = I.match, dis = ui.busy ? "disabled" : "";
+    let html = `<h3>Add images and videos</h3>
+      <p class="hint">Choose a folder: files are matched to the study's files by name (case, spaces, dashes and the file type don't matter) and copied in under the names the CSV files use.</p>
+      <div class="row">${btn("images-pick", "Add from a folder…", "", dis)}</div>`;
+    if (I.error) html += `<p class="error-box">${esc(I.error)}</p>`;
+    if (m) {
+      const name = (p) => p.split(/[\\/]/).pop();
+      const fresh = m.matched.filter((x) => !x.exists), existing = m.matched.filter((x) => x.exists);
+      html += `<p>${m.matched.length} file${m.matched.length === 1 ? "" : "s"} match${m.matched.length === 1 ? "es" : ""}: ${fresh.length} new${existing.length ? `, ${existing.length} already in the study` : ""}.</p>`;
+      if (m.unmatched.length) {
+        const opts = [["", "skip"], ...m.missing.map((s) => [s.slot, `${s.slot} (${s.what})`])];
+        html += `<p class="hint">These matched nothing; choose a file for each, or skip:</p><div class="table-wrap"><table class="register"><tbody>
+          ${m.unmatched.map((src, i) => `<tr><td>${esc(name(src))}</td><td><select data-action-change="images-assign:${i}">
+            ${opts.map(([v, l]) => `<option value="${esc(v)}" ${I.assign[src] === v ? "selected" : ""}>${esc(l)}</option>`).join("")}</select></td></tr>`).join("")}
+          </tbody></table></div>`;
+      }
+      const n = fresh.length + Object.values(I.assign).filter(Boolean).length + (I.replace ? existing.length : 0);
+      html += `<div class="row">${btn("images-copy", `Copy ${n} file${n === 1 ? "" : "s"} into the study`, "primary", dis || (n ? "" : "disabled"))}
+        ${existing.length ? `<label class="check"><input type="checkbox" id="images-replace" ${I.replace ? "checked" : ""}> <span>Also replace the ${existing.length} already in the study</span></label>` : ""}</div>`;
+    }
+    if (I.copied) {
+      const c = I.copied;
+      html += `<p class="hint">Copied ${c.copied.length}${c.converted.length ? `, converted ${c.converted.length} to the file type the study uses` : ""}${c.kept.length ? `, kept ${c.kept.length} already there` : ""}.${c.errors.length ? ` Couldn't copy: ${esc(c.errors.join("; "))}.` : ""}</p>`;
+    }
+    return html;
+  }
+
+  /** Design > Content: each image's size and shape for the feed, duplicates, versions that differ. */
+  function imageCheck() {
+    const I = ui.images, r = I.report, dis = ui.busy ? "disabled" : "";
+    let html = `<h3>Image check</h3><div class="row">${btn("images-report", r ? "Check the images again" : "Check the images", "", dis)}</div>`;
+    if (!r) return html;
+    const flagged = r.images.filter((x) => x.flags.length);
+    if (!flagged.length && !r.notes.length) return html + `<p class="hint">All ${r.images.length} images look right for the feed.</p>`;
+    // the same warning for many images (e.g. all 540 px wide) is one line, not thirty
+    const groups = new Map();
+    for (const x of flagged) for (const f of x.flags) groups.set(f, (groups.get(f) || []).concat(x));
+    const list = (xs) => xs.length > 3 ? `${xs.length} images (${xs.slice(0, 3).map((x) => `<code>${esc(x.file)}</code>`).join(", ")}, …)`
+      : xs.map((x) => `<code>${esc(x.file)}</code> (${esc(x.what)})`).join(", ");
+    html += `<ul class="checks">${[...groups].map(([f, xs]) => `<li class="warning"><div class="msg"><span class="ic">!</span><span>${list(xs)}: ${esc(f)}</span></div></li>`).join("")}
+      ${r.notes.map((n) => `<li class="warning"><div class="msg"><span class="ic">!</span><span>${esc(n)}</span></div></li>`).join("")}</ul>`;
+    if (r.large.length) html += `<div class="row">${btn("images-resize", `Shrink the ${r.large.length} large image${r.large.length === 1 ? "" : "s"}`, "", dis)}<span class="hint">to 2160 px on the longest side; the originals are kept in <code>originals/</code></span></div>`;
+    if (I.resized) html += `<p class="hint">Shrunk ${I.resized.resized.length}; the originals are in ${btn("open-path:" + I.resized.originals, "the originals folder", "link")}.</p>`;
+    return html;
+  }
+
+  async function imagesPick() {
+    const I = ui.images;
+    I.error = null;
+    try {
+      const src = await bridge("pick_folder", null, null);
+      if (!src) return;
+      I.match = await bridge("images_match", "Matching the files…", ui.folder, src);
+      I.assign = {};
+      I.copied = null;
+    } catch (e) { I.error = e.message; }
+    render();
+  }
+
+  async function imagesCopy() {
+    const I = ui.images, m = I.match;
+    if (!m) return;
+    const pairs = m.matched.filter((x) => I.replace || !x.exists).map((x) => ({ source: x.source, slot: x.slot }))
+      .concat(Object.entries(I.assign).filter(([, slot]) => slot).map(([source, slot]) => ({ source, slot })));
+    I.error = null;
+    try {
+      I.copied = await bridge("images_copy", "Copying…", ui.folder, pairs, I.replace);
+      I.match = null;
+      I.report = null;
+    } catch (e) { I.error = e.message; }
+    await filesRefresh();
+  }
+
+  async function imagesReport() {
+    const I = ui.images;
+    I.error = null;
+    try { I.report = await bridge("images_report", "Checking the images…", ui.folder); I.resized = null; }
+    catch (e) { I.error = e.message; }
+    render();
+  }
+
+  async function imagesResize() {
+    const I = ui.images;
+    if (!confirm("Shrink the large images to 2160 px on their longest side? The originals are kept in the originals folder.")) return;
+    try {
+      I.resized = await bridge("images_resize", "Shrinking…", ui.folder);
+      I.report = await bridge("images_report", "Checking the images…", ui.folder);
+    } catch (e) { I.error = e.message; }
+    render();
   }
 
   /** Design > Content: draw face and body AOIs on the critical posts' images (socialeyes aois). */
@@ -2359,6 +2463,7 @@ if (typeof module !== "undefined") module.exports = Core;
     ui.data = { status: null, unload: null, export: null, faces: null, gaze: null, heatmaps: null, blur: false, by: "cell", unblind: false, error: null };
     ui.files.result = null;
     ui.aois = { result: null, overwrite: false, error: null };
+    ui.images = { match: null, assign: {}, replace: false, copied: null, report: null, resized: null, error: null };
     ui.preview = { result: null, pid: null, conditions: false, error: null };
     resetHistory();
     if (!opened) C.syncFoils(ui.study, ui.content);
@@ -2591,6 +2696,10 @@ if (typeof module !== "undefined") module.exports = Core;
         return;
       case "data-heatmaps": dataHeatmaps(); return;
       case "aois-draw": aoisDraw(); return;
+      case "images-pick": imagesPick(); return;
+      case "images-copy": imagesCopy(); return;
+      case "images-report": imagesReport(); return;
+      case "images-resize": imagesResize(); return;
       case "preview-refresh": previewRefresh(); return;
       case "data-open-export": bridge("open_path", null, ui.data.export.out_dir).catch((e) => { ui.data.error = e.message; render(); }); return;
       case "data-pick": dataPick(args[0]); return;
@@ -2629,6 +2738,11 @@ if (typeof module !== "undefined") module.exports = Core;
       setP(path, steps);
     } else if (name === "part") {
       if (!setPart(args[0], el.checked)) { el.checked = !el.checked; return; }
+    } else if (name === "images-assign") {
+      const src = ui.images.match && ui.images.match.unmatched[Number(args[0])];
+      if (src) ui.images.assign[src] = el.value;
+      render();
+      return;
     } else if (name === "tags-layout") {
       // each layout with the tags it was tested with: bars 10 mm tag16h5, bands 12 mm tag36h11
       const preset = el.value === "bars" ? { family: "tag16h5", size_mm: 10 } : { family: "tag36h11", size_mm: 12 };
@@ -2700,6 +2814,7 @@ if (typeof module !== "undefined") module.exports = Core;
     if (el.id === "open-file" && el.files && el.files[0]) { openFile(el.files[0]); return; }
     if (el.id === "phone-update") { ui.phone.updateApp = el.checked; return; }
     if (el.id === "aois-overwrite") { ui.aois.overwrite = el.checked; return; }
+    if (el.id === "images-replace") { ui.images.replace = el.checked; render(); return; }
     if (el.id === "preview-pid") { ui.preview.pid = el.value; previewRefresh(); return; }
     if (el.id === "preview-conditions") { ui.preview.conditions = el.checked; render(); return; }
     if (el.id === "data-blur") { ui.data.blur = el.checked; render(); return; }

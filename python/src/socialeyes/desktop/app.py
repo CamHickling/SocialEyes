@@ -116,9 +116,40 @@ class Api:
 
     @_reply
     def content(self, folder: str) -> dict:
+        from .images import sources
         from .studies import content_checklist
 
-        return content_checklist(folder)
+        out = content_checklist(folder)
+        try:
+            out["sources"] = sources(folder)   # keeps sources.csv in step with the files the CSVs name
+        except OSError as e:                     # e.g. sources.csv open in Excel
+            out["sources"] = {"error": str(e)}
+        return out
+
+    @_reply
+    def images_match(self, folder: str, source: str) -> dict:
+        """The files in `source` matched to the study's image and video slots by name."""
+        from .images import match
+
+        return match(folder, source)
+
+    @_reply
+    def images_copy(self, folder: str, pairs: list, replace: bool = False) -> dict:
+        from .images import copy_in
+
+        return copy_in(folder, pairs, replace=bool(replace))
+
+    @_reply
+    def images_report(self, folder: str) -> dict:
+        from .images import image_report
+
+        return image_report(folder)
+
+    @_reply
+    def images_resize(self, folder: str) -> dict:
+        from .images import resize_large
+
+        return resize_large(folder)
 
     # ---------------------------------------------------------- Phone tab
 

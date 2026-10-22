@@ -283,7 +283,15 @@ its name appears in the top bar with its three pages:
   never overwritten. Each save (and **Check study**) also runs the compiler's checks, the
   same as `socialeyes validate`, shown next to the design checks. The **Content** step also
   lists which of the images, avatars, story images, videos and AOI files the CSVs name are in
-  the folder ("61 of 61 files ready"), and **Draw AOIs** draws face and body AOIs on the
+  the folder ("61 of 61 files ready"). **Add from a folder…** matches a folder of files to
+  them by name (ignoring case, spaces, dashes and the file type), lets you assign the rest by
+  hand, and copies them in under the CSVs' names (a .jpg for a .png file is converted; files
+  already there are only replaced when ticked). **Check the images** flags images the wrong
+  shape for a feed post (taller than 4:5 or wider than 1.91:1), narrower than 600 px, larger
+  than 2160 px (**Shrink** them, keeping the originals in `originals/`), the same picture used
+  twice, and versions of a critical post that differ in size. `sources.csv` gets a row per file
+  for its source, licence, credit and consent (rows are added, never removed), and the page
+  counts how many are filled in. **Draw AOIs** draws face and body AOIs on the
   critical posts' images ([`socialeyes aois`](#defining-areas-of-interest-aois)). **Preview**
   shows one participant's feed as the phone will show it (their post order, images, labels,
   likes, captions and first comments), from the study as saved; pick any participant, and tick

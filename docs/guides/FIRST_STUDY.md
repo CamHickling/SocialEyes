@@ -27,8 +27,11 @@ done on the command line (`socialeyes --help`); the README has the details.
    to write its questions), **Recording**, **Participants**. The panel on the right lists
    problems as you go; each one links to the step it's about.
 3. **Save**. This creates the study folder with CSV files to fill in and a `NEXT_STEPS.txt`.
-4. Put your images, avatars and videos in the folder and fill in the CSV files (posts, captions,
-   comments). The **Content** step shows which files are still missing ("54 of 61 files ready").
+4. Fill in the CSV files (posts, captions, comments) and add your images, avatars and videos:
+   **Add from a folder…** in the **Content** step copies them in, matched by name, and shows which
+   are still missing ("54 of 61 files ready"). **Check the images** flags any the wrong shape or
+   size for the feed. Write where each came from in `sources.csv` (source, licence, credit,
+   consent) for the ethics record.
 5. AOIs (areas of interest) for the critical posts' images: **Draw AOIs** in the **Content** step
    draws face, hair, upper body, waist, legs and body automatically; check them on the review page
    and correct any in [LabelMe](https://github.com/wkentaro/labelme). Other shapes can be drawn in
