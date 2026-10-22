@@ -23,6 +23,8 @@ class FakePhone:
         self.serial = "FAKE1"
 
     def local(self, remote: str) -> Path:
+        if remote.startswith(U.NEON_DIR):   # Neon Companion's recordings
+            return self.root / "neon_companion" / remote[len(U.NEON_DIR):].lstrip("/")
         assert remote.startswith(APP_FILES), remote
         return self.root / remote[len(APP_FILES):].lstrip("/")
 
@@ -39,6 +41,10 @@ class FakePhone:
             d = self.local(m.group(1))
             return "".join(f"{hashlib.sha256(p.read_bytes()).hexdigest()}  ./{p.relative_to(d).as_posix()}\n"
                            for p in sorted(d.rglob("*")) if p.is_file())
+        if m := re.fullmatch(r"find (\S+) -mindepth 2 -maxdepth 2 -type d -name (\S+) 2>/dev/null", cmd):
+            d = self.local(m.group(1))
+            return "".join(f"{m.group(1)}/{p.relative_to(d).as_posix()}\n" for p in sorted(d.glob(f"*/{m.group(2)}"))
+                           if p.is_dir()) if d.is_dir() else ""
         if m := re.fullmatch(r"cat (\S+)", cmd):
             return self.local(m.group(1)).read_text(encoding="utf-8")
         if m := re.fullmatch(r"rm -r (\S+)", cmd):
@@ -227,3 +233,67 @@ def test_the_phone_learns_the_ids_already_used(setup, monkeypatch):
     U.clear_phone(example)
     used = json.loads((phone_root / "studies" / "example" / "used_ids.json").read_text(encoding="utf-8"))
     assert used["used"] == ["P001", "P002", "P009"] and used["withdrawn"] == ["P009"]
+
+
+def pair_with_neon(phone_root: Path, pid: str, rid: str, on_phone: bool = True) -> None:
+    """Gives the phone's session of `pid` a Neon recording id, and Companion's folder the recording."""
+    meta_path = next((phone_root / "data" / "example" / pid).glob("*/session.json"))
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    meta["neon"] = {"recording_id": rid}
+    meta_path.write_text(json.dumps(meta), encoding="utf-8")
+    if on_phone:
+        rec = phone_root / "neon_companion" / "wearer-1" / rid
+        rec.mkdir(parents=True)
+        (rec / "gaze ps1.raw").write_bytes(b"\x01" * 4000)
+        (rec / "Neon Scene Camera v1 ps1.mp4").write_bytes(b"\x02" * 9000)   # names with spaces, as Companion's
+
+
+def test_unload_copies_the_paired_neon_recording_and_leaves_it_on_the_phone(setup, monkeypatch):
+    example, phone_root, tmp = setup
+    pair_with_neon(phone_root, "P001", "rec-0001")
+    pair_with_neon(phone_root, "P002", "rec-0002", on_phone=False)   # e.g. uploaded to Pupil Cloud and removed
+    settings.set_study("example", second_copy_dir=str(tmp / "second"))
+    monkeypatch.setattr(U, "Adb", lambda serial=None: FakePhone(phone_root))
+    r = U.unload(example)
+    by = {s.participant_id: s for s in r.sessions}
+    assert by["P001"].copied and by["P001"].neon == "copied and checked"
+    assert by["P002"].copied and by["P002"].neon == "not on the phone"
+    data = settings.data_dir("example")
+    local = data / "P001" / "neon" / "rec-0001"
+    assert (local / "Neon Scene Camera v1 ps1.mp4").read_bytes() == b"\x02" * 9000
+    assert (tmp / "second" / "P001" / "neon" / "rec-0001" / "gaze ps1.raw").is_file()
+    assert (phone_root / "neon_companion" / "wearer-1" / "rec-0001").is_dir()        # Companion keeps it
+    session = next((data / "P001").glob("P001-*"))
+    assert U.neon_recording(session) == local
+    rows = {r0["participant_id"]: r0 for r0 in register.read(data / register.REGISTER)[1]}
+    assert (rows["P001"]["neon_recording"], rows["P001"]["neon_copy"]) == ("rec-0001", "copied and checked")
+    assert rows["P002"]["neon_copy"] == "not on the phone"
+    # the neon folder isn't a session: unloading again and exporting see two sessions, not three
+    assert sorted(p.parent.parent.name for p in data.glob("*/*/session.json")) == ["P001", "P002"]
+    assert len(U.unload(example).sessions) == 2
+
+
+def test_withdrawing_moves_the_neon_copy_with_the_participant(setup, monkeypatch):
+    from socialeyes.session import withdraw as W
+
+    example, phone_root, tmp = setup
+    pair_with_neon(phone_root, "P001", "rec-0001")
+    monkeypatch.setattr(U, "Adb", lambda serial=None: FakePhone(phone_root))
+    U.unload(example)
+    data = settings.data_dir("example")
+    r = W.withdraw(example, "P001")
+    assert r.sessions == ["P001-20261004T100000"]                     # not "neon"
+    assert (data / W.HOLD / "P001" / "neon" / "rec-0001").is_dir() and not (data / "P001").exists()
+    W.restore(example, "P001")
+    assert (data / "P001" / "neon" / "rec-0001").is_dir()
+
+
+def test_eye_tracking_waits_for_the_recording(setup, monkeypatch):
+    from socialeyes.gaze.pipeline import study_gaze
+
+    example, phone_root, tmp = setup
+    pair_with_neon(phone_root, "P001", "rec-0001", on_phone=False)
+    monkeypatch.setattr(U, "Adb", lambda serial=None: FakePhone(phone_root))
+    U.unload(example)
+    r = study_gaze(example)
+    assert r["analysed"] == 0 and len(r["skipped"]) == 1 and "isn't copied yet" in r["skipped"][0]["why"]

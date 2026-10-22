@@ -58,8 +58,12 @@ phone**.
 
 ## 6. Eye tracking and the face camera (optional)
 
-- Neon recordings are matched to sessions with `socialeyes gaze <neon recording> <session>` (on the
-  command line for now). Afterwards **Make tables** adds gaze columns (time on each AOI, time to the
-  first fixation) and **Make heatmaps** draws where people looked, by condition.
+- **Copy from the phone** also copies each session's Neon recording from Neon Companion (it stays
+  in Companion too). Then **Analyse eye tracking**: it finds the phone in the scene video, scores
+  the validation dots (accuracy, and each wearer's offset, which it corrects) and places every
+  fixation on the screen and the post images: a few minutes per session. Afterwards **Make tables**
+  adds gaze columns (time on each AOI, time to the first fixation) and **Make heatmaps** draws where
+  people looked, by condition. The register shows each session's accuracy and how much of its feed
+  was tracked.
 - Studies that record the front camera: **Analyse face videos** (face in view, looking at the phone
   or away, distance); **Make tables** then adds those columns.

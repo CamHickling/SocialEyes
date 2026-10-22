@@ -6,8 +6,11 @@ For each session of the study on the phone, in this order:
 2. copy it into the study's data folder (via a staging folder) and check every file
    against the phone's hashes;
 3. if a second copy folder is set, copy it there too and check that copy;
-4. run the session analysis (quality.json etc. in analysis_out/);
-5. add or refresh its row in the register (sessions.csv).
+4. copy the Neon recording it is paired with (session.json neon.recording_id) from Neon Companion's
+   folder into ``<participant>/neon/<recording id>/``, checked the same way (and to the second copy);
+   Companion owns its recordings, so they are never deleted from the phone;
+5. run the session analysis (quality.json etc. in analysis_out/);
+6. add or refresh its row in the register (sessions.csv).
 
 The phone keeps every session: data loss is the bigger risk. **Clear copied sessions**
 (``clear_phone``, ``socialeyes unload --clear``) deletes from the phone only the sessions whose copy
@@ -36,6 +39,8 @@ from ..study.compiler import CHECKSUM_FILE
 from .loader import build_study, discard, parse_sha256sum, sync_used_ids
 
 SAFE = re.compile(r"[A-Za-z0-9_.-]+")
+NEON_DIR = "/sdcard/Documents/Neon"   # Neon Companion's recordings: <wearer or device id>/<recording id>/
+NEON = "neon"                          # in a participant's data folder: neon/<recording id>/
 
 
 @dataclass
@@ -47,6 +52,7 @@ class SessionResult:
     deleted: bool = False                # deleted from the phone
     kept_reason: Optional[str] = None    # why it is still on the phone
     completed: Optional[bool] = None
+    neon: Optional[str] = None           # the paired Neon recording: "copied and checked", "not on the phone", ...
     warnings: list = field(default_factory=list)
     error: Optional[str] = None
 
@@ -217,7 +223,18 @@ def _unload_one(adb: Adb, sid: str, pid: str, uid: str, data: Path, second: Opti
             _copy_verified(final, second / pid / uid, expected)
             s.second_copy = True
 
-        # 4: analysis (never blocks the unload)
+        # 4: the paired Neon recording (never blocks the unload; left on the phone)
+        recording = not ended and app_running
+        rid, neon_note = "", ""
+        if not recording:
+            try:
+                rid, neon_note = _unload_neon(adb, final, data / pid, second / pid if second is not None else None)
+            except (OSError, AdbError) as e:
+                rid, neon_note = _recording_id(final), "copy failed"
+                s.warnings.append(f"Neon recording not copied: {e}")
+        s.neon = neon_note or None
+
+        # 5: analysis (never blocks the unload)
         quality = None
         try:
             from ..session.analyze import analyze_session, write_results
@@ -226,22 +243,23 @@ def _unload_one(adb: Adb, sid: str, pid: str, uid: str, data: Path, second: Opti
             quality = results["quality"]
             write_results(results, settings.analysis_dir(sid) / pid / uid)
             s.completed = quality["completed"]
-            s.warnings = quality["warnings"]
+            s.warnings = quality["warnings"] + s.warnings
         except Exception as e:
             s.warnings = [f"could not analyse this session: {e}"]
 
-        # 5: register (before anything leaves the phone, so every session is on record)
-        recording = not ended and app_running
+        # 6: register (before anything leaves the phone, so every session is on record)
         delete = clear and not recording
         row = _register_row(final, quality, serial)
         row["on_phone"] = "" if delete else "yes"
+        if rid:
+            row["neon_recording"], row["neon_copy"] = rid, neon_note
         if quality is None:
             row["warnings"], row["n_warnings"] = "; ".join(s.warnings), len(s.warnings)
         register.update(data / register.REGISTER, [row])
         if second is not None:
             shutil.copy2(data / register.REGISTER, second / register.REGISTER)
 
-        # 6: only on a computer set to clear sessions after unloading
+        # 7: only on a computer set to clear sessions after unloading
         if recording:
             s.kept_reason = ("hasn't ended and SocialEyes is open on the phone, so it may still be recording: "
                              "copied but left on the phone. Close the app and unload again")
@@ -253,6 +271,54 @@ def _unload_one(adb: Adb, sid: str, pid: str, uid: str, data: Path, second: Opti
     except (OSError, AdbError) as e:
         s.error = str(e)
     return s
+
+
+def _recording_id(final: Path) -> str:
+    try:
+        return str((json.loads((final / "session.json").read_text(encoding="utf-8")).get("neon") or {}).get("recording_id") or "")
+    except (OSError, ValueError):
+        return ""
+
+
+def _unload_neon(adb: Adb, final: Path, participant: Path, second: Optional[Path]) -> tuple[str, str]:
+    """Copies the session's Neon recording from Companion's folder on the phone into
+    <participant>/neon/<recording id>/ (and the second copy), every file checked against the phone's
+    SHA-256. Companion owns it, so it stays on the phone. Returns (recording id, what happened)."""
+    rid = _recording_id(final)
+    if not rid:
+        return "", ""
+    if not SAFE.fullmatch(rid):
+        return rid, "not copied: odd recording id"
+    found = [p for p in adb.shell(f"find {NEON_DIR} -mindepth 2 -maxdepth 2 -type d -name {rid} 2>/dev/null").split()
+             if p.endswith("/" + rid)]
+    if not found:
+        return rid, "not on the phone"
+    remote = found[0]
+    expected = parse_sha256sum(adb.shell(f"cd {remote} && find . -type f -exec sha256sum {{}} +", timeout=1800))
+    if not expected:
+        return rid, "not on the phone"
+    dest = participant / NEON / rid
+    if not (dest.is_dir() and local_hashes(dest) == expected):
+        incoming = participant / NEON / ".incoming"
+        shutil.rmtree(incoming / rid, ignore_errors=True)
+        incoming.mkdir(parents=True, exist_ok=True)
+        adb.run("pull", remote, str(incoming), timeout=7200)
+        if local_hashes(incoming / rid) != expected:
+            shutil.rmtree(incoming / rid, ignore_errors=True)
+            raise OSError("the copied Neon recording doesn't match the phone's; unload again")
+        _replace_dir(incoming / rid, dest)
+        if not any(incoming.iterdir()):
+            incoming.rmdir()
+    if second is not None:
+        _copy_verified(dest, second / NEON / rid, expected)
+    return rid, "copied and checked"
+
+
+def neon_recording(session: Path) -> Optional[Path]:
+    """The local copy of a session's Neon recording, if unloaded: <participant>/neon/<recording id>/."""
+    rid = _recording_id(session)
+    path = session.parent / NEON / rid if rid else None
+    return path if path is not None and path.is_dir() else None
 
 
 def clear_phone(study_dir: Path | str, serial: Optional[str] = None,

@@ -870,8 +870,14 @@ socialeyes unload studies/example
 
 For every session of the study on the phone it reads each file's SHA-256 on the phone,
 copies the session into the study's data folder and checks every file, makes the second
-copy if one is set (and checks it), runs the session analysis (`analysis_out/<study>/…`)
-and records the session in `sessions.csv` in the data folder. **The phone keeps every
+copy if one is set (and checks it), copies the Neon recording the session is paired with
+(`session.json`'s `neon.recording_id`, from Neon Companion's folder on the phone) into
+`<participant>/neon/<recording id>/` the same way, runs the session analysis
+(`analysis_out/<study>/…`) and records the session in `sessions.csv` in the data folder. Companion
+owns its recordings, so they are never deleted from the phone, and a recording no longer on the
+phone (for example uploaded to Pupil Cloud and removed) is listed as *not on the phone*. The Data
+page's **Analyse eye tracking** then runs `socialeyes gaze` on every session whose recording is
+copied and not analysed yet. **The phone keeps every
 session**: losing data is the bigger risk. When you're ready, `socialeyes unload --clear` (or
 **Clear copied from the phone** on the Data page) deletes from the phone only the sessions whose
 copy on this computer, and second copy if one is set, still match the phone's files file for
@@ -891,7 +897,10 @@ socialeyes folders studies/example --second-copy none      # stop making a secon
 
 `sessions.csv` has one row per session: participant, start time, phone, app version,
 completed or not, duration, group, the study build it ran (`package_sha256`), quality
-warnings, a flag when a participant ID was used twice, and a `notes` column. Notes and any
+warnings, a flag when a participant ID was used twice, its Neon recording and whether it was
+copied (`neon_recording`, `neon_copy`), after eye tracking analysis the feed's tracked share and
+the accuracy and offset at the validation dots (`gaze_mapped`, `gaze_accuracy_deg`,
+`gaze_offset_deg`), and a `notes` column. Notes and any
 columns you add in Excel are kept when the app updates the file (close it in Excel first).
 
 To analyse a single session by hand:

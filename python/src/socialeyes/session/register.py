@@ -14,7 +14,8 @@ from pathlib import Path
 REGISTER = "sessions.csv"
 APP_COLUMNS = ["participant_id", "session_uid", "status", "status_at", "started", "phone", "app_version", "completed", "end_reason",
                "duration_s", "group_key", "package_sha256", "n_warnings", "warnings", "duplicate_id",
-               "on_phone", "unloaded_at"]
+               "on_phone", "unloaded_at", "neon_recording", "neon_copy", "gaze_mapped", "gaze_accuracy_deg",
+               "gaze_offset_deg"]
 COLUMNS = APP_COLUMNS + ["notes"]
 
 

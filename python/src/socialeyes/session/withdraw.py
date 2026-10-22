@@ -139,7 +139,7 @@ def withdraw(study_dir: Path | str, participant_id: str, reason: str = "") -> Wi
     if pid in register.withdrawn_ids(reg):
         raise ValueError(f"{pid} is withdrawn already")
     sources = [base / pid for base in _places(sid) if (base / pid).is_dir()]
-    r.sessions = sorted({p.name for s in sources for p in s.iterdir() if p.is_dir()})
+    r.sessions = sorted({p.name for s in sources for p in s.iterdir() if (p / "session.json").is_file()})
     r.neon_recordings = _neon_ids(sources)
     files = sum(_count_files(s) for s in sources)
     for src in sources:
@@ -175,7 +175,7 @@ def restore(study_dir: Path | str, participant_id: str) -> WithdrawResult:
     held = [base / HOLD / pid for base in _places(sid) if (base / HOLD / pid).is_dir()]
     if not held and any(e["participant_id"] == pid and e["action"] == "deleted" for e in status(study_dir)["log"]):
         raise ValueError(f"{pid}'s data was deleted permanently; it can't be restored")
-    r.sessions = sorted({p.name for h in held for p in h.iterdir() if p.is_dir()})
+    r.sessions = sorted({p.name for h in held for p in h.iterdir() if (p / "session.json").is_file()})
     files = sum(_count_files(h) for h in held)
     for h in held:
         dest = h.parent.parent / pid
@@ -203,7 +203,7 @@ def delete_permanently(study_dir: Path | str, participant_id: str, serial: Optio
     if pid not in register.withdrawn_ids(reg):
         raise ValueError(f"{pid} isn't withdrawn: withdraw them first")
     held = [base / HOLD / pid for base in _places(sid) if (base / HOLD / pid).is_dir()]
-    r.sessions = sorted({p.name for h in held for p in h.iterdir() if p.is_dir()})
+    r.sessions = sorted({p.name for h in held for p in h.iterdir() if (p / "session.json").is_file()})
     r.neon_recordings = _neon_ids(held)
     files = sum(_count_files(h) for h in held)
     for h in held:

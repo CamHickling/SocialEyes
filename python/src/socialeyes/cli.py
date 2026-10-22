@@ -175,58 +175,32 @@ def cmd_aois(args) -> int:
 
 
 def cmd_gaze(args) -> int:
-    from .gaze.mapping import map_gaze, summary
-    from .gaze.neon import NeonFormatError, read_recording
-    from .gaze.tracking import clock_offset_ns, track_recording
+    from .gaze import validation
+    from .gaze.neon import NeonFormatError
+    from .gaze.pipeline import analyse_gaze
     from .session.io import SessionFormatError, load_session
 
     try:
-        rec = read_recording(args.neon)
         session = load_session(args.session)
+        out = Path(args.out) if args.out else (Path("analysis_out") / (_study_id(args.session) or "unknown")
+                                               / session.participant_id / (session.meta.get("session_uid") or Path(args.session).name))
         progress = lambda step, n, total: print(f"  {step}: frame {n}/{total}", file=sys.stderr, flush=True)  # noqa: E731
-        tracking = track_recording(rec, session, args.max_bridge_ms, progress)
+        r = analyse_gaze(args.neon, args.session, out, build=Path(args.build) if args.build else None,
+                         offset=not args.no_offset, max_bridge_ms=args.max_bridge_ms, study_id=_study_id(args.session),
+                         progress=progress)
     except (NeonFormatError, SessionFormatError, ValueError, FileNotFoundError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
-    dev = session.device
-    # accuracy at the validation dots, and the session's gaze offset from them (applied to all gaze)
-    from .gaze import validation
+    import pandas as pd
 
-    dots, offset, accuracy = validation.score(rec, session, tracking, clock_offset_ns(session))
-    if args.no_offset:
-        offset = None
-    accuracy["offset_applied"] = offset is not None
-    gaze = map_gaze(rec, tracking, clock_offset_ns(session), dev["screen_width_px"], dev["screen_height_px"],
-                    offset=offset)
-    out = Path(args.out) if args.out else (Path("analysis_out") / (_study_id(args.session) or "unknown")
-                                           / session.participant_id / (session.meta.get("session_uid") or Path(args.session).name))
-    out.mkdir(parents=True, exist_ok=True)
-    dots.to_csv(out / "validation.csv", index=False)
-    (out / "validation.json").write_text(json.dumps(accuracy, indent=1), encoding="utf-8")
-    print(validation.report(accuracy))
-    tracking.to_csv(out / "screen_tracking.csv", index=False)
-    gaze.to_csv(out / "gaze_screen.csv", index=False)
-    print(f"{session.participant_id}: phone tracked in {len(tracking)} scene frames")
-    print(summary(tracking, gaze).to_string(index=False))
-    print(f"Wrote {out / 'screen_tracking.csv'} and {out / 'gaze_screen.csv'}")
-
-    # Neon's fixations, on the screen and on the post images (with the build the session ran)
-    from .gaze.fixations import map_fixations, read_fixations
-
-    build = Path(args.build) if args.build else None
-    if build is None and session.package_sha256 and _study_id(args.session):
-        from . import settings
-
-        snap = settings.build_snapshot(_study_id(args.session), session.package_sha256)
-        build = snap if (snap / "study.json").is_file() else None
-    try:
-        fix = map_fixations(read_fixations(args.neon), gaze, session, clock_offset_ns(session), build)
-    except FileNotFoundError as e:
-        print(f"warning: no fixations: {e}", file=sys.stderr)
+    print(validation.report(r["accuracy"]))
+    print(f"{r['participant_id']}: phone tracked in {r['frames']} scene frames")
+    print(pd.DataFrame(r["steps"]).to_string(index=False))
+    print(f"Wrote {out / 'screen_tracking.csv'}, {out / 'gaze_screen.csv'} and {out / 'validation.csv'}")
+    if r["fixations"] is None:
+        print(f"warning: no fixations: {r.get('fixations_error')}", file=sys.stderr)
         return 0
-    fix.to_csv(out / "fixations.csv", index=False)
-    on_img = fix[fix["image_id"].fillna("") != ""]
-    print(f"{len(fix)} fixations, {len(on_img)} on post images" + ("" if build else
+    print(f"{r['fixations']} fixations, {r['on_images']} on post images" + ("" if r["build"] else
           " (no build found: give --build to place them on the images)"))
     print(f"Wrote {out / 'fixations.csv'}")
     return 0
@@ -394,6 +368,8 @@ def cmd_unload(args) -> int:
         parts.append(("copied and checked" + (", second copy checked" if s.second_copy else "")) if s.copied else "not copied")
         parts.append("deleted from the phone" if s.deleted else f"on the phone: {s.kept_reason}")
         print(f"  {s.participant_id} {s.session_uid}: {', '.join(parts)}")
+        if s.neon:
+            print(f"      Neon recording: {s.neon}")
         for w in s.warnings:
             print(f"      warning: {w}")
     print(f"Data folder: {r.data_dir} (register: sessions.csv)")
