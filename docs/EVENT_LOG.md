@@ -90,7 +90,8 @@ the analysis map a screen point to exact image pixels.
               "front_camera": {"enabled": false}},
   "sensors": {"hz": 50, "accel": "LSM6DSR Accelerometer", "gyro": "LSM6DSR Gyroscope",
               "rotation": "Game Rotation Vector"},
-  "camera": {"lens": "front", "width": 1024, "height": 768, "fps": 30, "timestamp_source": "realtime", "orientation": 270},
+  "camera": {"lens": "front", "width": 1024, "height": 768, "fps": 30, "timestamp_source": "realtime", "orientation": 270,
+             "stream": "private_sink"},
   "end": {"reason": "completed", "clock": {"elapsed_ns": 0, "uptime_ns": 0, "wall_ms": 0}}
 }
 ```
@@ -219,7 +220,7 @@ the type. Unknown types must be ignored by readers, so the app can add new ones.
 | `battery` | `level` (0-1), `temp_c`: once per minute |
 | `screen_recording` | **(planned)** `status` (`started`, `stopped`), `file` |
 | `thermal` | `status` (`none`, `light`, `moderate`, `severe`, `critical`, `emergency`, `shutdown`; Android's `PowerManager` thermal status): at start and on every change |
-| `camera` | `status` (`started`, `segment`, `stopped`, `error`), `file` (on `started`/`segment`), `message` (on `error`) |
+| `camera` | `status` (`started`, `segment`, `stopped`, `fallback`, `error`), `file` (on `started`/`segment`), `stream` (on `fallback`: the way tried next, see Front camera), `message` (on `fallback`/`error`) |
 | `camera_check` | `step_id`, `result` (`ok` or `failed`), `face_s` (seconds until a face was held in view) |
 | `profile_photo` | `step_id`, `result` (`taken`, `skipped` or `camera_unavailable`), `retakes`: end of a profile_photo step. The photo itself is never stored |
 
@@ -306,7 +307,12 @@ participant at any time. `resolution` picks the size whose short side is closest
 among sizes with the sensor's own aspect ratio (usually 4:3), so the whole field of
 view is kept: `720p` gives 1024x768 on the Pixel 3. Next to the encoder the camera
 also fills a small hidden preview-type stream that is thrown away; some drivers
-(the Pixel 3's) drop every video frame without one.
+(the Pixel 3's) drop every video frame without one. Other drivers refuse that stream,
+so if no frame arrives within 2.5 s the app tries the next way, in turn: a hidden YUV
+stream, the encoder alone, then the encoder alone at 480p. Each change is a `camera`
+event with `status` `fallback`; the way that worked is remembered for the phone (the
+next recording starts with it) and written to `camera.stream`. If none gives frames,
+recording stops with a `camera` `error`.
 
 **Segments.** A new file starts every `segment_s` seconds and at every
 recording start: `camera/front_000.mp4`, `front_001.mp4`, ..., numbered across
@@ -358,7 +364,7 @@ was covered.
 
 | file | contents |
 |---|---|
-| `quality.json` | duration, completed?, time in background, interruptions (count and seconds per kind), Do Not Disturb at start, dropped frames, phone slept?, Neon recording id, Neon disconnects, the scene camera settings the app set (`neon_scene_camera`), and warnings when the recording didn't start, may not have saved, the camera settings weren't put back, or the eye tracker check warned, thermal status, camera framing checks (`camera_checks`: result and seconds to a face, with a warning when one failed), display calibrations (`display_calibration`: status and the brightness and scene camera chosen, with a warning when one didn't run), front camera segments, dropped frames and coverage, motion sensor rate and gaps, the session's `group_key` and `package_sha256` (with a warning when it differs from the `--build` package) |
+| `quality.json` | duration, completed?, time in background, interruptions (count and seconds per kind), Do Not Disturb at start, dropped frames, phone slept?, Neon recording id, Neon disconnects, the scene camera settings the app set (`neon_scene_camera`), and warnings when the recording didn't start, may not have saved, the camera settings weren't put back, or the eye tracker check warned, thermal status, camera framing checks (`camera_checks`: result and seconds to a face, with a warning when one failed), display calibrations (`display_calibration`: status and the brightness and scene camera chosen, with a warning when one didn't run), front camera segments, dropped frames and coverage, and how the camera was streamed (`stream`, `stream_fallbacks`: ways tried before frames arrived), motion sensor rate and gaps, the session's `group_key` and `package_sha256` (with a warning when it differs from the `--build` package) |
 | `strokes.csv` | one row per finger stroke: duration, distance, speed, `gesture` = `tap`, `double_tap`, `long_press`, `scroll`, `fling`, `pinch` |
 | `exposure.csv` | per post and element: seconds on screen (any part / fully / area-weighted), first time seen, times scrolled into view |
 | `touch_targets.csv` | every touch sample mapped to post, element, image pixel and AOI |

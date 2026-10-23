@@ -6,7 +6,9 @@ all use these functions. Rules (CAM-156):
 - *block*: no usable phone, study has errors, app missing with nothing to install,
   not enough storage, or replacing a study whose sessions are still on the phone.
 - *warn* (needs "load anyway"): battery under 50%, Do Not Disturb off, display
-  size or font size not the default.
+  size or font size not the default, Battery Saver on, the app restricted in the
+  background, or (on makers whose phones stop apps to save battery) the app not
+  exempt from battery optimisation (CAM-185).
 - the app is installed when missing; a newer app is only installed when asked
   (``update_app``). The phone's app is never uninstalled (that deletes its data).
 """
@@ -30,6 +32,21 @@ STORAGE_MARGIN = 500 * 2**20          # room for session data beyond the study i
 CAMERA_MARGIN = 2 * 2**30             # front camera video
 CAMERA_STEPS = ("profile_photo", "camera_check")   # procedure steps that use the front camera
 ZEN_MODES = {"0": "off", "1": "priority only", "2": "total silence", "3": "alarms only"}
+
+# Makers whose own battery savers stop apps beyond Android's (dontkillmyapp.com), and where
+# their settings usually are. The computer can't read or change these lists over adb.
+BATTERY_KILLERS = {
+    "samsung": "Settings > Battery > Background usage limits: take SocialEyes off Sleeping apps and Deep "
+               "sleeping apps, and turn off Put unused apps to sleep.",
+    "xiaomi": "Settings > Apps > Manage apps > SocialEyes: turn on Autostart and set Battery saver to No restrictions.",
+    "huawei": "Settings > Battery > App launch: set SocialEyes to Manage manually, with all three switches on.",
+    "honor": "Settings > Battery > App launch: set SocialEyes to Manage manually, with all three switches on.",
+    "oppo": "Settings > Battery > SocialEyes: allow background activity and turn off Optimise battery use.",
+    "realme": "Settings > Battery > SocialEyes: allow background activity and turn off Optimise battery use.",
+    "oneplus": "Settings > Battery > Battery optimisation > SocialEyes: Don't optimise.",
+    "vivo": "Settings > Battery > Background power consumption management: allow SocialEyes.",
+}
+BATTERY_KILLERS.update(redmi=BATTERY_KILLERS["xiaomi"], poco=BATTERY_KILLERS["xiaomi"])
 
 
 # ---------------------------------------------------------------- the app file to install
@@ -79,6 +96,7 @@ class PhoneState:
     serial: str
     model: str = ""
     android: str = ""
+    manufacturer: str = ""                # lower case, e.g. samsung
     app_installed: bool = False
     app_version_code: Optional[int] = None
     app_version_name: Optional[str] = None
@@ -90,6 +108,9 @@ class PhoneState:
     dnd: Optional[str] = None             # off, priority only, total silence, alarms only
     display_changed: bool = False         # display size changed from the phone's default
     font_scale: Optional[float] = None
+    power_saver: Optional[bool] = None    # Battery Saver on
+    battery_optimized: Optional[bool] = None    # the app isn't exempt from battery optimisation
+    background_restricted: Optional[bool] = None  # Settings > Apps > SocialEyes > Battery: Restricted
     studies: dict = field(default_factory=dict)    # study id -> package hash on the phone (None: unknown)
     sessions: dict = field(default_factory=dict)   # study id -> sessions still on the phone
     session_ids: dict = field(default_factory=dict)  # study id -> [(participant id, session uid)] on the phone
@@ -110,6 +131,19 @@ def parse_battery(dumpsys: str) -> tuple[Optional[int], bool]:
     level = re.search(r"^\s*level: (\d+)", dumpsys, re.M)
     charging = bool(re.search(r"(AC|USB|Wireless) powered: true", dumpsys))
     return (int(level.group(1)) if level else None), charging
+
+
+def parse_background(appops: str) -> Optional[bool]:
+    """`cmd appops get <pkg> RUN_ANY_IN_BACKGROUND` -> restricted in the background (None: not reported)."""
+    m = re.search(r"RUN_ANY_IN_BACKGROUND: (\w+)", appops)
+    if m:
+        return m.group(1) in ("ignore", "deny")
+    return False if "No operations" in appops else None
+
+
+def battery_killer(manufacturer: str) -> Optional[str]:
+    """Where a maker's own battery saver is set, if the maker is known to stop apps."""
+    return BATTERY_KILLERS.get((manufacturer or "").lower().strip())
 
 
 def parse_df(df: str) -> Optional[int]:
@@ -166,10 +200,15 @@ def read_phone(adb: Adb) -> PhoneState:
     device = adb.choose()
     s = PhoneState(serial=device.serial, model=device.model)
     s.android = adb.shell("getprop ro.build.version.release").strip()
+    s.manufacturer = adb.shell("getprop ro.product.manufacturer").strip().lower()
     s.app_installed, s.app_version_code, s.app_version_name, s.camera_granted = parse_package(
         adb.shell(f"dumpsys package {PACKAGE}"))
     s.app_running = bool(adb.shell(f"pidof {PACKAGE}").strip())
     s.battery, s.charging = parse_battery(adb.shell("dumpsys battery"))
+    s.power_saver = {"1": True, "0": False}.get(adb.shell("settings get global low_power").strip())
+    if s.app_installed:
+        s.battery_optimized = PACKAGE not in adb.shell("dumpsys deviceidle whitelist")
+        s.background_restricted = parse_background(adb.shell(f"cmd appops get {PACKAGE} RUN_ANY_IN_BACKGROUND"))
     s.free_bytes = parse_df(adb.shell("df -k /sdcard"))
     s.dnd = ZEN_MODES.get(adb.shell("settings get global zen_mode").strip())
     s.display_changed = "Override" in adb.shell("wm size") + adb.shell("wm density")
@@ -309,7 +348,30 @@ def readiness(phone: PhoneState, study: Optional[StudyInfo] = None, apk: Optiona
     if phone.font_scale is not None and abs(phone.font_scale - 1.0) > 1e-6:
         add("warn", f"The phone's font size is {phone.font_scale:g}x, not the default; text in the feed "
                     "will look different.")
+    for level, text in battery_checks(phone):
+        add(level, text)
     return checks
+
+
+def battery_checks(phone: PhoneState) -> list[tuple[str, str]]:
+    """Battery savers that can pause or stop the app during a session (CAM-185)."""
+    out = []
+    if phone.power_saver:
+        out.append(("warn", "Battery Saver is on: it slows the phone and can stop the front camera or the eye "
+                            "tracker's connection mid-session. Turn it off (Phone tab, Phone setup)."))
+    if not phone.app_installed:
+        return out
+    if phone.background_restricted:
+        out.append(("warn", "The SocialEyes app is restricted in the background, so Android can stop it if the "
+                            "screen turns off or another app comes up. Let it run unrestricted (Phone tab, Phone setup)."))
+    killer = battery_killer(phone.manufacturer)
+    if killer and phone.battery_optimized:
+        out.append(("warn", f"{phone.manufacturer.title()} phones stop apps to save battery. Exempt SocialEyes "
+                            f"(Phone tab, Phone setup), and on the phone: {killer}"))
+    elif killer:
+        out.append(("info", f"{phone.manufacturer.title()} phones can also stop apps through their own battery "
+                            f"settings; check once: {killer}"))
+    return out
 
 
 def blocked(checks: list[Check]) -> bool:

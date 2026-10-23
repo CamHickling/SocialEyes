@@ -4,7 +4,7 @@ phone itself, one step at a time, with the next step's instructions.
 ``guide`` lists the steps with a status each (done, todo, optional, waiting: an earlier step comes
 first); the first one to do is the "next" step. Steps the computer can do over adb carry an
 ``action`` that ``do`` runs (install the app, open it once, allow the camera, Do Not Disturb on,
-display size back to default); the rest say what to tap on the phone. Nothing here deletes data:
+display size back to default, battery savers off for the app); the rest say what to tap on the phone. Nothing here deletes data:
 the app is installed with ``install -r``, never uninstalled.
 """
 from __future__ import annotations
@@ -14,7 +14,7 @@ from typing import Optional
 
 from .adb import PACKAGE, Adb, AdbError
 
-ACTIONS = ("install", "open_app", "camera", "dnd", "display")
+ACTIONS = ("install", "open_app", "camera", "dnd", "display", "battery_saver")
 
 
 @dataclass
@@ -65,6 +65,11 @@ def _steps() -> list[Step]:
             "Changed sizes make the feed look different from other phones. Click Reset them, or set "
             "Settings > Display > Display size and Font size back to the default.",
         ]),
+        Step("battery_saver", "Stop battery savers pausing the app", action="battery_saver",
+             action_label="Exempt the app", how=[
+            "Battery savers can slow the phone or stop the app mid-session. Click Exempt the app: it turns off "
+            "Battery Saver and lets SocialEyes run without battery optimisation or background limits.",
+        ]),
         Step("battery", "Charge the battery", how=[
             "Charge the phone to at least 50% before a session; a session with the front camera uses more.",
         ]),
@@ -73,6 +78,7 @@ def _steps() -> list[Step]:
 
 def guide(serial: Optional[str] = None, adb: Optional[Adb] = None) -> dict:
     """{device: {serial, model, state} or None, steps: [Step], next: id of the first step to do or None}."""
+    from . import loader
     from .loader import MIN_BATTERY, read_phone
 
     steps = {s.id: s for s in _steps()}
@@ -142,6 +148,20 @@ def guide(serial: Optional[str] = None, adb: Optional[Adb] = None) -> dict:
     changed = p.display_changed or (p.font_scale is not None and abs(p.font_scale - 1.0) > 1e-6)
     s.status = "todo" if changed else "done"
     s.detail = "Changed from the default." if changed else "Default."
+    s = steps["battery_saver"]
+    if p.app_installed:
+        problems = [text for flag, text in ((p.power_saver, "Battery Saver is on"),
+                                            (p.background_restricted, "the app is restricted in the background"),
+                                            (p.battery_optimized, "the app is battery-optimised")) if flag]
+        killer = loader.battery_killer(p.manufacturer)
+        s.status = "todo" if problems else "optional" if killer else "done"
+        s.detail = (problems[0][0].upper() + "; ".join(problems)[1:] + "." if problems else "Exempt.")
+        if killer:
+            s.how = s.how + [f"{p.manufacturer.title()} phones also have their own list, which only the phone can "
+                             f"change: {killer}"]
+            if not problems:
+                s.action = None
+                s.detail = "Exempt from Android's battery savers; check the phone's own list once."
     s = steps["battery"]
     if p.battery is not None:
         s.status = "done" if p.battery >= MIN_BATTERY else "todo"
@@ -150,7 +170,7 @@ def guide(serial: Optional[str] = None, adb: Optional[Adb] = None) -> dict:
     return out
 
 
-AFTER = {"open": "app", "camera": "app", "ruler": "open"}   # a step that needs another done first
+AFTER = {"open": "app", "camera": "app", "ruler": "open", "battery_saver": "app"}   # a step that needs another done first
 
 
 def _settle(out: dict) -> None:
@@ -199,6 +219,14 @@ def do(action: str, serial: Optional[str] = None, adb: Optional[Adb] = None) -> 
                            + (f" ({out.strip().splitlines()[-1]})" if out.strip() else "")
                            + "; swipe down from the top of its screen and tap Do Not Disturb.")
         return "Turned on Do Not Disturb (priority only)."
+    if action == "battery_saver":
+        adb.shell("settings put global low_power 0")
+        adb.shell(f"cmd deviceidle whitelist +{PACKAGE}")
+        adb.shell(f"cmd appops set {PACKAGE} RUN_ANY_IN_BACKGROUND allow")
+        if PACKAGE not in adb.shell("dumpsys deviceidle whitelist"):
+            raise AdbError("This phone doesn't let the computer exempt the app; on the phone open Settings > Apps > "
+                           "SocialEyes > Battery and choose Unrestricted.")
+        return "Turned off Battery Saver and exempted SocialEyes from battery optimisation and background limits."
     adb.shell("wm size reset")
     adb.shell("wm density reset")
     adb.shell("settings put system font_scale 1.0")

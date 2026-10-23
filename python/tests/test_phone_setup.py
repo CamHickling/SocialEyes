@@ -79,3 +79,33 @@ def test_actions_run_on_the_phone_and_say_when_it_must_be_done_by_hand():
     assert adb.calls == ["wm size reset", "wm density reset", "settings put system font_scale 1.0"]
     with pytest.raises(ValueError):
         S.do("uninstall", adb=adb)
+
+
+def test_battery_savers_are_found_and_a_makers_own_list_is_pointed_out(monkeypatch):
+    phone = dict(serial="ABC", app_installed=True, profile={}, battery=90, dnd="priority only", font_scale=1.0)
+    monkeypatch.setattr(loader, "read_phone", lambda adb: PhoneState(
+        **phone, power_saver=True, battery_optimized=True, manufacturer="google"))
+    s = by_id(S.guide(adb=FakeAdb([Device("ABC", "device")])))["battery_saver"]
+    assert s["status"] == "todo" and s["action"] == "battery_saver" and s["detail"].startswith("Battery Saver is on;")
+    monkeypatch.setattr(loader, "read_phone", lambda adb: PhoneState(
+        **phone, power_saver=False, battery_optimized=False, background_restricted=False, manufacturer="samsung"))
+    s = by_id(S.guide(adb=FakeAdb([Device("ABC", "device")])))["battery_saver"]
+    assert s["status"] == "optional" and s["action"] is None and "Sleeping apps" in s["how"][-1]
+
+
+def test_exempting_the_app_runs_on_the_phone_and_says_when_it_didnt_take():
+    adb = FakeAdb([Device("ABC", "device")], shell={"dumpsys deviceidle whitelist": f"user,{S.PACKAGE},10123"})
+    assert "exempted" in S.do("battery_saver", adb=adb)
+    assert f"cmd deviceidle whitelist +{S.PACKAGE}" in adb.calls
+    with pytest.raises(AdbError, match="Unrestricted"):
+        S.do("battery_saver", adb=FakeAdb([Device("ABC", "device")]))
+
+
+def test_readiness_warns_about_battery_savers():
+    p = PhoneState(serial="ABC", app_installed=True, power_saver=True, background_restricted=True,
+                   battery_optimized=True, manufacturer="xiaomi")
+    warns = [c.text for c in loader.readiness(p) if c.level == "warn"]
+    assert any("Battery Saver" in t for t in warns) and any("restricted" in t for t in warns)
+    assert any(t.startswith("Xiaomi phones stop apps") and "Autostart" in t for t in warns)
+    assert loader.parse_background("RUN_ANY_IN_BACKGROUND: ignore; time=+1d") is True
+    assert loader.parse_background("No operations.") is False

@@ -278,6 +278,9 @@ def camera_quality(s: Session) -> dict | None:
         "fps_requested": fps,
         "fps_achieved": round(achieved, 2),
         "step_coverage": coverage,
+        # how the app fed the camera to the encoder, and how many ways it tried first (CAM-185)
+        "stream": info.get("stream"),
+        "stream_fallbacks": int((ev["status"] == "fallback").sum()) if "status" in (ev := s.events_of("camera")) else 0,
         "warnings": warnings,
     })
     return out

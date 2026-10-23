@@ -2558,7 +2558,7 @@ if (typeof module !== "undefined") module.exports = Core;
     }
     const step = (s) => {
       const [cls, ic] = SETUP_ICON[s.status];
-      const open = s.id === g.next || (s.status === "optional" && s.action) || (s.status === "todo" && P.setupOpen);
+      const open = s.id === g.next || s.status === "optional" || (s.status === "todo" && P.setupOpen);
       return `<li class="${s.id === g.next ? "next" : cls}">
         <div class="msg"><span class="ic">${ic}</span><span><b>${esc(s.title)}</b>${s.detail ? ` <span class="hint">${esc(s.detail)}</span>` : ""}</span></div>
         ${open ? `<div class="how">${s.how.map((h) => `<p>${esc(h)}</p>`).join("")}

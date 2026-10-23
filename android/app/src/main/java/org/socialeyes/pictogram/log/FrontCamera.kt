@@ -78,6 +78,22 @@ private class FrontCameraInfo(val id: String, val chars: CameraCharacteristics) 
 }
 
 /**
+ * Ways of feeding the camera to the encoder, tried in turn until frames arrive (CAM-185).
+ * Drivers differ: the Pixel 3's drops every video frame unless a preview-type stream runs
+ * alongside, others refuse a PRIVATE stream, or two streams at once. The way that worked is
+ * remembered per camera, so the next recording starts with it.
+ */
+private enum class StreamMode(val sinkFormat: Int?, val shortSide: Int?) {
+    PRIVATE_SINK(ImageFormat.PRIVATE, null),
+    YUV_SINK(ImageFormat.YUV_420_888, null),
+    ENCODER_ONLY(null, null),
+    ENCODER_ONLY_480P(null, 480),
+}
+
+/** How long a new camera stream may take to deliver its first encoded frame. */
+private const val FIRST_FRAME_MS = 2500L
+
+/**
  * Records the front camera into H.264 MP4 segments with one `camera_frames.csv`
  * row per encoded frame (docs/EVENT_LOG.md, "Front camera"). The camera feeds the
  * encoder's input surface directly, so each encoded frame carries the camera's
@@ -93,6 +109,7 @@ class FrontCameraRecorder(context: Context, private val dir: File, private val l
     private val thread = HandlerThread("front-camera").apply { start() }
     private val handler = Handler(thread.looper)
     private val info = FrontCameraInfo.find(manager)
+    private val prefs = context.getSharedPreferences("front_camera", Context.MODE_PRIVATE)
 
     // touched only on the camera thread
     private var device: CameraDevice? = null
@@ -102,6 +119,11 @@ class FrontCameraRecorder(context: Context, private val dir: File, private val l
     // An invisible preview-like stream next to the encoder. Some drivers (the Pixel 3's)
     // only run a video stream alongside a preview, and lose every frame otherwise.
     private var previewSink: ImageReader? = null
+    private var mode = StreamMode.PRIVATE_SINK
+    private var modesTried = 0
+    private var framesSinceOpen = 0
+    private val firstFrameCheck = Runnable { if (framesSinceOpen > 0) remember() else fallBack("no frames within $FIRST_FRAME_MS ms") }
+    private val reopen = Runnable { open(mode) }
     private var muxer: MediaMuxer? = null
     private var track = -1
     private var outputFormat: MediaFormat? = null
@@ -126,7 +148,13 @@ class FrontCameraRecorder(context: Context, private val dir: File, private val l
     val available get() = info != null
 
     /** Starts recording (a new segment), unless it already is. */
-    fun start() = handler.post { if (!recording) open() }
+    fun start() = handler.post {
+        handler.removeCallbacks(reopen)
+        if (!recording) {
+            modesTried = 0
+            open(remembered())
+        }
+    }
 
     /**
      * Stops recording and closes the current segment. With [wait], blocks until the
@@ -136,6 +164,8 @@ class FrontCameraRecorder(context: Context, private val dir: File, private val l
     fun stop(wait: Boolean = true) {
         val done = CountDownLatch(1)
         handler.post {
+            handler.removeCallbacks(reopen)
+            recording = false
             if (encoder == null && device == null) done.countDown() else {
                 closeLatch = done
                 close("stopped")
@@ -152,13 +182,16 @@ class FrontCameraRecorder(context: Context, private val dir: File, private val l
     // ------------------------------------------------------------ camera thread
 
     @SuppressLint("MissingPermission") // the setup screen asks for the camera
-    private fun open() {
+    private fun open(stream: StreamMode) {
         val cam = info ?: return error("no front camera")
         if (closing) finishClose() // restarted before the last file finished flushing
+        mode = stream
+        modesTried++
+        framesSinceOpen = 0
         try {
             ptsToSensorNs = null // the clock offset can change while the phone sleeps
             captured.clear()
-            val size = chooseSize(cam)
+            val size = chooseSize(cam, stream.shortSide)
             val fpsRange = chooseFps(cam)
             val enc = createEncoder(size)
             recording = true
@@ -169,6 +202,7 @@ class FrontCameraRecorder(context: Context, private val dir: File, private val l
                 put("fps", fpsRange.upper)
                 put("timestamp_source", if (cam.realtime) "realtime" else "unknown")
                 put("orientation", cam.orientation)
+                put("stream", stream.name.lowercase())
                 cam.focalMm?.let { put("focal_mm", it) }
                 cam.focalPx(size.width)?.let { put("focal_px", Math.round(it * 10) / 10.0) }
             })
@@ -197,31 +231,89 @@ class FrontCameraRecorder(context: Context, private val dir: File, private val l
     @Suppress("DEPRECATION") // createCaptureSession(List<Surface>, ...) is fine on API 29+
     private fun startSession(d: CameraDevice, enc: MediaCodec, fps: Range<Int>) {
         val surface = inputSurface ?: return
-        val sink = ImageReader.newInstance(
-            640, 480, ImageFormat.PRIVATE, 2, HardwareBuffer.USAGE_GPU_SAMPLED_IMAGE,
-        ).also { previewSink = it }
-        sink.setOnImageAvailableListener({ r -> r.acquireLatestImage()?.close() }, handler) // never shown
-        d.createCaptureSession(listOf(surface, sink.surface), object : CameraCaptureSession.StateCallback() {
-            override fun onConfigured(s: CameraCaptureSession) {
-                session = s
-                val request = d.createCaptureRequest(CameraDevice.TEMPLATE_RECORD).apply {
-                    addTarget(surface)
-                    addTarget(sink.surface)
-                    set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, fps)
-                }.build()
-                s.setRepeatingRequest(request, object : CameraCaptureSession.CaptureCallback() {
-                    override fun onCaptureCompleted(s: CameraCaptureSession, r: CaptureRequest, result: TotalCaptureResult) {
-                        val ts = result.get(CaptureResult.SENSOR_TIMESTAMP) ?: return
-                        captured[ts] = result.get(CaptureResult.SENSOR_EXPOSURE_TIME)
-                        while (captured.size > 120) captured.pollFirstEntry() // ~4 s at 30 fps
+        val sink = try {
+            when (val f = mode.sinkFormat) {
+                null -> null
+                ImageFormat.PRIVATE -> ImageReader.newInstance(640, 480, f, 2, HardwareBuffer.USAGE_GPU_SAMPLED_IMAGE)
+                else -> ImageReader.newInstance(640, 480, f, 2)
+            }
+        } catch (e: Exception) {
+            return fallBack("hidden stream: ${e.message}")
+        }
+        previewSink = sink
+        sink?.setOnImageAvailableListener({ r -> r.acquireLatestImage()?.close() }, handler) // never shown
+        try {
+            d.createCaptureSession(listOfNotNull(surface, sink?.surface), object : CameraCaptureSession.StateCallback() {
+                override fun onConfigured(s: CameraCaptureSession) {
+                    session = s
+                    try {
+                        val request = d.createCaptureRequest(CameraDevice.TEMPLATE_RECORD).apply {
+                            addTarget(surface)
+                            sink?.let { addTarget(it.surface) }
+                            set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, fps)
+                        }.build()
+                        s.setRepeatingRequest(request, object : CameraCaptureSession.CaptureCallback() {
+                            override fun onCaptureCompleted(s: CameraCaptureSession, r: CaptureRequest, result: TotalCaptureResult) {
+                                val ts = result.get(CaptureResult.SENSOR_TIMESTAMP) ?: return
+                                captured[ts] = result.get(CaptureResult.SENSOR_EXPOSURE_TIME)
+                                while (captured.size > 120) captured.pollFirstEntry() // ~4 s at 30 fps
+                            }
+                        }, handler)
+                        handler.postDelayed(firstFrameCheck, FIRST_FRAME_MS)
+                    } catch (e: Exception) {
+                        fallBack("capture request: ${e.message}")
                     }
-                }, handler)
-            }
+                }
 
-            override fun onConfigureFailed(s: CameraCaptureSession) {
-                close("stopped", "camera session could not be configured")
-            }
-        }, handler)
+                override fun onConfigureFailed(s: CameraCaptureSession) = fallBack("camera session could not be configured")
+            }, handler)
+        } catch (e: Exception) {
+            fallBack("camera session: ${e.message}")
+        }
+    }
+
+    /** The stream mode that last delivered frames on this camera (the first mode if none has yet). */
+    private fun remembered(): StreamMode {
+        val name = info?.let { prefs.getString("mode_${it.id}", null) }
+        return StreamMode.values().firstOrNull { it.name == name } ?: StreamMode.PRIVATE_SINK
+    }
+
+    private fun remember() {
+        val id = info?.id ?: return
+        if (prefs.getString("mode_$id", null) != mode.name) prefs.edit().putString("mode_$id", mode.name).apply()
+    }
+
+    /**
+     * This stream mode gave no frames: tears the camera and encoder down (nothing was written)
+     * and opens the next mode, after the camera has had a moment to close. Stops recording
+     * once every mode has been tried.
+     */
+    private fun fallBack(reason: String) {
+        handler.removeCallbacks(firstFrameCheck)
+        if (closing || !recording) return
+        val modes = StreamMode.values()
+        if (modesTried >= modes.size || framesSinceOpen > 0) {
+            return close("stopped", "front camera gave no frames (${mode.name.lowercase()}: $reason)")
+        }
+        val next = modes[(mode.ordinal + 1) % modes.size]
+        Log.w(TAG, "${mode.name}: $reason; trying ${next.name}")
+        log.event("camera", fields = arrayOf("status" to "fallback", "stream" to next.name.lowercase(),
+            "message" to "${mode.name.lowercase()}: $reason"))
+        runCatching { session?.close() }
+        session = null
+        runCatching { device?.close() }
+        device = null
+        runCatching { previewSink?.close() }
+        previewSink = null
+        encoder?.let { runCatching { it.stop() }; runCatching { it.release() } }
+        encoder = null
+        inputSurface?.release()
+        inputSurface = null
+        closeMuxer()
+        outputFormat = null
+        recording = false
+        mode = next
+        handler.postDelayed(reopen, 300)
     }
 
     private fun createEncoder(size: Size): MediaCodec {
@@ -241,6 +333,7 @@ class FrontCameraRecorder(context: Context, private val dir: File, private val l
 
             override fun onOutputBufferAvailable(c: MediaCodec, index: Int, bi: MediaCodec.BufferInfo) {
                 val last = bi.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0
+                if (bi.size > 0 && bi.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG == 0) framesSinceOpen++
                 writeFrame(c, index, bi)
                 if (last) finishClose() // the encoder has flushed its last frames
             }
@@ -337,6 +430,8 @@ class FrontCameraRecorder(context: Context, private val dir: File, private val l
      */
     private fun close(status: String, message: String? = null) {
         if (message != null) error(message)
+        handler.removeCallbacks(firstFrameCheck)
+        handler.removeCallbacks(reopen)
         if (closing) return
         if (encoder == null && device == null) {
             closeLatch?.countDown()
@@ -379,8 +474,8 @@ class FrontCameraRecorder(context: Context, private val dir: File, private val l
         log.event("camera", fields = arrayOf("status" to "error", "message" to message))
     }
 
-    private fun chooseSize(cam: FrontCameraInfo): Size {
-        val target = when (config.resolution) {
+    private fun chooseSize(cam: FrontCameraInfo, shortSide: Int? = null): Size {
+        val target = shortSide ?: when (config.resolution) {
             "480p" -> 480
             "1080p" -> 1080
             else -> 720
