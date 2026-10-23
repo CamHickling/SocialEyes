@@ -20,7 +20,7 @@ import json
 import sys
 from pathlib import Path
 
-from . import __version__
+from . import __version__, experimental
 
 
 def _print_report(rep) -> None:
@@ -137,6 +137,9 @@ def cmd_face(args) -> int:
         looking = "" if st["looking_share"] is None else f", looking at the phone {100 * st['looking_share']:.0f}%"
         dist = "" if st["distance_mm_median"] is None else f", {st['distance_mm_median'] / 10:.0f} cm away"
         print(f"  {step}: face in {100 * st['face_share']:.0f}% of {st['frames']} frames{looking}{dist}")
+    if r.posts is not None and len(r.posts):
+        print(f"  expressions while each post was on screen: {len(r.posts)} post(s), in face_posts.csv")
+    print(f"note: {experimental.note('face_analysis')}")
     for w in r.summary["warnings"]:
         print(f"warning: {w}", file=sys.stderr)
     if args.blur:
@@ -171,6 +174,7 @@ def cmd_aois(args) -> int:
             if res.aois:
                 print(f"  check {res.image}: {n}")
     print(f"Review them: {r.review}")
+    print(f"note: {experimental.note('auto_aois')}")
     return 0
 
 
@@ -203,6 +207,7 @@ def cmd_gaze(args) -> int:
     print(f"{r['fixations']} fixations, {r['on_images']} on post images" + ("" if r["build"] else
           " (no build found: give --build to place them on the images)"))
     print(f"Wrote {out / 'fixations.csv'}")
+    print(f"note: {experimental.note('gaze')}")
     return 0
 
 
@@ -219,6 +224,7 @@ def cmd_heatmaps(args) -> int:
         print(f"  skipped {folder}: {why}")
     print(f"{len(r.images)} image(s) with fixations")
     print(f"Wrote {r.page}")
+    print(f"note: {experimental.note('gaze')}")
     return 0
 
 

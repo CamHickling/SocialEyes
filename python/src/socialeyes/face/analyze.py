@@ -16,6 +16,16 @@ scores; model in models/face_landmarker.task, Apache 2.0) runs on every recorded
   can't be placed, so eye_x / eye_y are left blank and only the head counts: a blink is not
   looking away.
 
+Expressions (experimental, CAM-226): MediaPipe's 52 expression scores (ARKit blendshapes, 0-1)
+are kept per frame in face_expressions.csv, and a few readable measures are made from them
+(EXPRESSIONS: smile, frown, brow lowering, ...). They are a model's estimates, not coded facial
+action units, and haven't been checked against human coding. face_posts.csv gives, for each
+post, the seconds the face was seen while that post was in front of the participant (an open
+story, reel or comments sheet, else the post whose image filled most of the screen) and each
+measure's mean then minus the participant's own median over the feed: above 0 means more than
+their usual during the feed. People differ a lot in resting face, so compare a person with
+themselves, not people with each other.
+
 Checked against a recording of known actions (studies/face_test, 16 Oct 2026): the phone put
 down, held close (18 cm) and at arm's length (48 cm), the head turned 55° away, a hand over the
 mouth (the face is still found) all came out as expected.
@@ -41,6 +51,18 @@ AWAY_EYE = 0.45
 MIN_AWAY_S = 0.25
 BLINK = 0.45
 
+# readable expression measures: the mean of these MediaPipe expression scores
+EXPRESSIONS = {
+    "smile": ("mouthSmileLeft", "mouthSmileRight"),
+    "frown": ("mouthFrownLeft", "mouthFrownRight"),
+    "brow_lower": ("browDownLeft", "browDownRight"),
+    "brow_raise": ("browInnerUp",),
+    "nose_wrinkle": ("noseSneerLeft", "noseSneerRight"),
+    "lip_press": ("mouthPressLeft", "mouthPressRight"),
+    "cheek_raise": ("cheekSquintLeft", "cheekSquintRight"),
+}
+POST_COLUMNS = ["post_id", "face_s"] + [f"{m}_vs_usual" for m in EXPRESSIONS]
+
 FACE_COLUMNS = ["segment", "frame", "t_ns", "step_id", "faces", "face", "yaw_deg", "pitch_deg", "roll_deg",
                 "distance_mm", "eye_x", "eye_y", "blink", "looking", "box_left", "box_top", "box_right", "box_bottom"]
 
@@ -55,6 +77,7 @@ class FaceResult:
     frames: pd.DataFrame        # FACE_COLUMNS, one row per video frame
     expressions: pd.DataFrame   # segment, frame, t_ns, then one column per blendshape
     summary: dict
+    posts: pd.DataFrame = None  # POST_COLUMNS: expressions while each post was in front of the participant
 
 
 def video_frames(session: Session) -> Iterator[tuple[int, int, int, np.ndarray]]:
@@ -207,7 +230,42 @@ def analyze_faces(session_dir: Path | str, progress: Callable[[int, int], None] 
     expressions = pd.DataFrame(expr)
     if len(expressions):
         expressions = expressions.drop(columns=["_neutral"], errors="ignore")
-    return FaceResult(frames, expressions, summarize(frames, s, assumed))
+    return FaceResult(frames, expressions, summarize(frames, s, assumed), post_expressions(s, expressions))
+
+
+def expression_measures(expressions: pd.DataFrame) -> pd.DataFrame:
+    """t_ns and one column per EXPRESSIONS measure, from face_expressions.csv's scores."""
+    out = pd.DataFrame({"t_ns": expressions["t_ns"].to_numpy(np.int64)} if len(expressions) else {"t_ns": []})
+    for name, parts in EXPRESSIONS.items():
+        have = [p for p in parts if p in expressions.columns]
+        out[name] = expressions[have].mean(axis=1).to_numpy() if have and len(expressions) else np.nan
+    return out
+
+
+def post_expressions(s: Session, expressions: pd.DataFrame) -> pd.DataFrame:
+    """POST_COLUMNS, one row per post that was in front of the participant while the face was seen
+    during the feed. Each measure: its mean then minus the participant's median over the feed."""
+    from ..session.viewport import Layout
+
+    m = expression_measures(expressions)
+    start, end = s.feed_window()
+    m = m[(m["t_ns"] >= start) & (m["t_ns"] < end)]
+    if not len(m) or s.viewport is None or not len(s.viewport):
+        return pd.DataFrame(columns=POST_COLUMNS)
+    layout = Layout(s.viewport)
+    fi = layout.frame_at(m["t_ns"].to_numpy(np.int64))
+    focus = layout.focus(s.feed_area)
+    m = m.assign(post_id=np.where(fi >= 0, focus[np.clip(fi, 0, None)], ""))
+    usual = m[list(EXPRESSIONS)].median()
+    interval = float(np.median(np.diff(m["t_ns"].to_numpy(np.int64)))) / 1e9 if len(m) > 1 else 0.0
+    rows = []
+    for pid, g in m[m["post_id"] != ""].groupby("post_id", sort=False):
+        row = {"post_id": pid, "face_s": round(len(g) * interval, 2)}
+        for name in EXPRESSIONS:
+            v = g[name].mean() - usual[name]
+            row[f"{name}_vs_usual"] = None if v != v else round(float(v), 4)
+        rows.append(row)
+    return pd.DataFrame(rows, columns=POST_COLUMNS)
 
 
 def _classify_looking(frames: pd.DataFrame, steps: pd.DataFrame) -> None:
@@ -267,8 +325,11 @@ def summarize(frames: pd.DataFrame, s: Session, focal_assumed: bool) -> dict:
     if focal_assumed:
         warnings.append(f"the camera's focal length wasn't recorded: distances assume a {ASSUMED_HFOV_DEG:.0f}° "
                         "field of view and may be off by 20% or more")
+    from ..experimental import note
+
     return {"participant_id": s.participant_id, "session_uid": s.meta.get("session_uid"),
-            "steps": out, "focal_assumed": focal_assumed, "warnings": warnings}
+            "steps": out, "focal_assumed": focal_assumed, "warnings": warnings,
+            "experimental": note("face_analysis")}
 
 
 def _r(v) -> Optional[float]:
@@ -280,6 +341,8 @@ def write_face(result: FaceResult, out_dir: Path | str) -> Path:
     out.mkdir(parents=True, exist_ok=True)
     result.frames.to_csv(out / "face.csv", index=False)
     result.expressions.to_csv(out / "face_expressions.csv", index=False)
+    if result.posts is not None:
+        result.posts.to_csv(out / "face_posts.csv", index=False)
     (out / "face_summary.json").write_text(json.dumps(result.summary, indent=2) + "\n", encoding="utf-8")
     return out
 

@@ -98,6 +98,9 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 .step .card-head { margin: -4px 0; }
 .step-title { border: 0; background: none; font: inherit; color: var(--text); display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 4px 0; text-align: left; flex: 1; min-width: 0; }
 .step-title .num { width: 24px; height: 24px; border-radius: 50%; background: var(--surface-2); display: grid; place-items: center; font-size: 12px; flex: none; }
+/* a feature that isn't yet shown to give results to rely on (ui.js EXPERIMENTAL) */
+.exp { display: inline-block; vertical-align: middle; border: 1px dashed var(--warn); color: var(--warn); border-radius: 999px;
+  padding: 0 8px; font-size: 11px; font-weight: 600; letter-spacing: .02em; cursor: help; white-space: nowrap; }
 .badge { background: var(--accent-soft); border-radius: 999px; padding: 1px 10px; font-size: 12px; font-weight: 600; white-space: nowrap; }
 .step.open { border-color: var(--accent); }
 .step.open .card-head { margin-bottom: 8px; }

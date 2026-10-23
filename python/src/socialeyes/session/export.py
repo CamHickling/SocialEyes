@@ -108,6 +108,20 @@ _FACE = [  # only in studies that record the front camera; from `socialeyes face
     ("face_distance_cm", "Median distance from the face to the phone during the feed, from the iris size", "cm"),
     ("face_warnings", "The face analysis's warnings, joined by ;", ""),
 ]
+_EXPRESSION_TEXT = {
+    "smile": "smiling", "frown": "mouth corners down", "brow_lower": "brows lowered (frowning)",
+    "brow_raise": "inner brows raised", "nose_wrinkle": "nose wrinkled", "lip_press": "lips pressed",
+    "cheek_raise": "cheeks raised (as in a real smile)",
+}
+# by_item, in studies that record the front camera: from face_posts.csv (`socialeyes face`, CAM-226)
+_FACE_ITEM = [("face_seen_s", "Seconds the face was seen while this post was in front of the "
+                              "participant (an open story or comments sheet, else the post filling most of the "
+                              "screen)", "seconds")] + [
+    (f"face_{m}", f"{t.capitalize()} while this post was in front of the participant, minus the participant's own "
+                  "median over the feed (MediaPipe's expression scores; not coded action units). Above 0: more "
+                  "than their usual", "score difference, -1 to 1")
+    for m, t in _EXPRESSION_TEXT.items()
+]
 _CONDITION = [
     ("cell", "Within-subjects cell (filler: all filler posts)", ""),
     ("n_posts", "Posts of this cell in the participant's feed", "count"),
@@ -189,8 +203,10 @@ def export_study(study_dir: Path | str, data_dir: Path | str, out_dir: Path | st
                 face = _face_summary(folder, analysis_dir, faces, progress) if analysis_dir else None
                 fx = analysis_dir and Path(analysis_dir) / folder.parent.name / folder.name / "fixations.csv"
                 fixations = pd.read_csv(fx) if fx and fx.is_file() else None
+                fp = analysis_dir and Path(analysis_dir) / folder.parent.name / folder.name / "face_posts.csv"
+                face_posts = pd.read_csv(fp) if fp and fp.is_file() else None
                 srow, irows, crows = _session_tables(folder, build, studies[key], reg, face, fixations,
-                                                     aoi_names(build))
+                                                     aoi_names(build), face_posts)
             except Exception as e:  # one bad session never stops the export
                 r.skipped.append((str(folder), str(e)))
                 continue
@@ -270,6 +286,22 @@ def _face_columns(study: dict, face: Optional[dict]) -> dict:
         "face_distance_cm": None if dist is None else round(dist / 10, 1),
         "face_warnings": "; ".join((face or {}).get("warnings", [])) if face else None,
     }
+
+
+def _face_item(face_posts: Optional[pd.DataFrame], pid: str) -> dict:
+    """by_item's face columns for one post (blank when the face video wasn't analysed; face_seen_s 0
+    when the post was never in front of the participant while the face was seen)."""
+    if face_posts is None:
+        return {}
+    hit = face_posts[face_posts["post_id"].astype(str) == str(pid)]
+    if not len(hit):
+        return {"face_seen_s": 0.0}
+    r = hit.iloc[0]
+    out = {"face_seen_s": r.get("face_s")}
+    for m in _EXPRESSION_TEXT:
+        v = r.get(f"{m}_vs_usual")
+        out[f"face_{m}"] = None if v is None or v != v else v
+    return out
 
 
 def _front_camera(study: dict) -> bool:
@@ -372,7 +404,8 @@ def _comment_rows(s: Session, plan: dict, study: dict, ids: dict, by: dict, feed
 
 def _session_tables(folder: Path, build: Path, manifest: dict, reg: dict,
                     face: Optional[dict] = None, fixations: Optional[pd.DataFrame] = None,
-                    names: Optional[list[str]] = None) -> tuple[dict, list[dict], list[dict]]:
+                    names: Optional[list[str]] = None,
+                    face_posts: Optional[pd.DataFrame] = None) -> tuple[dict, list[dict], list[dict]]:
     s = load_session(folder)
     plan = json.loads((build / "plans" / f"{s.participant_id}.json").read_text(encoding="utf-8"))
     res = analyze_session(folder, build)
@@ -444,6 +477,8 @@ def _session_tables(folder: Path, build: Path, manifest: dict, reg: dict,
         row.update(ratings.get(pid, {}))
         row.update(recog["items"].get(pid, {}))
         row.update(_gaze(fixations, pid, first_ns, names or []))
+        if _front_camera(study):
+            row.update(_face_item(face_posts, pid))
         items.append(row)
 
     steps = s.step_windows()
@@ -504,7 +539,7 @@ def _ids(s: Session, plan: dict, study: dict) -> dict:
 
 def factor_col(name: str) -> str:
     """A factor's column: its name, or <name>_level if that is one of the fixed columns."""
-    fixed = {c for c, _, _ in _ID + _SESSION + _ITEM + _CONDITION + _FACE}
+    fixed = {c for c, _, _ in _ID + _SESSION + _ITEM + _CONDITION + _FACE + _FACE_ITEM}
     return f"{name}_level" if name in fixed else name
 
 
@@ -619,6 +654,8 @@ def _columns(manifest: dict, names: Optional[list[str]] = None) -> dict[str, lis
         recog_session += [f"{pre}_hit_rate", f"{pre}_fa_alternate", f"{pre}_fa_foil"]
     item_cols = [c for c, _, _ in _ITEM]
     by_item = ids + item_cols[:4] + within + item_cols[4:] + rating + recog_item + gaze_columns(names or [])
+    if _front_camera(study):
+        by_item += [c for c, _, _ in _FACE_ITEM]
     by_session = ids + [c for c, _, _ in _SESSION] + [c for c, _, _ in _questionnaire_columns(study)] + recog_session
     if _front_camera(study):
         by_session += [c for c, _, _ in _FACE]
@@ -672,7 +709,7 @@ def _by_condition(items: pd.DataFrame, cols: dict) -> pd.DataFrame:
 
 def _write_codebook(path: Path, manifest: dict, tables: dict[str, pd.DataFrame], blinded: bool = False) -> None:
     study = manifest["study"]
-    desc: dict[str, tuple[str, str]] = {c: (d, v) for c, d, v in _ID + _SESSION + _ITEM + _CONDITION + _FACE}
+    desc: dict[str, tuple[str, str]] = {c: (d, v) for c, d, v in _ID + _SESSION + _ITEM + _CONDITION + _FACE + _FACE_ITEM}
     desc["gaze_fixations"] = ("Fixations on the post's image (from socialeyes gaze; blank: no eye tracking)", "count")
     desc["gaze_image_ms"] = ("Time fixating the post's image", "milliseconds")
     desc["gaze_inline_comments_ms"] = ("Time fixating the comments shown under the post (as one block)",
@@ -709,6 +746,12 @@ def _write_codebook(path: Path, manifest: dict, tables: dict[str, pd.DataFrame],
         desc[f"{pre}_fa_alternate"] = (f"Recognition ({st['id']}): share of unseen versions of seen posts called old",
                                        "0-1")
         desc[f"{pre}_fa_foil"] = (f"Recognition ({st['id']}): share of never-shown foil images called old", "0-1")
+    # columns from an experimental feature say so (experimental.py)
+    from ..experimental import column_feature
+
+    for c, (d, v) in list(desc.items()):
+        if column_feature(c) and not d.startswith("Experimental"):
+            desc[c] = ("Experimental: " + d[:1].lower() + d[1:], v)
     if blinded:   # explore.blind_tables: codes until unblinding
         from .explore import LEAKING
 

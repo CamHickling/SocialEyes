@@ -581,7 +581,7 @@
     if (S.error) h += `<div class="err">${esc(S.error)}</div>`;
     if (d && d.note) h += `<div class="note">${esc(d.note)}</div>`;
     if (S.tool === "outline") {
-      h += `<h3>Outline</h3>`;
+      h += `<h3>Outline <span class="exp" title="The outlines come from segmentation models and haven't been checked on real stimuli: look at every AOI before collecting data.">Experimental</span></h3>`;
       if (S.candNote) h += `<div class="note">${esc(S.candNote)}</div>`;
       if (!S.clicks.length) h += `<p class="hint">Click on the thing to outline${S.outline === "download" ? ". The first click downloads the outlining model (45 MB, once)" : ""}.</p>`;
       else if (!S.cands.length && !S.busy) h += `<p class="hint">No outline here; try clicking somewhere else.</p>`;

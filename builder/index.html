@@ -99,6 +99,9 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 .step .card-head { margin: -4px 0; }
 .step-title { border: 0; background: none; font: inherit; color: var(--text); display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 4px 0; text-align: left; flex: 1; min-width: 0; }
 .step-title .num { width: 24px; height: 24px; border-radius: 50%; background: var(--surface-2); display: grid; place-items: center; font-size: 12px; flex: none; }
+/* a feature that isn't yet shown to give results to rely on (ui.js EXPERIMENTAL) */
+.exp { display: inline-block; vertical-align: middle; border: 1px dashed var(--warn); color: var(--warn); border-radius: 999px;
+  padding: 0 8px; font-size: 11px; font-weight: 600; letter-spacing: .02em; cursor: help; white-space: nowrap; }
 .badge { background: var(--accent-soft); border-radius: 999px; padding: 1px 10px; font-size: 12px; font-weight: 600; white-space: nowrap; }
 .step.open { border-color: var(--accent); }
 .step.open .card-head { margin-bottom: 8px; }
@@ -1593,7 +1596,7 @@ if (typeof module !== "undefined") module.exports = Core;
     if (S.error) h += `<div class="err">${esc(S.error)}</div>`;
     if (d && d.note) h += `<div class="note">${esc(d.note)}</div>`;
     if (S.tool === "outline") {
-      h += `<h3>Outline</h3>`;
+      h += `<h3>Outline <span class="exp" title="The outlines come from segmentation models and haven't been checked on real stimuli: look at every AOI before collecting data.">Experimental</span></h3>`;
       if (S.candNote) h += `<div class="note">${esc(S.candNote)}</div>`;
       if (!S.clicks.length) h += `<p class="hint">Click on the thing to outline${S.outline === "download" ? ". The first click downloads the outlining model (45 MB, once)" : ""}.</p>`;
       else if (!S.cands.length && !S.busy) h += `<p class="hint">No outline here; try clicking somewhere else.</p>`;
@@ -2859,10 +2862,19 @@ if (typeof module !== "undefined") module.exports = Core;
     render();
   }
 
+  /** Features that work in tests but aren't yet shown to give results to rely on: the same list as
+   *  python/src/socialeyes/experimental.py (a test checks), shown as a badge where they appear. */
+  const EXPERIMENTAL = {
+    face_analysis: "Looking away and distance were checked on one recording of known actions. Expressions are MediaPipe's estimates, not coded facial action units, and haven't been checked against human coding.",
+    auto_aois: "The outlines come from segmentation models and haven't been checked on real stimuli: look at every AOI before collecting data.",
+    gaze: "Tested on one real session and on simulated fixations.",
+  };
+  const expBadge = (key) => `<span class="exp" title="${esc(EXPERIMENTAL[key])}">Experimental</span>`;
+
   /** Design > Content: draw face and body AOIs on the critical posts' images (socialeyes aois). */
   function autoAois() {
     const A = ui.aois, r = A.result, dis = ui.busy ? "disabled" : "";
-    let html = `<h3>AOIs (areas of interest)</h3>
+    let html = `<h3>AOIs (areas of interest) ${expBadge("auto_aois")}</h3>
       <p class="hint">Draw and name the areas to measure gaze on, image by image: outline a thing with a click, or draw polygons and boxes.</p>
       <div class="row">${btn("aois-edit", "Edit AOIs…", "", dis)}</div>
       <p class="hint">Or draw <i>face</i>, <i>hair</i>, <i>upper_body</i>, <i>waist</i>, <i>legs</i> and <i>body</i> on every critical post's image
@@ -3019,7 +3031,7 @@ if (typeof module !== "undefined") module.exports = Core;
     let html = `<h3>Analysis</h3>`;
     if (f.videos) {
       const left = f.videos - f.analysed;
-      html += `<div class="row">${btn("data-faces", "Analyse face videos", "", dis || (!left && !D.blur ? "disabled" : ""))}
+      html += `<div class="row">${btn("data-faces", "Analyse face videos", "", dis || (!left && !D.blur ? "disabled" : ""))} ${expBadge("face_analysis")}
         <span class="hint">${f.analysed} of ${f.videos} analysed${left ? ` · about as long as the videos` : ""}</span>
         <label class="check"><input type="checkbox" id="data-blur" ${D.blur ? "checked" : ""}> <span>Also make blurred copies for sharing</span></label></div>`;
       const r = D.faces;
@@ -3028,7 +3040,7 @@ if (typeof module !== "undefined") module.exports = Core;
     }
     if (g.recorded) {
       const left = g.copied - g.sessions, missing = g.recorded - g.copied;
-      html += `<div class="row">${btn("data-gaze", "Analyse eye tracking", "", dis || (left > 0 ? "" : "disabled"))}
+      html += `<div class="row">${btn("data-gaze", "Analyse eye tracking", "", dis || (left > 0 ? "" : "disabled"))} ${expBadge("gaze")}
         <span class="hint">${g.sessions} of ${g.recorded} session${g.recorded === 1 ? "" : "s"} analysed${left > 0 ? ` · a few minutes each` : ""}${missing
           ? ` · ${missing} Neon recording${missing === 1 ? "" : "s"} not copied yet: Copy from the phone with Companion's phone connected` : ""}</span></div>`;
       const r = D.gaze;
@@ -3039,7 +3051,7 @@ if (typeof module !== "undefined") module.exports = Core;
     }
     if (g.sessions) {
       const factors = (ui.study && ui.study.factors || []).map((x) => x.name);
-      html += `<div class="row">${btn("data-heatmaps", "Make heatmaps", "", dis)}
+      html += `<div class="row">${btn("data-heatmaps", "Make heatmaps", "", dis)} ${expBadge("gaze")}
         <label class="hint" for="data-by">by</label>
         <select id="data-by">${[["cell", "condition"], ...factors.map((n) => [n, n])].map(([v, l]) => `<option value="${esc(v)}" ${D.by === v ? "selected" : ""}>${esc(l)}</option>`).join("")}</select>
         <span class="hint">${g.sessions} session${g.sessions === 1 ? "" : "s"} with eye tracking</span>

@@ -144,9 +144,9 @@ for mixed models in R.
 | Session log format (touches, scrolling, interactions, quality events) | ✅ | `docs/EVENT_LOG.md` (version 1) |
 | Session analysis: gestures, time on screen, touch→AOI, finger occlusion, quality checks | ✅ | `python/src/socialeyes/session/` (tested on simulated sessions) |
 | Tables for analysis: by session, by item, by condition, with a codebook (`socialeyes export`, Data tab), and a blinded exploration page | ✅ | `python/src/socialeyes/session/export.py`, `explore.py` |
-| Face camera analysis: face present, head pose, distance, looking away, expression scores, blurred copies (`socialeyes face`) | ✅ | `python/src/socialeyes/face/` |
-| Automatic face and body AOIs on post images, with a review page (`socialeyes aois`) | ✅ | `python/src/socialeyes/face/body_aois.py` |
-| Fixations on post images and AOIs (`socialeyes gaze`), heatmaps by condition with difference maps (`socialeyes heatmaps`), gaze columns in the export | ✅ (tested on one real session and simulated fixations) | `python/src/socialeyes/gaze/fixations.py`, `heatmap.py` |
+| Face camera analysis: face present, head pose, distance, looking away, expression scores, expressions per post, blurred copies (`socialeyes face`) | 🧪 experimental (checked on one recording of known actions; expressions not checked against human coding) | `python/src/socialeyes/face/` |
+| Automatic face and body AOIs on post images, with a review page (`socialeyes aois`); click-to-outline in the AOI editor | 🧪 experimental (not yet checked on real stimuli) | `python/src/socialeyes/face/body_aois.py` |
+| Fixations on post images and AOIs (`socialeyes gaze`), heatmaps by condition with difference maps (`socialeyes heatmaps`), gaze columns in the export | 🧪 experimental (tested on one real session and simulated fixations) | `python/src/socialeyes/gaze/fixations.py`, `heatmap.py` |
 | Experiment builder: guided form that writes study.yaml and CSV skeletons | ✅ | `builder/index.html` (open in a browser) |
 | Desktop app (Windows): Studies lists studies with their status; an open study's Design pages edit its folder in place, check it like the compiler and list the files it still needs (and draw AOIs); Phone loads it onto the phone; Data unloads sessions with a register, makes the tables, analyses face videos and makes heatmaps; edits that would break collected data need a new version; Windows installer (`packaging/build.py`, about 180 MB with the face and body models; `SocialEyes.exe --selftest report.json` checks an installed copy) | ✅ | `socialeyes app` (`python/src/socialeyes/desktop/`) |
 | CSV format reference | ✅ | `docs/STUDY_DESIGN.md` (version 1) |
@@ -157,6 +157,8 @@ for mixed models in R.
 | Gaze-to-screen mapping and AOI analysis | ⏳ | |
 | R analysis templates | ⏳ | |
 | macOS/Linux setup script | ⏳ | the conda environment already works cross-platform |
+
+🧪 **Experimental** features pass the tests but haven't yet been shown to give results to rely on in a real study. The desktop app shows an *Experimental* badge on them (hover it for why), the command line prints a note, and the codebook starts their columns' descriptions with "Experimental:". Pilot them, and check their output by eye, before building a study's main analysis on them. The list is in `python/src/socialeyes/experimental.py`.
 
 ---
 
@@ -617,6 +619,7 @@ socialeyes face data/my_study/P001/<session> --blur
 |---|---|
 | `face.csv` | one row per video frame: faces found, head turn / tilt / roll (degrees), distance from the phone (mm, from the iris size and the camera's focal length), eye position, blink score, looking at the phone (1) or away (0), the face's box |
 | `face_expressions.csv` | MediaPipe's 52 expression scores per frame (smile, brow raise, jaw open, ...) for facial-expression analysis |
+| `face_posts.csv` | per post: seconds the face was seen while the post was in front of the participant (an open story or comments sheet, else the post filling most of the screen), and smile, frown, brow lowering, brow raising, nose wrinkling, lip pressing and cheek raising then, each as the difference from the participant's own median over the feed. `socialeyes export` puts them in `by_item` as `face_seen_s`, `face_smile`, ... (experimental: model estimates, not coded action units; compare a person with themselves) |
 | `face_summary.json` | per recorded step: share of frames with a face, with more than one face, looking at the phone; median distance and head pose; warnings (face visible less than 80% of a step, someone else in view, looked away more than 20%) |
 | `camera_blurred/` | with `--blur`: copies of the video for sharing, the face replaced by a smooth smear of its colours (frames without a detected face smeared whole). Hair outside the face, clothes and the room stay visible |
 

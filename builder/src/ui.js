@@ -1238,10 +1238,19 @@
     render();
   }
 
+  /** Features that work in tests but aren't yet shown to give results to rely on: the same list as
+   *  python/src/socialeyes/experimental.py (a test checks), shown as a badge where they appear. */
+  const EXPERIMENTAL = {
+    face_analysis: "Looking away and distance were checked on one recording of known actions. Expressions are MediaPipe's estimates, not coded facial action units, and haven't been checked against human coding.",
+    auto_aois: "The outlines come from segmentation models and haven't been checked on real stimuli: look at every AOI before collecting data.",
+    gaze: "Tested on one real session and on simulated fixations.",
+  };
+  const expBadge = (key) => `<span class="exp" title="${esc(EXPERIMENTAL[key])}">Experimental</span>`;
+
   /** Design > Content: draw face and body AOIs on the critical posts' images (socialeyes aois). */
   function autoAois() {
     const A = ui.aois, r = A.result, dis = ui.busy ? "disabled" : "";
-    let html = `<h3>AOIs (areas of interest)</h3>
+    let html = `<h3>AOIs (areas of interest) ${expBadge("auto_aois")}</h3>
       <p class="hint">Draw and name the areas to measure gaze on, image by image: outline a thing with a click, or draw polygons and boxes.</p>
       <div class="row">${btn("aois-edit", "Edit AOIs…", "", dis)}</div>
       <p class="hint">Or draw <i>face</i>, <i>hair</i>, <i>upper_body</i>, <i>waist</i>, <i>legs</i> and <i>body</i> on every critical post's image
@@ -1398,7 +1407,7 @@
     let html = `<h3>Analysis</h3>`;
     if (f.videos) {
       const left = f.videos - f.analysed;
-      html += `<div class="row">${btn("data-faces", "Analyse face videos", "", dis || (!left && !D.blur ? "disabled" : ""))}
+      html += `<div class="row">${btn("data-faces", "Analyse face videos", "", dis || (!left && !D.blur ? "disabled" : ""))} ${expBadge("face_analysis")}
         <span class="hint">${f.analysed} of ${f.videos} analysed${left ? ` · about as long as the videos` : ""}</span>
         <label class="check"><input type="checkbox" id="data-blur" ${D.blur ? "checked" : ""}> <span>Also make blurred copies for sharing</span></label></div>`;
       const r = D.faces;
@@ -1407,7 +1416,7 @@
     }
     if (g.recorded) {
       const left = g.copied - g.sessions, missing = g.recorded - g.copied;
-      html += `<div class="row">${btn("data-gaze", "Analyse eye tracking", "", dis || (left > 0 ? "" : "disabled"))}
+      html += `<div class="row">${btn("data-gaze", "Analyse eye tracking", "", dis || (left > 0 ? "" : "disabled"))} ${expBadge("gaze")}
         <span class="hint">${g.sessions} of ${g.recorded} session${g.recorded === 1 ? "" : "s"} analysed${left > 0 ? ` · a few minutes each` : ""}${missing
           ? ` · ${missing} Neon recording${missing === 1 ? "" : "s"} not copied yet: Copy from the phone with Companion's phone connected` : ""}</span></div>`;
       const r = D.gaze;
@@ -1418,7 +1427,7 @@
     }
     if (g.sessions) {
       const factors = (ui.study && ui.study.factors || []).map((x) => x.name);
-      html += `<div class="row">${btn("data-heatmaps", "Make heatmaps", "", dis)}
+      html += `<div class="row">${btn("data-heatmaps", "Make heatmaps", "", dis)} ${expBadge("gaze")}
         <label class="hint" for="data-by">by</label>
         <select id="data-by">${[["cell", "condition"], ...factors.map((n) => [n, n])].map(([v, l]) => `<option value="${esc(v)}" ${D.by === v ? "selected" : ""}>${esc(l)}</option>`).join("")}</select>
         <span class="hint">${g.sessions} session${g.sessions === 1 ? "" : "s"} with eye tracking</span>

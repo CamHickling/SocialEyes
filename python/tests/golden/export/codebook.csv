@@ -82,16 +82,16 @@ by_item,recog_alt_response,Recognition (recog): answer to the other version of t
 by_item,recog_alt_correct,Recognition (recog): the answer to the other version of this post's image (not seen) was right,"1 = yes, 0 = no"
 by_item,recog_alt_confidence,Recognition (recog): confidence for the other version of this post's image (not seen),1-4
 by_item,recog_alt_rt_ms,Recognition (recog): time to answer for the other version of this post's image (not seen),milliseconds
-by_item,gaze_fixations,Fixations on the post's image (from socialeyes gaze; blank: no eye tracking),count
-by_item,gaze_image_ms,Time fixating the post's image,milliseconds
-by_item,gaze_inline_comments_ms,Time fixating the comments shown under the post (as one block),milliseconds
-by_item,gaze_sheet_ms,"Time fixating the post's open comments sheet (its comments, the comment box and the rest)",milliseconds
-by_item,gaze_face_ms,Time fixating AOI face of the post's image,milliseconds
-by_item,gaze_face_first_s,Time from the post first coming on screen to the first fixation in AOI face (blank: never fixated),seconds
-by_item,gaze_waist_ms,Time fixating AOI waist of the post's image,milliseconds
-by_item,gaze_waist_first_s,Time from the post first coming on screen to the first fixation in AOI waist (blank: never fixated),seconds
-by_item,gaze_legs_ms,Time fixating AOI legs of the post's image,milliseconds
-by_item,gaze_legs_first_s,Time from the post first coming on screen to the first fixation in AOI legs (blank: never fixated),seconds
+by_item,gaze_fixations,Experimental: fixations on the post's image (from socialeyes gaze; blank: no eye tracking),count
+by_item,gaze_image_ms,Experimental: time fixating the post's image,milliseconds
+by_item,gaze_inline_comments_ms,Experimental: time fixating the comments shown under the post (as one block),milliseconds
+by_item,gaze_sheet_ms,"Experimental: time fixating the post's open comments sheet (its comments, the comment box and the rest)",milliseconds
+by_item,gaze_face_ms,Experimental: time fixating AOI face of the post's image,milliseconds
+by_item,gaze_face_first_s,Experimental: time from the post first coming on screen to the first fixation in AOI face (blank: never fixated),seconds
+by_item,gaze_waist_ms,Experimental: time fixating AOI waist of the post's image,milliseconds
+by_item,gaze_waist_first_s,Experimental: time from the post first coming on screen to the first fixation in AOI waist (blank: never fixated),seconds
+by_item,gaze_legs_ms,Experimental: time fixating AOI legs of the post's image,milliseconds
+by_item,gaze_legs_first_s,Experimental: time from the post first coming on screen to the first fixation in AOI legs (blank: never fixated),seconds
 by_condition,participant_id,Participant id,
 by_condition,session_uid,"The session (a participant can have more than one, see duplicate_id)",
 by_condition,group,Between-subjects group number (1-based),

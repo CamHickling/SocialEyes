@@ -140,6 +140,10 @@ def test_export_face_columns(camera_session, tmp_path):
     assert (tmp_path / "analysis" / "P001" / "P001-sim" / "face_summary.json").is_file()
     row = pd.read_csv(tmp_path / "out" / "by_session.csv", encoding="utf-8-sig").iloc[0]
     assert row["face_present"] == 0 and "face visible in only 0%" in row["face_warnings"]
+    items = pd.read_csv(tmp_path / "out" / "by_item.csv", encoding="utf-8-sig")
+    assert (items["face_seen_s"] == 0).all() and items["face_smile"].isna().all()   # no face, no expressions
+    codebook = pd.read_csv(tmp_path / "out" / "codebook.csv", encoding="utf-8-sig")
+    assert codebook.astype(str).apply(lambda c: c.str.contains("Experimental: smiling")).any().any()
     summary = json.loads((tmp_path / "analysis" / "P001" / "P001-sim" / "face_summary.json").read_text())
     assert summary["participant_id"] == "P001"
     # without the analysis and without running it, the columns are there but blank
@@ -193,3 +197,25 @@ def test_study_faces_and_the_app_calls(camera_session, tmp_path, monkeypatch):
     assert h["images"] == 0 and len(h["skipped"]) == 1 and h["page"].endswith("index.html")
     a = api.aois_draw(str(study), False)["ok"]
     assert a["written"] == [] and len(a["empty"]) == 16 and a["review"].endswith("index.html")
+
+
+def test_expressions_per_post_against_the_participants_usual(camera_session):
+    from socialeyes.face.analyze import post_expressions
+    from socialeyes.session.viewport import Layout
+
+    _, _, session, _ = camera_session
+    s = load_session(session)
+    start, end = s.feed_window()
+    t = np.arange(start, end, 33_333_333, dtype=np.int64)
+    layout = Layout(s.viewport)
+    focus = layout.focus(s.feed_area)[np.clip(layout.frame_at(t), 0, None)]
+    smiled = focus[len(focus) // 2]          # one post the participant smiled at
+    assert smiled
+    smile = np.where(focus == smiled, 0.6, 0.1)
+    expr = pd.DataFrame({"segment": 0, "frame": range(len(t)), "t_ns": t,
+                         "mouthSmileLeft": smile, "mouthSmileRight": smile, "browDownLeft": 0.2, "browDownRight": 0.2})
+    posts = post_expressions(s, expr).set_index("post_id")
+    assert posts.loc[smiled, "smile_vs_usual"] == pytest.approx(0.5)
+    assert (posts.drop(index=smiled)["smile_vs_usual"] == 0).all()
+    assert (posts["brow_lower_vs_usual"] == 0).all() and posts["frown_vs_usual"].isna().all()
+    assert posts.loc[smiled, "face_s"] > 0

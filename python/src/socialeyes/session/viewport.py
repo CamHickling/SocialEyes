@@ -89,6 +89,28 @@ class Layout:
         out[["image_left", "image_top", "image_right", "image_bottom"]] = img
         return out
 
+    def focus(self, area: tuple[float, float, float, float]) -> np.ndarray:
+        """The post in front of the participant in each frame: an open story, reel or comments sheet's
+        post, else the post whose image shows most within ``area`` (at least half of it on screen),
+        else ''."""
+        out = np.full(len(self.times), "", dtype=object)
+        aL, aT, aR, aB = area
+        for fi, g in self._by_frame.items():
+            over = g[g["element"].isin(["story", "reel", "sheet"])]
+            if len(over):
+                out[fi] = over["post_id"].iloc[0]
+                continue
+            img = g[g["element"] == "image"]
+            if not len(img):
+                continue
+            L, T, R, B = (img[c].to_numpy(float) for c in ("left", "top", "right", "bottom"))
+            shown = np.clip(np.minimum(R, aR) - np.maximum(L, aL), 0, None) * np.clip(np.minimum(B, aB) - np.maximum(T, aT), 0, None)
+            whole = (R - L) * (B - T)
+            k = int(shown.argmax())
+            if whole[k] > 0 and shown[k] / whole[k] >= 0.5:
+                out[fi] = img["post_id"].iloc[k]
+        return out
+
     def exposure(self, end_ns: int, area: tuple[float, float, float, float]) -> pd.DataFrame:
         """Time each post/element was on screen.
 
