@@ -4,7 +4,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -21,6 +20,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -44,6 +45,14 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.setProgress
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -270,6 +279,7 @@ private fun ItemsPage(
 /**
  * Visual analogue scale: a line with no marker until the participant taps or
  * drags. Value 0-1 (3 decimals). Changes are logged when the finger lifts.
+ * A screen reader reads it as a slider ("not answered" until it is) and can move it.
  */
 @Composable
 private fun Vas(item: QItem, value: Double?, onChange: (Double, final: Boolean) -> Unit) {
@@ -284,6 +294,12 @@ private fun Vas(item: QItem, value: Double?, onChange: (Double, final: Boolean) 
             Canvas(
                 Modifier
                     .fillMaxSize()
+                    .semantics {
+                        contentDescription = "Scale from ${item.minLabel ?: "left"} to ${item.maxLabel ?: "right"}"
+                        stateDescription = value?.let { "${(it * 100).roundToInt()}%" } ?: "Not answered"
+                        progressBarRangeInfo = ProgressBarRangeInfo(value?.toFloat() ?: 0f, 0f..1f, steps = 0)
+                        setProgress { v -> onChange((v.coerceIn(0f, 1f) * 1000).roundToInt() / 1000.0, true); true }
+                    }
                     .pointerInput(Unit) { detectTapGestures { onChange(toValue(it.x), true) } }
                     .pointerInput(Unit) {
                         detectHorizontalDragGestures(
@@ -310,24 +326,35 @@ private fun Vas(item: QItem, value: Double?, onChange: (Double, final: Boolean) 
     }
 }
 
-/** Likert scale: numbered circles 1..points, with per-point labels or end labels. */
+/**
+ * Likert scale: numbered circles 1..points, with per-point labels or end labels. For a screen
+ * reader they are radio buttons, each read with its label ("1 of 7, Not at all") and its state.
+ */
 @Composable
 private fun Likert(item: QItem, value: Int?, onChange: (Int) -> Unit) {
     val points = item.points ?: 7
     Column {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Row(Modifier.fillMaxWidth().selectableGroup(), horizontalArrangement = Arrangement.SpaceBetween) {
             for (p in 1..points) {
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                     val selected = value == p
+                    val label = item.labels?.getOrNull(p - 1)
+                        ?: if (p == 1) item.minLabel else if (p == points) item.maxLabel else null
                     Box(
                         Modifier
-                            .size(40.dp)
+                            .size(48.dp) // the touch target; the circle is 40 dp inside it
+                            .semantics { contentDescription = "$p of $points" + (label?.let { ", $it" } ?: "") }
+                            .selectable(selected = selected, role = Role.RadioButton, onClick = { onChange(p) })
+                            .padding(4.dp)
                             .border(2.dp, MaterialTheme.colorScheme.onSurface, CircleShape)
-                            .background(if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface, CircleShape)
-                            .clickable { onChange(p) },
+                            .background(if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface, CircleShape),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text("$p", color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface)
+                        Text(
+                            "$p",
+                            color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.clearAndSetSemantics {}, // read through the circle's description
+                        )
                     }
                     item.labels?.getOrNull(p - 1)?.let {
                         Spacer(Modifier.height(4.dp))
@@ -348,13 +375,16 @@ private fun Likert(item: QItem, value: Int?, onChange: (Int) -> Unit) {
 @Composable
 private fun Choice(item: QItem, value: String?, onChange: (String) -> Unit) {
     val options = item.options.orEmpty()
-    Column {
+    Column(Modifier.selectableGroup()) {
         options.forEachIndexed { i, option ->
             Row(
-                Modifier.fillMaxWidth().clickable { onChange(option) }.padding(vertical = 4.dp),
+                Modifier
+                    .fillMaxWidth()
+                    .selectable(selected = value == option, role = Role.RadioButton, onClick = { onChange(option) })
+                    .padding(vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                RadioButton(selected = value == option, onClick = { onChange(option) })
+                RadioButton(selected = value == option, onClick = null) // the row is the button
                 Text(item.optionLabels?.getOrNull(i) ?: option, fontSize = 16.sp)
             }
         }

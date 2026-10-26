@@ -60,15 +60,25 @@ class Phone:
             root = ET.fromstring(xml)
         except ET.ParseError:
             return out
-        for n in root.iter("node"):
+        def walk(n, checked):
+            # Compose puts a radio button's state on the parent and its description on a child, read
+            # together by a screen reader: a child inherits the nearest checkable parent's state
+            if n.get("checkable") == "true":
+                checked = n.get("checked") == "true"
             b = [int(v) for v in re.findall(r"-?\d+", n.get("bounds", ""))]
-            if len(b) != 4:
-                continue
-            out.append({"text": (n.get("text") or "").strip(), "desc": (n.get("content-desc") or "").strip(),
-                        "cls": n.get("class", "").split(".")[-1], "click": n.get("clickable") == "true",
-                        "enabled": n.get("enabled") == "true", "checked": n.get("checked") == "true",
-                        "scroll": n.get("scrollable") == "true", "bounds": b,
-                        "x": (b[0] + b[2]) // 2, "y": (b[1] + b[3]) // 2})
+            if len(b) == 4:
+                out.append({"text": (n.get("text") or "").strip(), "desc": (n.get("content-desc") or "").strip(),
+                            "cls": n.get("class", "").split(".")[-1], "click": n.get("clickable") == "true",
+                            "enabled": n.get("enabled") == "true",
+                            "checked": checked or n.get("checked") == "true" or n.get("selected") == "true",
+                            "state": n.get("state-description") or "",
+                            "scroll": n.get("scrollable") == "true", "bounds": b,
+                            "x": (b[0] + b[2]) // 2, "y": (b[1] + b[3]) // 2})
+            for c in n.findall("node"):
+                walk(c, checked)
+
+        for n in root.findall("node"):
+            walk(n, False)
         return out
 
     @staticmethod
@@ -221,29 +231,31 @@ class Driver:
         """Answers every question on the screen; True if there were any."""
         p = self.p
         answered = False
-        if p.find(nodes, "Yes") and p.find(nodes, "No"):    # recognition: "did you see exactly this image?"
+        # the app describes its answers for screen readers (app 0.3.12): choices and scale points are
+        # radio buttons that say whether they are selected; only unanswered questions are answered
+        yes, no = p.find(nodes, "Yes"), p.find(nodes, "No")
+        if yes and no and not any(n["checked"] for n in yes + no):    # recognition: "did you see exactly this image?"
             self.recog_n += 1
             p.tap(nodes, "Yes" if self.recog_n % 2 else "No")
             answered = True
             time.sleep(.8)
             nodes = p.nodes()
-        digits = sorted((n for n in nodes if re.fullmatch(r"\d", n["text"])), key=lambda n: (n["y"], n["x"]))
         rows: dict = {}
-        for n in digits:
-            rows.setdefault(n["y"] // 40, []).append(n)
+        for n in nodes:
+            m = re.match(r"(\d+) of (\d+)", n["desc"])
+            if m:
+                rows.setdefault(n["y"] // 40, []).append(n)
         for row in rows.values():       # a scale: tap its middle point
-            row.sort(key=lambda n: n["x"])
-            mid = row[len(row) // 2]
-            p.tap_xy(mid["x"], mid["y"])
-            answered = True
-        # a visual analogue scale has no node of its own: its end labels sit side by side under it
-        tv = [n for n in nodes if n["text"] and n["cls"] == "TextView" and not n["text"].isdigit()]
-        for a in ([] if digits else tv):
-            for b in tv:
-                if a is not b and abs(a["y"] - b["y"]) < 6 and a["bounds"][2] <= b["bounds"][0] + 2 \
-                        and a["bounds"][0] < self.w * .2 and b["bounds"][2] > self.w * .8:
-                    p.tap_xy(int(self.w * .6), a["bounds"][1] - 80)
-                    answered = True
+            if not any(n["checked"] for n in row):
+                row.sort(key=lambda n: n["x"])
+                mid = row[len(row) // 2]
+                p.tap_xy(mid["x"], mid["y"])
+                answered = True
+        for n in nodes:                 # a visual analogue scale: tap it at 60%
+            if n["desc"].startswith("Scale from") and (not n["state"] or "Not answered" in n["state"]):  # older dumps lack states
+                b = n["bounds"]
+                p.tap_xy(int(b[0] + .6 * (b[2] - b[0])), n["y"])
+                answered = True
         return answered
 
 
@@ -331,6 +343,9 @@ def main(argv=None) -> int:
         adb = Adb(args.serial)
         adb.choose()
         phone = Phone(adb)
+        before = set(unload.phone_sessions(adb, STUDY_ID))   # left from an interrupted run: not this one
+        if before:
+            print(f"  note: {len(before)} earlier session(s) of {STUDY_ID} on the phone are copied too, not compared")
         phone.wake()
         adb.shell("am force-stop org.socialeyes.pictogram")
         adb.shell("monkey -p org.socialeyes.pictogram -c android.intent.category.LAUNCHER 1")
@@ -339,7 +354,7 @@ def main(argv=None) -> int:
         Driver(phone, log=lambda s: print(" ", s)).run()
         print("Copying it from the phone…")
         u = unload.unload(study, serial=args.serial, progress=lambda s: print(" ", s))
-        copied = [s for s in u.sessions if s.copied]
+        copied = [s for s in u.sessions if s.copied and (s.participant_id, s.session_uid) not in before]
         if u.error or len(copied) != 1:
             print(f"error: unloading: {u.error or [vars(s) for s in u.sessions]}", file=sys.stderr)
             return 1
