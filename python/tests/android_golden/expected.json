@@ -1,0 +1,106 @@
+{
+  "files": [
+    "events.jsonl",
+    "session.json",
+    "touch.csv",
+    "viewport.csv"
+  ],
+  "session_json_keys": [
+    "app_version",
+    "clock",
+    "device",
+    "end",
+    "feed_area",
+    "format",
+    "format_version",
+    "group_key",
+    "logging",
+    "package_sha256",
+    "participant_id",
+    "session_uid",
+    "started_wall",
+    "study_id",
+    "study_version",
+    "sync_patch"
+  ],
+  "steps_shown": [
+    "welcome",
+    "photo",
+    "pre",
+    "feed",
+    "post",
+    "ratings",
+    "recog",
+    "end"
+  ],
+  "steps_skipped": [
+    "cal1",
+    "val1",
+    "cal2"
+  ],
+  "steps_ended": [
+    "welcome:continue",
+    "photo:continue",
+    "pre:continue",
+    "feed:done_button",
+    "post:continue",
+    "ratings:continue",
+    "recog:continue"
+  ],
+  "answers": {
+    "pre": {
+      "items": [
+        "body_sat_pre"
+      ],
+      "trials": 0
+    },
+    "post": {
+      "items": [
+        "body_sat_post"
+      ],
+      "trials": 0
+    },
+    "ratings": {
+      "items": [
+        "attractive",
+        "realistic"
+      ],
+      "trials": 8
+    },
+    "recog": {
+      "items": [
+        "confidence",
+        "old_new"
+      ],
+      "trials": 18
+    }
+  },
+  "event_types": [
+    "battery",
+    "brightness",
+    "comments_close",
+    "comments_open",
+    "comments_sheet",
+    "dnd",
+    "done_button_shown",
+    "items_shown",
+    "like",
+    "marker_layout",
+    "neon",
+    "orientation",
+    "profile_photo",
+    "response",
+    "response_change",
+    "step_end",
+    "step_skipped",
+    "step_start",
+    "sync_patch",
+    "thermal",
+    "trial_start"
+  ],
+  "at_least": {
+    "like": 1,
+    "comments_open": 1
+  },
+  "completed": true
+}

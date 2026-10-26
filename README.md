@@ -1186,10 +1186,13 @@ Roughly in order:
       (how a new researcher makes and loads an experiment, what is confusing or missing)
       and folded in the export, AOI and heatmap features above: a Studies home, one open
       study with Design / Phone / Data, shorter Design pages
-- [ ] *Later:* **Facial expression analysis** of the front camera video (expressions / action
-      units over time, aligned to the posts on screen), once the face camera features are in
+- [x] **Facial expression analysis** (experimental) of the front camera video: expression scores per
+      post, against each participant's usual (`face_posts.csv`, `by_item` face columns)
 - [ ] More tests and docs, macOS/Linux setup (golden sessions done: `python/tests/test_golden.py`
-      checks four fixed simulated sessions' analysis and export against saved results)
+      checks four fixed simulated sessions' analysis and export against saved results; the Android
+      golden session, `python scripts/android_golden.py --serial <phone>`, runs the real app through
+      the example study on a test phone or emulator, copies the session back and checks it against
+      `python/tests/android_golden/expected.json`: run it before an app release)
 - [x] **Experiment builder**: a form that walks you through the study's decisions
       (factors, procedure, feed, logging) and writes `study.yaml` and CSV skeletons for you
 - [x] Commenting and replying in the comments sheet
