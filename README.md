@@ -8,14 +8,15 @@
 
 **A controllable mock social media feed + eye tracking, for body-image research.**
 
-![status](https://img.shields.io/badge/status-work%20in%20progress-6750A4?style=flat-square)
-![version](https://img.shields.io/badge/version-0.1-21005D?style=flat-square)
+![status](https://img.shields.io/badge/status-pilot%20underway-6750A4?style=flat-square)
+![version](https://img.shields.io/badge/app-0.3.13-21005D?style=flat-square)
 ![python](https://img.shields.io/badge/python-3.10%2B-21005D?style=flat-square&logo=python&logoColor=white)
 ![license](https://img.shields.io/badge/license-Apache%202.0-21005D?style=flat-square)
 ![platform](https://img.shields.io/badge/app-Android-21005D?style=flat-square&logo=android&logoColor=white)
 ![eye tracker](https://img.shields.io/badge/eye%20tracker-Pupil%20Labs%20Neon-21005D?style=flat-square)
 ![stats](https://img.shields.io/badge/stats-R%20%C2%B7%20lme4-21005D?style=flat-square&logo=r&logoColor=white)
 
+[Why it exists](#why-it-exists) ·
 [How it works](#how-it-works) ·
 [Status](#feature-status) ·
 [Install](#installation) ·
@@ -29,7 +30,7 @@
 <br>
 
 > [!WARNING]
-> **Work in progress (v0.1).** The study format (v1), the session log format (v1),
+> **Work in progress (app 0.3.13, pilot underway).** The study format (v1), the session log format (v1),
 > the study compiler and command-line tool, the experiment builder and the phone
 > app work, and the app starts and stops the Neon recording. The gaze analysis pipeline
 > is **not built yet**. Each part below is marked ✅ working, 🟡 partial or ⏳ planned, so you know
@@ -82,6 +83,40 @@ for mixed models in R.
   rate the image, or their own body satisfaction afterwards?
 - Do appearance-focused comments pull attention towards specific body regions?
 - Can people later tell whether they saw the edited or the original version?
+
+## Why it exists
+
+**The problem.** Research on social media and body image usually has to choose between control
+and realism. Showing static images on a monitor gives control, but nobody scrolls like that. Letting
+people scroll a real app is realistic, but the researcher can't decide what's in the feed or record
+exactly what was on screen when. Eye tracking makes it harder still: gaze from head-mounted glasses
+has to be mapped onto a phone that moves, onto content that scrolls. No existing tool offered a
+realistic, researcher-controlled social media feed with eye tracking built in, so the team's studies
+couldn't be run as designed.
+
+**Who it's for.** SocialEyes is built for a team of 10 researchers at UBC who study attention and
+gaze on social media, and it is now running their pilot. It has three kinds of users:
+**researchers**, who design studies and analyse data, often without using a terminal; **the person
+running sessions**, who needs a short, reliable routine on the day; and **participants**, for whom
+the feed has to feel like the real thing.
+
+**Decisions and trade-offs**
+
+| Decision | Why |
+|---|---|
+| Sessions run on the **phone and glasses alone**; the laptop only loads studies and collects data | Fewer moving parts in the room, and the participant holds the phone normally |
+| **Never delete data automatically.** The phone keeps every session until checked copies exist | Losing a session costs more than the storage it takes up |
+| Analysis stays **blinded** until the analysis plan is fixed, and SocialEyes **fits no models** | Protects the science. The researcher's analysis is run once, as planned |
+| Unproven features ship marked **Experimental** | Researchers can try them early without relying on them by mistake |
+| A **guided builder and a Windows installer** instead of config files and a CLI | Most of the team don't use a terminal |
+| Edits that would change data already collected need a **new study version** | One study can't quietly turn into two |
+
+**Measured, then changed.** Pilot recordings drive the roadmap. The settings test on the pilot phone
+showed that manual scene camera exposure cut the eye tracker's frame rate, so studies now use auto
+exposure aimed darker. Measured gaze accuracy (about 4 mm on the screen) is coarser than the gap
+between comment lines under a post, so the export doesn't claim per-comment gaze there, only in
+the comments sheet, where the rows are taller. Every session reports its own quality (gaze accuracy,
+share of time tracked, interruptions) so problems come to light during the pilot, not after the study.
 
 ---
 
