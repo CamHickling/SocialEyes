@@ -593,10 +593,10 @@
       <div class="card">
         <h4>Screen and scene camera</h4>
         <div class="grid">
-          ${field({ path: "display.brightness", label: "Screen brightness (0.05 to 1)", kind: "nullnum", min: 0.05, max: 1, placeholder: "the phone's setting", help: "For the whole session. Blank = the phone's own setting. A Display calibration step chooses it for you." })}
+          ${field({ path: "display.brightness", label: "Screen brightness (0.05 to 1)", kind: "nullnum", min: 0.05, max: 1, placeholder: "the phone model's", help: "For the whole session. Blank = the phone model's tested setting (from a Settings test on that model) when the study uses eye tracking, else the phone's own setting." })}
           <div class="field"><label for="f_exposure">Scene camera exposure</label><select id="f_exposure" data-action-change="exposure-mode" data-key="exposure-mode">
-            ${[["__null__", "Leave Companion's setting"], ["auto", "Automatic"], ["manual", "Fixed"]].map(([v, l]) => `<option value="${v}" ${mode === v ? "selected" : ""}>${l}</option>`).join("")}</select>
-            ${help("Automatic exposure meters the room and can blow out the bright screen. Set at the start of each session, put back at the end.")}</div>
+            ${[["__null__", "The phone model's tested setting"], ["auto", "Automatic"], ["manual", "Fixed"]].map(([v, l]) => `<option value="${v}" ${mode === v ? "selected" : ""}>${l}</option>`).join("")}</select>
+            ${help("Automatic exposure meters the room and can blow out the bright screen. Set at the start of each session, put back at the end. The phone model's tested setting comes from a Settings test on that model; without one, Companion's own setting is left alone.")}</div>
           ${mode === "manual" ? field({ path: "neon.scene_exposure.exposure_us", label: "Exposure time (µs)", kind: "int", min: 1, max: 1000000, placeholder: "e.g. 4000" }) : ""}
           ${mode === "manual" ? field({ path: "neon.scene_exposure.gain", label: "Gain", kind: "int", min: 0, placeholder: "Companion's" }) : ""}
           ${mode === "auto" ? field({ path: "neon.scene_exposure.brightness", label: "Target brightness", kind: "int", placeholder: "Companion's", help: "Lower = darker." }) : ""}

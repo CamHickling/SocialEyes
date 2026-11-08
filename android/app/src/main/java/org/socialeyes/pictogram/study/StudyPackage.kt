@@ -230,7 +230,13 @@ class Step(val raw: JsonObject) {
 fun JsonObject.flag(key: String, default: Boolean): Boolean =
     (this[key] as? JsonPrimitive)?.booleanOrNull ?: default
 
-class StudyPackage(val dir: File, val manifest: StudyManifest) {
+class StudyPackage(
+    val dir: File, val manifest: StudyManifest,
+    /** This phone model's tested settings, when they filled blanks in the study (PhoneSettings). */
+    val phoneSettings: org.socialeyes.pictogram.device.PhoneSettings? = null,
+    /** The study fields they filled, e.g. "display.brightness". */
+    val phoneFilled: List<String> = emptyList(),
+) {
     val study get() = manifest.study
     val steps: List<Step> = manifest.study.procedure.map(::Step)
 

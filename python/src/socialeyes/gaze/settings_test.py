@@ -1,7 +1,7 @@
 """Settings test (`settings_test` step): which fixed screen brightness and Neon scene camera
 exposure to use in phone-only sessions (CAM-165).
 
-    python -m socialeyes.gaze.settings_test <neon recording folder> <session folder> [-o OUT]
+    python -m socialeyes.gaze.settings_test <neon recording folder> <session folder> [-o OUT] [--save]
 
 For every setting the app showed (a marker_layout whose ladder.bars has settings_test), the scene
 frames after it settled (1.2 s after an auto exposure setting, 0.3 s after a manual one) are scored
@@ -10,6 +10,8 @@ phone (a pose from the tags), the post photo's share at full white (blown out) a
 plus the scene video's frame rate while the setting was on. Writes settings_observations.csv (one
 row per setting shown), settings_summary.csv (per setting and hold) and a report ranking the
 settings by their worst hold (display_calibration.rank), leaving out any that slow the scene video.
+--save keeps the best setting as the phone model's (phone/models.py): eye-tracking studies that leave
+the screen brightness or scene camera exposure blank then get it on phones of that model.
 """
 from __future__ import annotations
 
@@ -17,6 +19,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -145,11 +148,26 @@ def report(summ: pd.DataFrame, holds: dict[int, str] | None = None) -> str:
     return "\n".join(lines)
 
 
+def save_best(summ: pd.DataFrame, session: Session, source: str) -> Optional[dict]:
+    """Keeps the best setting as this session's phone model's (None if no setting qualified)."""
+    from ..phone import models
+
+    order, _ = ranked(summ)
+    if not order:
+        return None
+    best = summ[summ["variant"] == order[0]].iloc[0]
+    device = session.device
+    return models.save(device.get("manufacturer", ""), device.get("model", ""), float(best["brightness"]),
+                       models.exposure_from_camera(json.loads(best["camera"])), f"{source} ({order[0]})")
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="python -m socialeyes.gaze.settings_test", description=__doc__.splitlines()[0])
     p.add_argument("neon", help="Neon recording folder (native format)")
     p.add_argument("session", help="the matching session folder")
     p.add_argument("-o", "--out", help="output folder (default: analysis_out/settings_test/<session>)")
+    p.add_argument("--save", action="store_true",
+                   help="keep the best setting as this phone model's, for studies that leave them blank")
     args = p.parse_args(argv)
     session = load_session(args.session)
     obs = analyse(read_recording(args.neon), session)
@@ -167,6 +185,14 @@ def main(argv: list[str] | None = None) -> int:
     (out / "settings_report.txt").write_text(text + "\n", encoding="utf-8")
     print(text)
     print(f"\nWrote {out}")
+    if args.save:
+        device = session.device
+        entry = save_best(summ, session, f"settings test {Path(args.session).name}")
+        if entry is None:
+            print("\nNothing saved: no setting qualified.")
+        else:
+            from ..phone.models import describe
+            print(f"\nSaved for {device.get('manufacturer', '')} {device.get('model', '')}: {describe(entry)}")
     return 0
 
 

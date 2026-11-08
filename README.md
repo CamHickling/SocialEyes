@@ -919,6 +919,22 @@ the study's bar tags against it: it warns when a rounded corner would cut into a
 too little room between the tags for the wordmark and icons, and when the screen size hasn't been
 checked yet.
 
+Screens also differ in how bright they are, so the screen brightness and Neon scene camera exposure
+are kept **per phone model**. Run the `settings_test` study once on a new model with the glasses and
+score it with `--save`:
+
+```powershell
+python -m socialeyes.gaze.settings_test <neon recording folder> <session folder> --save
+```
+
+That keeps its best setting for that model on this computer (`phone_models` in `settings.json`;
+the Motorola Edge 40 Pro's ships with SocialEyes: brightness 0.30, Companion's auto exposure at
+brightness -32). An eye-tracking study that leaves **Screen brightness** or **Scene camera
+exposure** blank (Design > Recording) then gets the phone model's: loading gives the phone
+`phone_settings.json` and the app fills the blanks at each session start, logged in `session.json`
+(`phone_settings`). A study that sets them keeps its own, and loading warns when they differ from
+the phone model's; on a model without a settings test it warns if either is blank.
+
 Sessions are saved on the phone. Copy them off with `socialeyes unload` (or the desktop
 app's **Data** tab, which does the same):
 

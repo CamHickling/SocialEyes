@@ -1,5 +1,6 @@
 package org.socialeyes.pictogram
 
+import org.socialeyes.pictogram.device.PhoneSettings
 import org.socialeyes.pictogram.device.ScreenScale
 import android.app.ActivityManager
 import android.os.Bundle
@@ -97,7 +98,9 @@ class MainActivity : ComponentActivity() {
 
     /** neon.auto_record: check the eye tracker, then (once the researcher confirms) start the
      *  Neon recording first, so the whole session is in it. */
-    private fun startSession(pkg: StudyPackage, participantId: String) {
+    private fun startSession(study: StudyPackage, participantId: String) {
+        // this phone model's tested brightness and exposure where the study leaves them blank (CAM-227)
+        val pkg = PhoneSettings.apply(study, getExternalFilesDir(null))
         if (!pkg.study.neon.autoRecord) {
             launchSession(pkg, participantId, null)
             return

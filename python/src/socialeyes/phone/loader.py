@@ -242,6 +242,7 @@ class StudyInfo:
     needs_camera: bool          # the app uses the camera: front camera video, profile_photo or camera_check
     records_camera: bool = False  # front camera video: needs room on the phone
     tags: Optional[dict] = None   # markers.on_screen, when steps show on-screen tags (eye tracking)
+    recording: dict = field(default_factory=dict)  # display and neon from study.json (brightness, scene exposure)
 
 
 def build_study(study_dir: Path | str) -> StudyInfo:
@@ -262,6 +263,7 @@ def build_study(study_dir: Path | str) -> StudyInfo:
         records_camera=records,
         tags=(study.get("markers") or {}).get("on_screen") if ((study.get("markers") or {}).get("on_screen") or {}).get("steps")
         else None,
+        recording={k: study.get(k) or {} for k in ("display", "neon")},
     )
 
 
@@ -324,6 +326,8 @@ def readiness(phone: PhoneState, study: Optional[StudyInfo] = None, apk: Optiona
 
         for level, text in ruler_check(phone.profile, study.tags is not None) + layout_checks(phone.profile, study.tags):
             add(level, text)
+        for level, text in phone_settings(phone, study)[0]:
+            add(level, text)
 
         need = study.size_bytes + STORAGE_MARGIN + (CAMERA_MARGIN if study.records_camera else 0)
         if phone.free_bytes is not None and phone.free_bytes < need:
@@ -351,6 +355,15 @@ def readiness(phone: PhoneState, study: Optional[StudyInfo] = None, apk: Optiona
     for level, text in battery_checks(phone):
         add(level, text)
     return checks
+
+
+def phone_settings(phone: PhoneState, study: StudyInfo) -> tuple[list[tuple[str, str]], Optional[dict]]:
+    """This phone model's tested brightness and exposure against the study's (models.py)."""
+    from .models import checks
+
+    profile = phone.profile or {}
+    return checks(profile.get("manufacturer") or phone.manufacturer, profile.get("model") or phone.model,
+                  study.recording, study.tags is not None)
 
 
 def battery_checks(phone: PhoneState) -> list[tuple[str, str]]:
@@ -478,6 +491,10 @@ def load(study_dir: Path | str, serial: Optional[str] = None, update_app: bool =
             if r.phone.app_running:
                 step("SocialEyes is open on the phone: close it and open it again to see the study.")
         sync_used_ids(adb, study.id)  # the ids already taken, for the phone's "Next participant"
+        own = phone_settings(r.phone, study)[1]
+        if own is not None:
+            step("Giving the phone its model's tested screen brightness and exposure…")
+            _push_phone_settings(adb, own)
         r.loaded = True
         keep_snapshot(study)
         return r
@@ -487,6 +504,20 @@ def load(study_dir: Path | str, serial: Optional[str] = None, update_app: bool =
         return r
     finally:
         discard(study)
+
+
+def _push_phone_settings(adb: Adb, payload: dict) -> None:
+    """phone_settings.json into the app's files folder, where the app reads it at each session start."""
+    from .models import PHONE_SETTINGS_FILE
+
+    tmp = Path(tempfile.mkdtemp(prefix="socialeyes-phone-"))
+    try:
+        src = tmp / PHONE_SETTINGS_FILE
+        src.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        adb.run("push", str(src), f"{APP_FILES}/{PHONE_SETTINGS_FILE}", timeout=60)
+        adb.shell(f"chmod a+r {APP_FILES}/{PHONE_SETTINGS_FILE} 2>/dev/null; true")   # readable by the app, like the study
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 def keep_snapshot(study: StudyInfo) -> Optional[Path]:

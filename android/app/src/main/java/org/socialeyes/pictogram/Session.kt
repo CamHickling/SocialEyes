@@ -12,6 +12,8 @@ import androidx.compose.runtime.setValue
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.encodeToJsonElement
+import kotlinx.serialization.json.putJsonObject
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
@@ -27,6 +29,7 @@ import org.socialeyes.pictogram.neon.GazeStream
 import org.socialeyes.pictogram.neon.NeonLink
 import org.socialeyes.pictogram.study.Plan
 import org.socialeyes.pictogram.study.Step
+import org.socialeyes.pictogram.study.StudyJson
 import org.socialeyes.pictogram.study.StudyPackage
 import org.socialeyes.pictogram.study.flag
 import java.io.File
@@ -68,7 +71,10 @@ class Session(
     fun begin() {
         sensors?.start()
         gaze?.start()
-        brightness?.let { log.event("display_setting", fields = arrayOf("brightness" to it, "source" to "study")) }
+        brightness?.let {
+            val source = if ("display.brightness" in pkg.phoneFilled) "phone_model" else "study"
+            log.event("display_setting", fields = arrayOf("brightness" to it, "source" to source))
+        }
         startStep()
     }
 
@@ -165,6 +171,14 @@ class Session(
                 put("clock", Clocks.snapshot())
                 put("device", deviceInfo(activity))
                 put("logging", logging)
+                pkg.phoneSettings?.let { p ->
+                    putJsonObject("phone_settings") {   // this phone model's tested settings filled the study's blanks
+                        put("filled", JsonArray(pkg.phoneFilled.map(::JsonPrimitive)))
+                        p.brightness?.let { put("brightness", it) }
+                        p.sceneExposure?.let { put("scene_exposure", StudyJson.encodeToJsonElement(it)) }
+                        put("source", p.source)
+                    }
+                }
             }
             val log = SessionLog(dir, meta, logTouches = logging.flag("touches", true))
             val camera = cameraConfig?.let { FrontCameraRecorder(activity, dir, log, it) }
