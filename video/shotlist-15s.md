@@ -13,11 +13,11 @@ sits in a corner, and is large on the last screen.
 | 2 | 3.0–7.0 s | THE FIX · **Researchers control every post, label and comment** | The guided experiment builder (`builder/index.html`), filled in with the example study: posts, image versions, "edited" labels, comments. | A critical post is set to show the retouched version with the "edited" label (exact clicks depend on the builder's form). |
 | 3a | 7.0–9.5 s | ON THE PHONE · **A realistic feed, synced with Neon eye tracking** | Phone frame: a critical post with "This image has been digitally altered". | Scroll onto the post, then double-tap: the heart and the like count update. |
 | 3b | 9.5–11.0 s | (same) | The same placeholder image with a gaze heatmap over it. A clear tag on the image: **Simulated data · Experimental feature**. | The heatmap fades in over the image. |
-| 4 | 11.0–15.0 s | THE RESULT · **Built in 2 months, not 2 years** | Stats rise in: **10** UBC researchers · **2 months** to build, to spec · **3 pilots** running soon. Then the SocialEyes logo and "Built for UBC researchers studying attention on social media". | Hold. |
+| 4 | 11.0–15.0 s | THE RESULT · **Built in 2 months, not 2 years** | Stats rise in: **8** UBC researchers · **2 months** to build, to spec · **3 pilots** running soon. Then the SocialEyes logo and "Built for UBC researchers studying attention on social media". | Hold. |
 
 ## Facts used (from the README and your answers, 2026-11-09)
 
-- Built for a team of **10 researchers at UBC** who study attention and gaze on social media.
+- Built for a team of **8 researchers at UBC** who study attention and gaze on social media.
 - **3 pilots** are running on it soon (updated 2026-11-09; the README says a pilot is underway).
 - **Built to spec in 2 months instead of 2 years** (your answer; not in the README).
 - Researchers set the feed's images, "edited" labels, comments, captions and like counts.

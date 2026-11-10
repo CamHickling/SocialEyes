@@ -95,7 +95,7 @@ interruptions, so problems show up during the pilot, not after the study.
 </tr>
 </table>
 
-**Track record:** built to spec in 2 months instead of 2 years, for a team of 10 UBC researchers.
+**Track record:** built to spec in 2 months instead of 2 years, for a team of 8 UBC researchers.
 3 pilots are being planned and started on it.
 
 **Typical questions it is built to answer:**
@@ -116,7 +116,7 @@ has to be mapped onto a phone that moves, onto content that scrolls. No existing
 realistic, researcher-controlled social media feed with eye tracking built in, so the team's studies
 couldn't be run as designed.
 
-**Who it's for.** SocialEyes is built for a team of 10 researchers at UBC who study attention and
+**Who it's for.** SocialEyes is built for a team of 8 researchers at UBC who study attention and
 gaze on social media, and 3 pilots are now being planned and started on it. It has three kinds of users:
 **researchers**, who design studies and analyse data, often without using a terminal; **the person
 running sessions**, who needs a short, reliable routine on the day; and **participants**, for whom
@@ -1296,7 +1296,7 @@ Roughly in order:
 ## Credits
 
 Code by [Cam Hickling](https://github.com/CamHickling). Built in collaboration with Maya Libben, Alan Kingstone
-and Susan Holtzman, for a team of 10 researchers at UBC who study attention and gaze on social media.
+and Susan Holtzman, for a team of 8 researchers at UBC who study attention and gaze on social media.
 
 ## Contributing and contact
 

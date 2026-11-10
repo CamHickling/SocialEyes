@@ -55,7 +55,7 @@ HEADLINES = [
     (7.0, 11.0, "ON THE PHONE", "A realistic feed, synced with Neon eye tracking"),
     (11.0, 15.0, "THE RESULT", "Built in 2 months, not 2 years"),
 ]
-STATS = [("10", "UBC researchers"), ("2", "months to build, to spec"), ("3", "pilots running soon")]
+STATS = [("8", "UBC researchers"), ("2", "months to build, to spec"), ("3", "pilots running soon")]
 FOOTER = "Built for UBC researchers studying attention on social media"
 TAG = "SIMULATED DATA  ·  EXPERIMENTAL FEATURE"
 
