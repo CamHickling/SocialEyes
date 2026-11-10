@@ -6,11 +6,11 @@
   <img alt="SocialEyes: gaze and attention in social media" src="docs/assets/readme-banner-light.png" width="100%">
 </picture>
 
-**A controllable mock social media feed + eye tracking, for body-image research.**
+**Run social media experiments that feel real to participants and stay under your control.**
 
 ![SocialEyes demo](video/socialeyes-15s.gif)
 
-![status](https://img.shields.io/badge/status-pilot%20underway-6750A4?style=flat-square)
+![status](https://img.shields.io/badge/status-3%20pilots%20starting-6750A4?style=flat-square)
 ![version](https://img.shields.io/badge/app-0.3.13-21005D?style=flat-square)
 ![python](https://img.shields.io/badge/python-3.10%2B-21005D?style=flat-square&logo=python&logoColor=white)
 ![license](https://img.shields.io/badge/license-Apache%202.0-21005D?style=flat-square)
@@ -32,7 +32,7 @@
 <br>
 
 > [!WARNING]
-> **Work in progress (app 0.3.13, pilot underway).** The study format (v1), the session log format (v1),
+> **Work in progress (app 0.3.13, 3 pilots being planned and started).** The study format (v1), the session log format (v1),
 > the study compiler and command-line tool, the experiment builder and the phone
 > app work, and the app starts and stops the Neon recording. The gaze analysis pipeline
 > is **not built yet**. Each part below is marked ✅ working, 🟡 partial or ⏳ planned, so you know
@@ -76,7 +76,27 @@ for mixed models in R.
 
 </td>
 </tr>
+<tr>
+<td valign="top">
+
+### 🧭 No terminal needed
+A guided builder and a Windows installer, so researchers design and run studies
+without config files or a command line.
+
+</td>
+<td valign="top">
+
+### ✅ Quality you can see
+Every session reports its own gaze accuracy, share of time tracked and
+interruptions, so problems show up during the pilot, not after the study.
+
+</td>
+<td></td>
+</tr>
 </table>
+
+**Track record:** built to spec in 2 months instead of 2 years, for a team of 10 UBC researchers.
+3 pilots are being planned and started on it.
 
 **Typical questions it is built to answer:**
 
@@ -97,7 +117,7 @@ realistic, researcher-controlled social media feed with eye tracking built in, s
 couldn't be run as designed.
 
 **Who it's for.** SocialEyes is built for a team of 10 researchers at UBC who study attention and
-gaze on social media, and it is now running their pilot. It has three kinds of users:
+gaze on social media, and 3 pilots are now being planned and started on it. It has three kinds of users:
 **researchers**, who design studies and analyse data, often without using a terminal; **the person
 running sessions**, who needs a short, reliable routine on the day; and **participants**, for whom
 the feed has to feel like the real thing.
@@ -361,32 +381,7 @@ before it reaches the phone. The app
 needs `pywebview`, which `setup-toolchain.ps1` installs; in an older toolchain run
 `pip install pywebview`.
 
-#### Building the installer
-
-Researchers who don't use a terminal get a normal Windows installer
-(`SocialEyes-Setup-<version>.exe`). It installs per user (no administrator rights needed)
-and bundles Python, the `socialeyes` package, adb, the phone app and the example study.
-The installed app keeps studies and data in `Documents\SocialEyes` (`studies\`, `data\`,
-`analysis_out\`); uninstalling removes the program only, never those folders. It needs the
-Microsoft Edge WebView2 Runtime, which comes with Windows 11 and up-to-date Windows 10;
-the installer checks for it and offers Microsoft's download page when it is missing.
-
-```powershell
-. .\scripts\env.ps1
-python packaging\build.py          # release: needs the signing key (see Release signing key)
-python packaging\build.py --dev    # test build with this computer's debug-signed phone app
-```
-
-The installer is written to `packaging\out\`. A `--dev` installer is for testing on your
-own machines only: its phone app is signed with this computer's debug key, so phones that
-get it can't take the release app later without uninstalling it, which deletes its data.
-`SocialEyes.exe --selftest report.json` checks the bundled parts (builder page, adb, phone
-app, example study, window toolkit) without opening a window. `setup-toolchain.ps1`
-installs PyInstaller and a portable Inno Setup (no registry entries) into `.toolchain\`.
-The toolchain uses OpenBLAS rather than Intel MKL (`environment.yml`), which keeps about
-600 MB of MKL libraries out of the installer; in an older toolchain run
-`conda install -p .toolchain\env -c conda-forge "libblas=*=*openblas"`. The release phone
-app is shrunk with R8 (`android/app/proguard-rules.pro`), from about 74 MB to about 5 MB.
+Building the Windows installer is described in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#building-the-installer).
 
 ### Key ideas
 
@@ -900,40 +895,12 @@ its data. With several phones connected, pick one with `--serial` (see `adb devi
 If the study uses the front camera (video recording, a `profile_photo` or a `camera_check`
 step), loading also gives the app camera permission, every time it is missing.
 
-#### Release signing key
-
-Phones can only update the app if every version is signed with the same key. Debug
-builds use this computer's debug key, which is fine for development. For releases
-(the desktop app's installer), create the project key **once**, keep it out of git
-(`.gitignore` covers it) and back it up with its passwords somewhere safe. If it is
-lost, phones can't install updates without uninstalling the app, which deletes its data.
-
-```powershell
-. .\scripts\env.ps1
-keytool -genkeypair -v -keystore android\socialeyes-release.jks -alias socialeyes `
-  -keyalg RSA -keysize 4096 -validity 10000
-```
-
-Then create `android\keystore.properties`:
-
-```
-storeFile=socialeyes-release.jks
-storePassword=<the keystore password>
-keyAlias=socialeyes
-keyPassword=<the key password>
-```
-
-and build with `.\gradlew assembleRelease`. A phone that has a debug build can't be
-updated to a release build in place (different keys): unload its sessions, uninstall
-SocialEyes on the phone, then load again.
+Release builds need the project's signing key; see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#release-signing-key).
 
 Open **SocialEyes** (the app drawer, or tap **Add to home screen** on its setup screen once
 for a home-screen shortcut), pick the study and a participant, and start. Press Back to stop a
 session. The first time the app goes full screen, Android shows a "Viewing full screen"
 notice; tap **Got it** during a test run so participants never see it.
-
-To unlock a test phone from the computer, put its PIN in `phone-pin.local` in the project
-root (git-ignored; never commit it) and run `.\scripts\unlock-phone.ps1`.
 
 **On the day.** The phone's setup screen offers **Start the next participant: P004**: the first
 participant id that has no session on the phone and that the computer's register hasn't seen
@@ -1126,6 +1093,7 @@ studies/example/         a complete worked example with placeholder images
 docs/
   STUDY_DESIGN.md        CSV reference, balance rules, compiler output
   EVENT_LOG.md           session log format (app <-> analysis contract)
+  DEVELOPMENT.md         building the installer, the release signing key, test phones
   assets/                logos, banners, avatar, favicons (PNG + SVG); lavender palette:
                          #6750A4 primary, #21005D deep purple, #A28BE0 on dark backgrounds
 ```
@@ -1324,6 +1292,11 @@ Roughly in order:
       `accounts.csv` for the researcher to review and edit before compiling
 
 ---
+
+## Credits
+
+Code by [Cam Hickling](https://github.com/CamHickling). Built in collaboration with Maya Libben, Alan Kingstone
+and Susan Holtzman, for a team of 10 researchers at UBC who study attention and gaze on social media.
 
 ## Contributing and contact
 
