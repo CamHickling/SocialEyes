@@ -8,6 +8,8 @@
 
 **A controllable mock social media feed + eye tracking, for body-image research.**
 
+![SocialEyes demo](video/socialeyes-15s.gif)
+
 ![status](https://img.shields.io/badge/status-pilot%20underway-6750A4?style=flat-square)
 ![version](https://img.shields.io/badge/app-0.3.13-21005D?style=flat-square)
 ![python](https://img.shields.io/badge/python-3.10%2B-21005D?style=flat-square&logo=python&logoColor=white)

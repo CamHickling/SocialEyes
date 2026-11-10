@@ -39,3 +39,6 @@ python/src/socialeyes/face/models/pose_landmarker_full.task
 python/src/socialeyes/face/models/selfie_multiclass_256x256.tflite
 python/src/socialeyes/face/models/magic_touch.tflite
 python/src/socialeyes/face/models/*.onnx
+
+# Demo video build files (video/record_15s.py)
+video/build/
