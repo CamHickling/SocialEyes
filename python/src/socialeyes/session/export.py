@@ -795,15 +795,20 @@ def _item_values(it: dict) -> str:
 
 
 def export(study_dir: Path | str, data_dir: Path | str | None = None, out_dir: Path | str | None = None,
-           progress: Callable[[str], None] = lambda s: None, faces: bool = True, unblind: bool = False) -> ExportResult:
+           progress: Callable[[str], None] = lambda s: None, faces: bool = True, unblind: bool = False,
+           unblinding=None) -> ExportResult:
     """export_study with the study's folders from the settings (data folder, <data folder>/export)
-    and each session's own build where it was kept at load time."""
+    and each session's own build where it was kept at load time. ``unblind`` needs ``unblinding``
+    (an unblinding.Unblinding: the researcher's name and the typed phrase), and is logged."""
     from .. import settings
     from ..phone.unload import study_id_of
+    from . import unblinding as ub
 
     sid = study_id_of(study_dir)
     data = Path(data_dir) if data_dir else settings.data_dir(sid)
     out = Path(out_dir) if out_dir else (data / "export" if data_dir else settings.export_dir(sid))
+    if unblind:
+        ub.unblind(study_dir, data, sid, unblinding, "tables and exploration page")
     return export_study(study_dir, data, out, build_for=snapshot_or_none(sid), progress=progress,
                         analysis_dir=settings.analysis_dir(sid), faces=faces, unblind=unblind)
 

@@ -89,6 +89,13 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 .btn.primary:hover { filter: brightness(1.08); }
 .btn.link { border: 0; background: none; padding: 4px 8px; color: var(--accent); }
 .btn.link.danger { color: var(--error); }
+.btn.danger-solid { background: var(--error); color: var(--bg); border-color: var(--error); font-weight: 600; }
+.btn.danger-solid:disabled { opacity: .45; cursor: not-allowed; }
+.card.unblind { margin-top: 12px; }
+.card.unblind p { margin: 0 0 6px; }
+.card.unblind.form { border-color: var(--error); display: flex; flex-direction: column; gap: 10px; }
+.card.unblind.form .field { max-width: 420px; }
+.disclaimer { background: var(--warn-soft); color: var(--warn); border-radius: 8px; padding: 10px 12px; }
 .btn.file { position: relative; overflow: hidden; }
 .btn.file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .tips { margin: 0 0 16px; padding-left: 20px; max-width: 75ch; }
@@ -1654,7 +1661,7 @@ if (typeof module !== "undefined") module.exports = Core;
     phone: { result: null, serial: "", devices: [], updateApp: false, progress: null, error: null,
       setup: null, setupOpen: false, setupNote: null, setupError: null },
     // Data tab: the study's folders and register, the phone's sessions, the last unload
-    data: { status: null, unload: null, export: null, faces: null, gaze: null, heatmaps: null, blur: false, by: "cell", unblind: false, error: null },
+    data: { status: null, unload: null, export: null, faces: null, gaze: null, heatmaps: null, blur: false, by: "cell", unblind: false, unblindForm: false, researcher: "", typed: "", error: null },
     studies: { list: null, newId: "", error: null },
     files: { result: null, missingOnly: true, error: null },   // the study folder's files (Design > Content)
     // Design > Content: adding images from a folder, and the image check
@@ -2935,7 +2942,7 @@ if (typeof module !== "undefined") module.exports = Core;
         ${btn("data-open:data", "Open data folder", "link", dis)}${btn("data-refresh", "Refresh", "link", dis)}</div>
       ${ph.error ? `<p class="hint">${esc(ph.error)}</p>` : ""}
       ${busy && ui.phone.progress ? `<p class="hint">${esc(ui.phone.progress)}</p>` : ""}
-      ${rows.length ? `<label class="check"><input type="checkbox" id="data-unblind" ${D.unblind ? "checked" : ""}> <span>Unblind the tables and the exploration page (real condition names)</span></label>` : ""}
+      ${rows.length ? blindingPanel(st, busy) : ""}
       ${x && x.exploration ? `<p>${btn("open-path:" + x.exploration, x.unblinded ? "Open the exploration page (unblinded)" : "Open the exploration page (blinded)", "link")}</p>` : ""}
       ${x && x.out_dir ? `<p class="hint">Tables (by session, by item, by condition, by comment, and a codebook${x.unblinded ? "" : "; blinded until you unblind"}) for ${x.sessions} session${x.sessions === 1 ? "" : "s"} in ${btn("data-open-export", esc(x.out_dir), "link")}${x.skipped.length
         ? `. Skipped ${x.skipped.length}: ${x.skipped.map((s) => esc(`${s.folder.split(/[\\/]/).slice(-2).join("/")} (${s.why})`)).join("; ")}` : ""}</p>` : ""}`;
@@ -3051,11 +3058,14 @@ if (typeof module !== "undefined") module.exports = Core;
     }
     if (g.sessions) {
       const factors = (ui.study && ui.study.factors || []).map((x) => x.name);
-      html += `<div class="row">${btn("data-heatmaps", "Make heatmaps", "", dis)} ${expBadge("gaze")}
-        <label class="hint" for="data-by">by</label>
-        <select id="data-by">${[["cell", "condition"], ...factors.map((n) => [n, n])].map(([v, l]) => `<option value="${esc(v)}" ${D.by === v ? "selected" : ""}>${esc(l)}</option>`).join("")}</select>
+      const made = D.heatmaps && D.heatmaps.page && D.heatmaps.unblinded === D.unblind ? D.heatmaps.page : null;
+      const hmPage = made || (D.unblind ? g.heatmaps : g.heatmaps_blinded);
+      html += `<div class="row">${btn("data-heatmaps", D.unblind ? "Make heatmaps" : "Make heatmaps (blinded)", "", dis)} ${expBadge("gaze")}
+        ${D.unblind ? `<label class="hint" for="data-by">by</label>
+        <select id="data-by">${[["cell", "condition"], ...factors.map((n) => [n, n])].map(([v, l]) => `<option value="${esc(v)}" ${D.by === v ? "selected" : ""}>${esc(l)}</option>`).join("")}</select>` : ""}
         <span class="hint">${g.sessions} session${g.sessions === 1 ? "" : "s"} with eye tracking</span>
-        ${(D.heatmaps && D.heatmaps.page) || g.heatmaps ? btn("open-path:" + ((D.heatmaps && D.heatmaps.page) || g.heatmaps), "Open heatmaps", "link") : ""}</div>`;
+        ${hmPage ? btn("open-path:" + hmPage, D.unblind ? "Open heatmaps" : "Open heatmaps (blinded)", "link") : ""}</div>
+      ${D.unblind ? "" : `<p class="hint">Blinded heatmaps pool every condition of a post into one map, for checking the eye tracking, not for results. Maps by condition come after unblinding.</p>`}`;
       const h = D.heatmaps;
       if (h && h.skipped.length) html += `<p class="hint">Left out ${h.skipped.length} session(s) without fixations.</p>`;
     }
@@ -3082,11 +3092,57 @@ if (typeof module !== "undefined") module.exports = Core;
     await dataRefresh();
   }
 
+  /** The unblinding phrase for the open study, as the computer side checks it. */
+  function unblindPhrase() {
+    const st = ui.data.status;
+    return (st && st.unblinding && st.unblinding.phrase) || "";
+  }
+
+  function unblindReady() {
+    const D = ui.data;
+    return (D.researcher || "").trim().length >= 2 && (D.typed || "").trim() === unblindPhrase();
+  }
+
+  /** Blinded / unblinded state, the unblinding form (name + typed phrase) and the record so far. */
+  function blindingPanel(st, busy) {
+    const D = ui.data, hist = (st.unblinding && st.unblinding.history) || [];
+    const day = (r) => esc((r.unblinded_at || "").slice(0, 10));
+    const record = hist.length
+      ? `Unblinded before: first on ${day(hist[0])} by ${esc(hist[0].researcher)}${hist.length > 1 ? `, last on ${day(hist[hist.length - 1])} by ${esc(hist[hist.length - 1].researcher)}` : ""}
+         (${hist.length} unblinded output${hist.length === 1 ? "" : "s"} recorded in <code>unblinding.csv</code>).`
+      : "Never unblinded.";
+    if (D.unblind) {
+      return `<div class="card unblind on"><p><span class="pill">Unblinded</span> by <b>${esc(D.researcher.trim())}</b>: tables, the exploration page and heatmaps you make now show the real conditions, and each is recorded.
+        ${btn("data-reblind", "Back to blinded", "link", busy ? "disabled" : "")}</p><p class="hint">${record}</p></div>`;
+    }
+    if (!D.unblindForm) {
+      return `<div class="card unblind"><p><b>Blinded.</b> Tables and the exploration page show conditions as codes (A, B, …); heatmaps pool every condition.
+        ${btn("data-unblind-open", "Unblind…", "link danger", busy ? "disabled" : "")}</p><p class="hint">${record}</p></div>`;
+    }
+    const phrase = esc(unblindPhrase());
+    return `<div class="card unblind form">
+      <p><b>Unblind ${esc(st.study_id)}?</b></p>
+      <p class="disclaimer">Unblinding shows which condition is which, in the tables, the exploration page and the heatmaps.
+        <b>It can't be taken back:</b> nobody can un-see results. Do it only once your analysis plan, including which
+        sessions you will exclude and why, is written down. Every unblinded output is recorded in <code>unblinding.csv</code>
+        in the study's data folder, with your name, the date and time, this computer and its user.</p>
+      <div class="field"><label for="unblind-researcher">Researcher's name</label>
+        <input type="text" id="unblind-researcher" autocomplete="name" value="${esc(D.researcher)}" placeholder="First and last name"></div>
+      <div class="field"><label for="unblind-typed">To confirm, type <code>${phrase}</code></label>
+        <input type="text" id="unblind-typed" autocomplete="off" spellcheck="false" value="${esc(D.typed)}"></div>
+      <div class="row">${btn("data-unblind-go", "I understand, unblind", "danger-solid", unblindReady() && !busy ? "" : "disabled")}
+        ${btn("data-unblind-cancel", "Cancel", "link")}</div>
+      <p class="hint">${record}</p></div>`;
+  }
+
   async function dataHeatmaps() {
     const D = ui.data;
     D.error = null;
     ui.phone.progress = "Starting…";
-    try { D.heatmaps = await bridge("data_heatmaps", "Making heatmaps…", ui.folder, D.by); }
+    try {
+      D.heatmaps = await bridge("data_heatmaps", "Making heatmaps…", ui.folder, D.unblind ? D.by : "cell", D.unblind, D.researcher, D.typed);
+      D.heatmaps.unblinded = D.unblind;
+    }
     catch (e) { D.error = e.message; }
     ui.phone.progress = null;
     await dataRefresh();
@@ -3115,7 +3171,7 @@ if (typeof module !== "undefined") module.exports = Core;
     const D = ui.data;
     D.error = null;
     ui.phone.progress = "Starting…";
-    try { D.export = await bridge("data_export", "Making tables…", ui.folder, D.unblind); }
+    try { D.export = await bridge("data_export", "Making tables…", ui.folder, D.unblind, D.researcher, D.typed); }
     catch (e) { D.error = e.message; }
     ui.phone.progress = null;
     render();
@@ -3284,7 +3340,7 @@ if (typeof module !== "undefined") module.exports = Core;
     ui.sessions = 0;
     ui.protect = null;
     ui.phone.result = null;
-    ui.data = { status: null, unload: null, export: null, faces: null, gaze: null, heatmaps: null, blur: false, by: "cell", unblind: false, error: null };
+    ui.data = { status: null, unload: null, export: null, faces: null, gaze: null, heatmaps: null, blur: false, by: "cell", unblind: false, unblindForm: false, researcher: "", typed: "", error: null };
     ui.files.result = null;
     ui.aois = { result: null, overwrite: false, error: null };
     ui.images = { match: null, assign: {}, replace: false, copied: null, report: null, resized: null, error: null };
@@ -3519,6 +3575,14 @@ if (typeof module !== "undefined") module.exports = Core;
           : "Delete the raw face videos that are due (the face measures stay)? This can't be undone.")) dataCall("data_retention_delete", "Deleting…", args[0]);
         return;
       case "data-heatmaps": dataHeatmaps(); return;
+      case "data-unblind-open": ui.data.unblindForm = true; ui.data.typed = ""; render(); return;
+      case "data-unblind-cancel": ui.data.unblindForm = false; ui.data.typed = ""; render(); return;
+      case "data-unblind-go":
+        if (!unblindReady()) return;
+        ui.data.unblind = true; ui.data.unblindForm = false; ui.data.export = null; ui.data.heatmaps = null;
+        dataExport().then(dataRefresh); return;
+      case "data-reblind":
+        ui.data.unblind = false; ui.data.typed = ""; ui.data.export = null; ui.data.heatmaps = null; render(); return;
       case "aois-draw": aoisDraw(); return;
       case "aois-edit":
         window.AoiEditor.open({ call: bridge, folder: ui.folder, onClose: (saved) => { if (saved) filesRefresh(); } });
@@ -3635,6 +3699,12 @@ if (typeof module !== "undefined") module.exports = Core;
   document.addEventListener("input", (e) => {
     const el = e.target;
     if (el.id === "new-study-id") { ui.studies.newId = el.value; return; }
+    if (el.id === "unblind-researcher" || el.id === "unblind-typed") {
+      if (el.id === "unblind-researcher") ui.data.researcher = el.value; else ui.data.typed = el.value;
+      const go = document.querySelector('[data-action="data-unblind-go"]');
+      if (go) go.disabled = !unblindReady();
+      return;
+    }
     if (!el.dataset || !el.dataset.path || el.dataset.kind === "bool" || el.tagName === "SELECT") return;
     applyInput(el);
     renderSide();
@@ -3659,10 +3729,6 @@ if (typeof module !== "undefined") module.exports = Core;
     if (el.id === "preview-pid") { ui.preview.pid = el.value; previewRefresh(); return; }
     if (el.id === "preview-conditions") { ui.preview.conditions = el.checked; render(); return; }
     if (el.id === "data-blur") { ui.data.blur = el.checked; render(); return; }
-    if (el.id === "data-unblind") {
-      if (el.checked && !confirm("Unblinding shows which condition is which. Do it only once your analysis plan is fixed. Unblind the next tables and exploration page?")) { el.checked = false; return; }
-      ui.data.unblind = el.checked; return;
-    }
     if (el.id === "data-by") { ui.data.by = el.value; return; }
     if (el.id === "advanced-toggle") { setAdvanced(el.checked); render(); return; }
     if (el.id === "files-missing") { ui.files.missingOnly = el.checked; render(); return; }

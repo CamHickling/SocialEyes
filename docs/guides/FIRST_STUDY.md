@@ -67,8 +67,14 @@ phone**.
      as **condition A, B, …** so you can check the data without seeing the results
 2. Write your analysis plan, including which sessions you will exclude and why (the exploration
    page lists the sessions with problems, but never excludes any).
-3. Only then: tick **Unblind the tables and the exploration page** and **Make tables** again, and run your planned
-   analysis on the tables. SocialEyes fits no models: the analysis is yours, run once, as planned.
+3. Only then: **Unblind…**, type your name and the phrase it shows (`unblind <study id>`), and
+   choose **I understand, unblind**. It makes the tables again with the real condition names, and
+   heatmaps you make from then on are by condition. Unblinding can't be taken back, so it is
+   recorded: `unblinding.csv` in the data folder keeps the date, your name and this computer's user,
+   and the Data page shows when the study was first unblinded. Then run your planned analysis on
+   the tables. SocialEyes fits no models: the analysis is yours, run once, as planned.
+4. Before unblinding, don't open the `analysis` folder's per-session files (such as
+   `fixations.csv`): they name the image each participant saw, which gives the conditions away.
 
 ## 6. Eye tracking and the face camera (optional)
 
@@ -77,7 +83,8 @@ phone**.
   the validation dots (accuracy, and each wearer's offset, which it corrects) and places every
   fixation on the screen and the post images: a few minutes per session. Afterwards **Make tables**
   adds gaze columns (time on each AOI, time to the first fixation) and **Make heatmaps** draws where
-  people looked, by condition. The register shows each session's accuracy and how much of its feed
+  people looked: before unblinding one map per post with every condition pooled (for checking the
+  eye tracking, not for results), after unblinding by condition. The register shows each session's accuracy and how much of its feed
   was tracked.
 - Studies that record the front camera: **Analyse face videos** (face in view, looking at the phone
   or away, distance); **Make tables** then adds those columns.

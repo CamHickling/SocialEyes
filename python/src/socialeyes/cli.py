@@ -211,18 +211,39 @@ def cmd_gaze(args) -> int:
     return 0
 
 
+def _unblinding(args):
+    """The go-ahead for --unblind: --researcher and the phrase, from --confirm or typed at the prompt."""
+    from .phone.unload import study_id_of
+    from .session.unblinding import Unblinding, phrase
+
+    if not args.unblind:
+        return None
+    want = phrase(study_id_of(args.study))
+    typed = args.confirm
+    if typed is None:
+        print("Unblinding shows which condition is which and can't be taken back; it is recorded in "
+              "unblinding.csv with your name, the date and this computer's user.")
+        try:
+            typed = input(f'Type "{want}" to confirm: ')
+        except EOFError:
+            typed = ""
+    return Unblinding(args.researcher or "", typed)
+
+
 def cmd_heatmaps(args) -> int:
     from .gaze.heatmap import study_heatmaps
 
     try:
         r, skipped = study_heatmaps(args.study, data_dir=args.data, out_dir=args.out, by=args.by,
-                                    sigma_deg=args.sigma_deg, progress=lambda s: print(s, flush=True))
+                                    sigma_deg=args.sigma_deg, progress=lambda s: print(s, flush=True),
+                                    unblind=args.unblind, unblinding=_unblinding(args))
     except (ValueError, FileNotFoundError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
     for folder, why in skipped:
         print(f"  skipped {folder}: {why}")
-    print(f"{len(r.images)} image(s) with fixations")
+    print(f"{len(r.images)} {'image' if args.unblind else 'post'}(s) with fixations"
+          + ("" if args.unblind else " (blinded: all conditions pooled, for checking the eye tracking only)"))
     print(f"Wrote {r.page}")
     print(f"note: {experimental.note('gaze')}")
     return 0
@@ -387,7 +408,7 @@ def cmd_export(args) -> int:
 
     try:
         r = export(args.study, data_dir=args.data, out_dir=args.out, progress=lambda s: print(s, flush=True),
-                   faces=not args.no_faces, unblind=args.unblind)
+                   faces=not args.no_faces, unblind=args.unblind, unblinding=_unblinding(args))
     except ValueError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
@@ -569,12 +590,19 @@ def main(argv: list[str] | None = None) -> int:
                    help="leave gaze as recorded (by default it is corrected by the offset at the validation dots)")
     g.set_defaults(func=cmd_gaze)
 
-    hm = sub.add_parser("heatmaps", help="fixation heatmaps over the post images, pooled by condition")
+    hm = sub.add_parser("heatmaps", help="fixation heatmaps over the post images (blinded until --unblind)")
     hm.add_argument("study", help="study folder (or its study.yaml)")
-    hm.add_argument("--by", default="cell", help="pool by the within-subjects cell (default) or one factor's levels, e.g. label")
+    hm.add_argument("--by", default="cell",
+                    help="with --unblind: pool by the within-subjects cell (default) or one factor's levels, e.g. label")
+    hm.add_argument("--unblind", action="store_true",
+                    help="maps by condition, difference maps and aoi_dwell.csv (default: blinded, one map per post with "
+                         "every condition pooled); needs --researcher and is recorded")
+    hm.add_argument("--researcher", help="with --unblind: your name, recorded in unblinding.csv")
+    hm.add_argument("--confirm", help='with --unblind: the phrase "unblind <study id>" (asked for if not given)')
     hm.add_argument("--sigma-deg", type=float, default=1.0, help="each fixation's spread, degrees of visual angle (default 1)")
     hm.add_argument("--data", help="the sessions' folder (default: the study's data folder)")
-    hm.add_argument("-o", "--out", help="output folder (default: analysis_out/<study>/heatmaps)")
+    hm.add_argument("-o", "--out",
+                    help="output folder (default: analysis_out/<study>/heatmaps_blinded, or heatmaps with --unblind)")
     hm.set_defaults(func=cmd_heatmaps)
 
     d = sub.add_parser("calibrate-display", help="during a display_calibration step: find the screen brightness and "
@@ -643,8 +671,10 @@ def main(argv: list[str] | None = None) -> int:
     ex.add_argument("--no-faces", action="store_true",
                     help="don't analyse front camera videos that haven't been analysed yet (their face columns stay blank)")
     ex.add_argument("--unblind", action="store_true",
-                    help="show the real condition names in exploration.html (default: neutral codes, so the "
-                         "data can be checked without seeing the results)")
+                    help="show the real condition names in the tables and exploration.html (default: neutral codes, "
+                         "so the data can be checked without seeing the results); needs --researcher and is recorded")
+    ex.add_argument("--researcher", help="with --unblind: your name, recorded in unblinding.csv")
+    ex.add_argument("--confirm", help='with --unblind: the phrase "unblind <study id>" (asked for if not given)')
     ex.set_defaults(func=cmd_export)
 
     fo = sub.add_parser("folders", help="show or set where this computer keeps a study's data and second copy")

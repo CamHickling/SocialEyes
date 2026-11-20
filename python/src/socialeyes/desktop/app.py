@@ -234,6 +234,8 @@ class Api:
         recorded = [s for s in sessions if _recording_id(s)]
         copied = sum(neon_recording(s) is not None for s in recorded)
         heatmaps = analysis / "heatmaps" / "index.html"
+        blinded_heatmaps = analysis / "heatmaps_blinded" / "index.html"
+        from ..session import unblinding
         from ..session import retention
 
         storage = []
@@ -253,7 +255,9 @@ class Api:
                 "clear_after_unload": bool(settings.study(sid).get("clear_after_unload")),
                 "faces": {"videos": len(videos), "analysed": analysed},
                 "gaze": {"sessions": gaze, "recorded": len(recorded), "copied": copied,
-                         "heatmaps": str(heatmaps) if heatmaps.is_file() else None}}
+                         "heatmaps": str(heatmaps) if heatmaps.is_file() else None,
+                         "heatmaps_blinded": str(blinded_heatmaps) if blinded_heatmaps.is_file() else None},
+                "unblinding": {"phrase": unblinding.phrase(sid), "history": unblinding.history(data)}}
 
     @_reply
     def data_set_folder(self, folder: str, which: str, path: str | None) -> bool:
@@ -302,12 +306,15 @@ class Api:
         return delete_due(folder, what)
 
     @_reply
-    def data_export(self, folder: str, unblind: bool = False) -> dict:
+    def data_export(self, folder: str, unblind: bool = False, researcher: str = "", typed: str = "") -> dict:
         """Tables of every unloaded session (by session, by item, by condition), their codebook and
-        the blinded exploration page (``unblind``: with the real condition names)."""
+        the blinded exploration page (``unblind``: with the real condition names; needs the
+        researcher's name and the typed phrase, and is logged in unblinding.csv)."""
         from ..session.export import export
+        from ..session.unblinding import Unblinding
 
-        return export(folder, progress=self._progress, unblind=bool(unblind)).to_json()
+        who = Unblinding(researcher or "", typed or "") if unblind else None
+        return export(folder, progress=self._progress, unblind=bool(unblind), unblinding=who).to_json()
 
     @_reply
     def data_faces(self, folder: str, blur: bool = False) -> dict:
@@ -324,11 +331,16 @@ class Api:
         return study_gaze(folder, redo=bool(redo), progress=self._progress)
 
     @_reply
-    def data_heatmaps(self, folder: str, by: str = "cell") -> dict:
-        """Gaze heatmaps over the post images from every session's fixations.csv."""
+    def data_heatmaps(self, folder: str, by: str = "cell", unblind: bool = False, researcher: str = "",
+                      typed: str = "") -> dict:
+        """Gaze heatmaps over the post images from every session's fixations.csv: blinded (one per
+        post, all conditions pooled) unless ``unblind`` (logged, like data_export)."""
         from ..gaze.heatmap import study_heatmaps
+        from ..session.unblinding import Unblinding
 
-        r, skipped = study_heatmaps(folder, by=by or "cell", progress=self._progress)
+        who = Unblinding(researcher or "", typed or "") if unblind else None
+        r, skipped = study_heatmaps(folder, by=by or "cell", progress=self._progress, unblind=bool(unblind),
+                                    unblinding=who)
         return {"page": r.page, "images": len(r.images), "skipped": [{"folder": f, "why": w} for f, w in skipped]}
 
     @_reply

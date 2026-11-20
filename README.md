@@ -203,7 +203,7 @@ share of time tracked, interruptions) so problems come to light during the pilot
 | Tables for analysis: by session, by item, by condition, with a codebook (`socialeyes export`, Data tab), and a blinded exploration page | ✅ | `python/src/socialeyes/session/export.py`, `explore.py` |
 | Face camera analysis: face present, head pose, distance, looking away, expression scores, expressions per post, blurred copies (`socialeyes face`) | 🧪 experimental (checked on one recording of known actions; expressions not checked against human coding) | `python/src/socialeyes/face/` |
 | Automatic face and body AOIs on post images, with a review page (`socialeyes aois`); click-to-outline in the AOI editor | 🧪 experimental (not yet checked on real stimuli) | `python/src/socialeyes/face/body_aois.py` |
-| Fixations on post images and AOIs (`socialeyes gaze`), heatmaps by condition with difference maps (`socialeyes heatmaps`), gaze columns in the export | 🧪 experimental (tested on one real session and simulated fixations) | `python/src/socialeyes/gaze/fixations.py`, `heatmap.py` |
+| Fixations on post images and AOIs (`socialeyes gaze`), heatmaps (blinded per post until unblinding, then by condition with difference maps; `socialeyes heatmaps`), gaze columns in the export | 🧪 experimental (tested on one real session and simulated fixations) | `python/src/socialeyes/gaze/fixations.py`, `heatmap.py` |
 | Experiment builder: guided form that writes study.yaml and CSV skeletons | ✅ | `builder/index.html` (open in a browser) |
 | Desktop app (Windows): Studies lists studies with their status; an open study's Design pages edit its folder in place, check it like the compiler and list the files it still needs (and draw AOIs); Phone loads it onto the phone; Data unloads sessions with a register, makes the tables, analyses face videos and makes heatmaps; edits that would break collected data need a new version; Windows installer (`packaging/build.py`, about 180 MB with the face and body models; `SocialEyes.exe --selftest report.json` checks an installed copy) | ✅ | `socialeyes app` (`python/src/socialeyes/desktop/`) |
 | CSV format reference | ✅ | `docs/STUDY_DESIGN.md` (version 1) |
@@ -364,7 +364,7 @@ its name appears in the top bar with its three pages:
   [tables for analysis](#tables-for-analysis); the data and second-copy folders are under
   **Folders**. Under **Analysis**, for studies that have them: **Analyse face videos** (with
   blurred copies if ticked; [`socialeyes face`](#face-camera-analysis)) and **Make heatmaps**
-  by condition or by one factor (`socialeyes heatmaps`).
+  (`socialeyes heatmaps`): blinded until you unblind, then by condition or by one factor.
 
 **Studies with data are protected.** Once a study has sessions, saving an edit that would
 change what participants get, or what the analysis relies on, is refused until you save it
@@ -630,9 +630,14 @@ before the analysis without seeing the results:
   B, …** and the groups as **group X, Y, …** in a shuffled order that says nothing about which is
   which; the order stays the same from one export to the next, and the key is never written down
 
-It fits no models and runs no tests. Unblind (`socialeyes export --unblind`, or tick
-**Unblind** under Data in the app, which asks first) only once your analysis plan, including the
-exclusion rules, is fixed. Until then the tables are blinded the same way: a `condition` column
+It fits no models and runs no tests. Unblind only once your analysis plan, including the
+exclusion rules, is fixed: under Data in the app, **Unblind…** asks for the researcher's name and
+for `unblind <study id>` typed out in full (as GitHub asks before deleting a repository); on the
+command line, `socialeyes export --unblind --researcher "<name>"` asks for the phrase (or give it
+with `--confirm`). Every unblinded output (tables, heatmaps) is recorded in `unblinding.csv` in the
+study's data folder: date and time, the researcher, this computer and its Windows user, the study
+version and how many sessions; SocialEyes only ever adds to it. The Data tab shows when the study
+was first unblinded and by whom. Until then the tables are blinded the same way: a `condition` column
 with the page's codes, `group` / `group_key`, `cell` and every factor's levels as codes, and the
 columns whose values give a condition away (`image_id`, `label_shown`, `comment_variant`,
 `comment_id`, `reply_to`) left empty; `BLINDED.txt` in the export folder says so, and the codebook
@@ -697,16 +702,23 @@ without them the dots can't be placed and gaze stays uncorrected; the builder an
 **Heatmaps.** Once sessions have `fixations.csv`:
 
 ```powershell
-socialeyes heatmaps studies/my_study            # or --by label: pool by one factor's levels
+socialeyes heatmaps studies/my_study            # blinded: one map per post, every condition pooled
+socialeyes heatmaps studies/my_study --unblind --researcher "<name>"   # by condition (--by label: one factor)
 ```
 
-draws, for every post image, where participants' fixations fell (each fixation a Gaussian of
+Until you unblind, heatmaps are **blinded**: one map per post with every condition and version
+pooled, drawn over the post's first image in `images.csv`, with a disclaimer that they are for
+checking the eye tracking, not for results; no condition names, no difference maps and no
+`aoi_dwell.csv`, in `analysis_out/<study>/heatmaps_blinded/`. Unblinded (recorded like the
+tables), it draws, for every post image, where participants' fixations fell (each fixation a Gaussian of
 1° of visual angle, `--sigma-deg`, weighted by its duration; each participant counts equally),
 pooled by condition, with the AOIs outlined; where an image was seen in two groups, a
 difference map (red: more looking in the first group, blue: in the second). The size of 1° on
 the image uses the participant's distance from the phone from their face video when it has been
 analysed, else 35 cm. It writes PNGs, `index.html` and `aoi_dwell.csv` (per image, group and
-AOI: the mean share of looking time) to `analysis_out/<study>/heatmaps/`.
+AOI: the mean share of looking time) to `analysis_out/<study>/heatmaps/`. The per-session
+analysis files (`analysis_out/<study>/<participant>/…`, e.g. `fixations.csv`) name the image each
+fixation fell on, so they show conditions: don't open them before unblinding.
 
 How the phone is tracked is still being settled (tag size and placement, and
 whether screen content and motion sensors should fill the gaps between tag

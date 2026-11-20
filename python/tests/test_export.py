@@ -214,5 +214,15 @@ def test_cli_unblind_flag(exported, tmp_path, capsys):
     shutil.copytree(data, copy, ignore=shutil.ignore_patterns("P009"))
     assert main(["export", str(EXAMPLE), "--data", str(copy)]) == 0
     assert "blinded: conditions as codes" in capsys.readouterr().out
-    assert main(["export", str(EXAMPLE), "--data", str(copy), "--unblind"]) == 0
+    # unblinding needs the researcher's name and the phrase, and is logged in the data folder
+    assert main(["export", str(EXAMPLE), "--data", str(copy), "--unblind", "--confirm", "unblind example"]) == 1
+    assert main(["export", str(EXAMPLE), "--data", str(copy), "--unblind", "--researcher", "Ada Lovelace",
+                 "--confirm", "unblind exampel"]) == 1
+    assert not (copy / "unblinding.csv").exists()
+    capsys.readouterr()
+    assert main(["export", str(EXAMPLE), "--data", str(copy), "--unblind", "--researcher", "Ada Lovelace",
+                 "--confirm", "unblind example"]) == 0
     assert "UNBLINDED" in capsys.readouterr().out
+    log = pd.read_csv(copy / "unblinding.csv", encoding="utf-8-sig")
+    assert list(log["researcher"]) == ["Ada Lovelace"] and log["study_id"].iloc[0] == "example"
+    assert log["what"].iloc[0] == "tables and exploration page" and log["computer_user"].notna().all()

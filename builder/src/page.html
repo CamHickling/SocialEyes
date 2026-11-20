@@ -88,6 +88,13 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 .btn.primary:hover { filter: brightness(1.08); }
 .btn.link { border: 0; background: none; padding: 4px 8px; color: var(--accent); }
 .btn.link.danger { color: var(--error); }
+.btn.danger-solid { background: var(--error); color: var(--bg); border-color: var(--error); font-weight: 600; }
+.btn.danger-solid:disabled { opacity: .45; cursor: not-allowed; }
+.card.unblind { margin-top: 12px; }
+.card.unblind p { margin: 0 0 6px; }
+.card.unblind.form { border-color: var(--error); display: flex; flex-direction: column; gap: 10px; }
+.card.unblind.form .field { max-width: 420px; }
+.disclaimer { background: var(--warn-soft); color: var(--warn); border-radius: 8px; padding: 10px 12px; }
 .btn.file { position: relative; overflow: hidden; }
 .btn.file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .tips { margin: 0 0 16px; padding-left: 20px; max-width: 75ch; }

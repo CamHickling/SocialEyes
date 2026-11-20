@@ -11,6 +11,11 @@ counts equally however long they looked; a pooled map is the mean over the parti
 fixated the image at least once, i.e. the share of their looking time on the image that fell on
 each spot. An image seen in two groups (e.g. with and without the "edited" label) also gets the
 difference of the two maps.
+
+Until the study is unblinded (session/unblinding.py) the heatmaps are blinded instead: one map per
+post with every condition and version pooled, drawn over one version of its image, with no group
+names, no difference maps and no aoi_dwell.csv, in analysis/heatmaps_blinded. They are for
+checking the eye tracking, not for comparing conditions.
 """
 from __future__ import annotations
 
@@ -124,7 +129,120 @@ def aoi_dwell(sessions: list[SessionFixations], by: str = "cell") -> pd.DataFram
     return out
 
 
+def base_images(images: dict) -> dict:
+    """post_id -> the image a blinded map is drawn over: the post's first image in images.csv,
+    whatever condition that is (images: the manifest's)."""
+    out: dict = {}
+    for image_id, info in images.items():
+        if info.get("post_id"):
+            out.setdefault(info["post_id"], image_id)
+    return out
+
+
+def _grid_shape(w: int, h: int) -> tuple[int, int]:
+    k = GRID / max(w, h)
+    return max(1, round(h * k)), max(1, round(w * k))
+
+
+def pooled_by_post(sessions: list[SessionFixations], images: dict, sigma_deg: float = SIGMA_DEG) -> dict:
+    """Blinded pooling: post_id -> {"image_id": base image, "map", "participants", "fixations"}, every
+    condition and version of the post together. Each version's map is made on its own image and
+    scaled to the base image's grid (versions of a post are the same picture, edited)."""
+    import cv2
+
+    base = base_images(images)
+    per: dict = {}
+    for s in sessions:
+        f = s.fixations[(s.fixations["image_id"].fillna("") != "") & s.fixations["img_x"].notna()]
+        for image_id, fx in f.groupby("image_id"):
+            info = images.get(image_id)
+            post = (info or {}).get("post_id")
+            if not info or post not in base:
+                continue
+            sig = sigma_img_px(s.px_per_mm, s.distance_mm, fx["img_per_screen_px"].fillna(1.0).to_numpy(float), sigma_deg)
+            m = _density(fx, np.atleast_1d(sig), info["width"], info["height"])
+            b = images[base[post]]
+            target = _grid_shape(b["width"], b["height"])
+            if m.shape != target:
+                m = cv2.resize(m, (target[1], target[0]), interpolation=cv2.INTER_LINEAR)
+                m = m / m.sum() if m.sum() > 0 else m
+            d = per.setdefault(post, {"maps": [], "fixations": 0})
+            d["maps"].append(m)
+            d["fixations"] += len(fx)
+    return {post: {"image_id": base[post], "map": np.mean(d["maps"], axis=0), "participants": len(d["maps"]),
+                   "fixations": d["fixations"]} for post, d in per.items()}
+
+
 # ---------------------------------------------------------------- drawing
+
+STYLE = """
+:root{--bg:#fff;--fg:#1a1a1a;--muted:#666;--line:#ddd;--warn-bg:#fff4d6;--warn-fg:#5c4300}
+@media (prefers-color-scheme:dark){:root{--bg:#151515;--fg:#eee;--muted:#aaa;--line:#333;--warn-bg:#3a2f12;--warn-fg:#f3dc9a}}
+body{background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,sans-serif;margin:0 auto;max-width:1200px;padding:16px}
+h2{font-size:17px;margin:28px 0 8px;border-top:1px solid var(--line);padding-top:16px}
+.row{display:flex;gap:16px;flex-wrap:wrap} figure{margin:0;flex:1 1 240px;max-width:360px}
+img{width:100%;border-radius:8px} figcaption{font-size:13px;color:var(--muted)}
+.disclaimer{background:var(--warn-bg);color:var(--warn-fg);border-radius:8px;padding:12px 16px}
+"""
+
+BLINDED_DISCLAIMER = (
+    "<b>Blinded heatmaps: for checking the eye tracking, not for results.</b> Every condition and every "
+    "version of a post is pooled into one map, drawn over one version of its image (the first listed in "
+    "images.csv, whichever condition that is). Use them to check that looking lands on the images and the "
+    "AOIs where you would expect. They are not a comparison of conditions and support no conclusions. "
+    "They can still hint at a condition (for example if one version draws the eye somewhere the other "
+    "doesn't), so look only as much as the check needs, and don't try to work out the conditions from them. "
+    "Maps by condition, difference maps and AOI shares (aoi_dwell.csv) are made only after unblinding, "
+    "which records who unblinded and when.")
+
+UNBLINDED_NOTE = (
+    "<b>Unblinded:</b> real condition names. Heatmaps are descriptive pictures of where people looked, "
+    "not a test: compare conditions with your planned analysis of the tables, not by eye here.")
+
+
+def render_blinded(build: Path, maps: dict, out: Path, progress: Callable[[str], None] = lambda s: None) -> HeatmapResult:
+    """One PNG per post (<post_id>.png) and index.html with the disclaimer; no condition anywhere."""
+    import cv2
+
+    manifest = json.loads((build / "study.json").read_text(encoding="utf-8"))
+    out.mkdir(parents=True, exist_ok=True)
+    r = HeatmapResult(out_dir=str(out))
+    rows = []
+    for post in sorted(maps):
+        m = maps[post]
+        info = manifest["images"][m["image_id"]]
+        bgr = cv2.imread(str(build / info["file"]), cv2.IMREAD_COLOR)
+        if bgr is None:
+            continue
+        progress(f"Drawing post {post}…")
+        k = 540 / max(bgr.shape[:2])
+        base = cv2.resize(bgr, None, fx=k, fy=k, interpolation=cv2.INTER_AREA)[:, :, ::-1].astype(float)
+        aoiset = aoiset_from_json(json.loads((build / info["aoi"]).read_text(encoding="utf-8"))) if info.get("aoi") else None
+        img = _overlay(base, m["map"], "inferno", float(m["map"].max()), signed=False)
+        _draw_aois(img, aoiset)
+        name = f"{post}.png"
+        cv2.imwrite(str(out / name), img[:, :, ::-1])
+        r.images.append({"post_id": post, "files": [name],
+                         "groups": {"all": {"participants": m["participants"], "fixations": m["fixations"]}}})
+        cap = f"{m['participants']} participant(s), {m['fixations']} fixations, all conditions together"
+        rows.append(f'<section><h2>Post {html.escape(post)}</h2><div class=row><figure><img src="{name}" loading="lazy" '
+                    f'alt="post {html.escape(post)}"><figcaption>{html.escape(cap)}</figcaption></figure></div></section>')
+    page = f"""<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+<title>Gaze heatmaps (blinded)</title>
+<style>{STYLE}</style>
+<h1>Gaze heatmaps (blinded): {html.escape(manifest['study']['id'])}</h1>
+<p class=disclaimer>{BLINDED_DISCLAIMER}</p>
+<p>Where participants' fixations fell on each post, weighted by how long they lasted; each participant counts
+equally. Brighter means more looking. White outlines are the AOIs of the image drawn.</p>
+{''.join(rows) or '<p>No fixations on post images yet.</p>'}
+"""
+    (out / "index.html").write_text(page, encoding="utf-8")
+    (out / "BLINDED.txt").write_text(
+        "These heatmaps are blinded: every condition of a post pooled into one map, for checking the eye\n"
+        "tracking only. Maps by condition are made after unblinding (Data tab, Unblind...).\n", encoding="utf-8")
+    r.page = str(out / "index.html")
+    return r
+
 
 
 def _overlay(base: np.ndarray, density: np.ndarray, cmap: str, vmax: float, signed: bool) -> np.ndarray:
@@ -203,15 +321,9 @@ def render(build: Path, maps: dict, out: Path, progress: Callable[[str], None] =
         rows.append(f"<section><h2>{html.escape(image_id)}</h2><div class=row>{figs}</div></section>")
     page = f"""<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
 <title>Gaze heatmaps</title>
-<style>
-:root{{--bg:#fff;--fg:#1a1a1a;--muted:#666;--line:#ddd}}
-@media (prefers-color-scheme:dark){{:root{{--bg:#151515;--fg:#eee;--muted:#aaa;--line:#333}}}}
-body{{background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,sans-serif;margin:0 auto;max-width:1200px;padding:16px}}
-h2{{font-size:17px;margin:28px 0 8px;border-top:1px solid var(--line);padding-top:16px}}
-.row{{display:flex;gap:16px;flex-wrap:wrap}} figure{{margin:0;flex:1 1 240px;max-width:360px}}
-img{{width:100%;border-radius:8px}} figcaption{{font-size:13px;color:var(--muted)}}
-</style>
+<style>{STYLE}</style>
 <h1>Gaze heatmaps: {html.escape(manifest['study']['id'])}</h1>
+<p class=disclaimer>{UNBLINDED_NOTE}</p>
 <p>Where participants' fixations fell on each post image, weighted by how long they lasted; each participant
 counts equally. Brighter means more looking. White outlines are the AOIs. Where an image was seen in two
 groups, the third map is the difference (red: more looking in the first group, blue: in the second). Per-AOI
@@ -262,7 +374,11 @@ def load_sessions(data_dir: Path, analysis_dir: Path, build_for: Callable[[Path]
 
 def study_heatmaps(study_dir: Path | str, data_dir: Optional[Path | str] = None, out_dir: Optional[Path | str] = None,
                    by: str = "cell", sigma_deg: float = SIGMA_DEG,
-                   progress: Callable[[str], None] = lambda s: None) -> tuple[HeatmapResult, list]:
+                   progress: Callable[[str], None] = lambda s: None,
+                   unblind: bool = False, unblinding=None) -> tuple[HeatmapResult, list]:
+    """Blinded heatmaps (one per post, all conditions pooled) in analysis/heatmaps_blinded; with
+    ``unblind`` (needs ``unblinding``, and is logged) maps by ``by``, difference maps and
+    aoi_dwell.csv in analysis/heatmaps."""
     import shutil
     import tempfile
 
@@ -273,7 +389,11 @@ def study_heatmaps(study_dir: Path | str, data_dir: Optional[Path | str] = None,
 
     sid = study_id_of(study_dir)
     data = Path(data_dir) if data_dir else settings.data_dir(sid)
-    out = Path(out_dir) if out_dir else settings.analysis_dir(sid) / "heatmaps"
+    out = Path(out_dir) if out_dir else settings.analysis_dir(sid) / ("heatmaps" if unblind else "heatmaps_blinded")
+    if unblind:
+        from ..session import unblinding as ub
+
+        ub.unblind(study_dir, data, sid, unblinding, f"heatmaps by {by}")
     tmp = Path(tempfile.mkdtemp(prefix="socialeyes-heatmaps-"))
     try:
         fresh: list = []
@@ -290,6 +410,8 @@ def study_heatmaps(study_dir: Path | str, data_dir: Optional[Path | str] = None,
         if build is None:
             build = build_for(data)
         manifest = json.loads((build / "study.json").read_text(encoding="utf-8"))
+        if not unblind:
+            return render_blinded(build, pooled_by_post(sessions, manifest["images"], sigma_deg), out, progress), skipped
         sizes = {i: (v["width"], v["height"]) for i, v in manifest["images"].items()}
         maps = pooled_maps(sessions, sizes, by, sigma_deg)
         r = render(build, maps, out, progress)
