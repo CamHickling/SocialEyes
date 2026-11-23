@@ -25,6 +25,7 @@ import hashlib
 import json
 import re
 import shutil
+import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -41,6 +42,12 @@ from .loader import build_study, discard, parse_sha256sum, sync_used_ids
 SAFE = re.compile(r"[A-Za-z0-9_.-]+")
 NEON_DIR = "/sdcard/Documents/Neon"   # Neon Companion's recordings: <wearer or device id>/<recording id>/
 NEON = "neon"                          # in a participant's data folder: neon/<recording id>/
+NEON_ATTEMPTS = 3                      # copies of a Neon recording tried before giving up
+NEON_SETTLE_S = 10.0                   # pause when Companion was still changing the recording's files
+
+
+def _sleep(seconds: float) -> None:    # the tests replace it
+    time.sleep(seconds)
 
 
 @dataclass
@@ -294,18 +301,32 @@ def _unload_neon(adb: Adb, final: Path, participant: Path, second: Optional[Path
     if not found:
         return rid, "not on the phone"
     remote = found[0]
-    expected = parse_sha256sum(adb.shell(f"cd {remote} && find . -type f -exec sha256sum {{}} +", timeout=1800))
+    def phone_hashes() -> dict:
+        return parse_sha256sum(adb.shell(f"cd {remote} && find . -type f -exec sha256sum {{}} +", timeout=1800))
+
+    expected = phone_hashes()
     if not expected:
         return rid, "not on the phone"
     dest = participant / NEON / rid
     if not (dest.is_dir() and local_hashes(dest) == expected):
         incoming = participant / NEON / ".incoming"
-        shutil.rmtree(incoming / rid, ignore_errors=True)
-        incoming.mkdir(parents=True, exist_ok=True)
-        adb.run("pull", remote, str(incoming), timeout=7200)
-        if local_hashes(incoming / rid) != expected:
+        # Right after a session Companion may still be finishing the recording's files (22 Nov test
+        # day: the first copy failed its check, the next one passed). On a mismatch the phone's files are
+        # checked again; the copy is tried again, after a pause when they were still changing.
+        for attempt in range(1, NEON_ATTEMPTS + 1):
+            shutil.rmtree(incoming / rid, ignore_errors=True)    # only this copy's unfinished pull
+            incoming.mkdir(parents=True, exist_ok=True)
+            adb.run("pull", remote, str(incoming), timeout=7200)
+            if local_hashes(incoming / rid) == expected:
+                break
             shutil.rmtree(incoming / rid, ignore_errors=True)
-            raise OSError("the copied Neon recording doesn't match the phone's; unload again")
+            now = phone_hashes()
+            if attempt == NEON_ATTEMPTS:
+                raise OSError("Companion was still saving the Neon recording; unload again in a minute"
+                              if now != expected else "the copied Neon recording doesn't match the phone's; unload again")
+            if now != expected:
+                expected = now
+                _sleep(NEON_SETTLE_S)
         _replace_dir(incoming / rid, dest)
         if not any(incoming.iterdir()):
             incoming.rmdir()

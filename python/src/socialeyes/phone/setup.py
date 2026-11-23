@@ -128,6 +128,14 @@ def guide(serial: Optional[str] = None, adb: Optional[Adb] = None) -> dict:
     s = steps["app"]
     s.status = "done" if p.app_installed else "todo"
     s.detail = f"Version {p.app_version_name} is installed." if p.app_installed else "Not installed yet."
+    apk = loader.find_apk() if p.app_installed else None
+    if apk and p.app_version_code is not None and apk.version_code > p.app_version_code:
+        # an older app counts as a step still to do: install -r updates it and keeps the phone's data
+        s.status = "todo"
+        s.detail = f"Version {p.app_version_name} is installed; {apk.version_name} is available."
+        s.action_label = "Update the app"
+        s.how = [f"Click Update the app to install {apk.version_name} over {p.app_version_name}. Sessions, "
+                 "studies and settings on the phone are kept; nothing is removed."]
     if p.app_installed:
         s = steps["open"]
         s.status = "done" if p.profile is not None else "todo"
@@ -201,7 +209,7 @@ def do(action: str, serial: Optional[str] = None, adb: Optional[Adb] = None) -> 
         if apk is None:
             raise AdbError("There's no app file on this computer to install. Build it first (android: gradlew assembleDebug).")
         _install(adb, apk)    # install -r: an app already there keeps its data
-        return f"Installed SocialEyes {apk.version_name}."
+        return f"Installed SocialEyes {apk.version_name} (the phone's data is kept)."
     if action == "open_app":
         out = adb.shell(f"monkey -p {PACKAGE} -c android.intent.category.LAUNCHER 1")
         if "No activities found" in out or "Error" in out:

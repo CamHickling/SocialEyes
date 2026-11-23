@@ -273,6 +273,49 @@ def test_unload_copies_the_paired_neon_recording_and_leaves_it_on_the_phone(setu
     assert len(U.unload(example).sessions) == 2
 
 
+class StillSaving(FakePhone):
+    """Companion still finishing the recording: the first `growing` pulls of it find its scene video
+    a little longer than when it was checksummed (22 Nov test day)."""
+
+    def __init__(self, root: Path, growing: int):
+        super().__init__(root)
+        self.growing, self.neon_pulls = growing, 0
+
+    def run(self, *args, timeout=60, check=True) -> str:
+        if args[0] == "pull" and args[1].startswith(U.NEON_DIR):
+            self.neon_pulls += 1
+            if self.neon_pulls <= self.growing:
+                video = self.local(args[1]) / "Neon Scene Camera v1 ps1.mp4"
+                video.write_bytes(video.read_bytes() + b"\x03" * 100)
+        return super().run(*args, timeout=timeout, check=check)
+
+
+def test_a_neon_recording_still_being_saved_is_copied_once_it_settles(setup, monkeypatch):
+    example, phone_root, tmp = setup
+    pair_with_neon(phone_root, "P001", "rec-0001")
+    pauses = []
+    monkeypatch.setattr(U, "_sleep", pauses.append)
+    phone = StillSaving(phone_root, growing=1)
+    monkeypatch.setattr(U, "Adb", lambda serial=None: phone)
+    by = {s.participant_id: s for s in U.unload(example).sessions}
+    assert by["P001"].neon == "copied and checked" and phone.neon_pulls == 2 and pauses == [U.NEON_SETTLE_S]
+    local = settings.data_dir("example") / "P001" / "neon" / "rec-0001" / "Neon Scene Camera v1 ps1.mp4"
+    assert local.read_bytes() == b"\x02" * 9000 + b"\x03" * 100               # the finished file
+    assert not (settings.data_dir("example") / "P001" / "neon" / ".incoming").exists()
+
+
+def test_a_neon_recording_that_never_settles_is_left_for_the_next_unload(setup, monkeypatch):
+    example, phone_root, tmp = setup
+    pair_with_neon(phone_root, "P001", "rec-0001")
+    monkeypatch.setattr(U, "_sleep", lambda s: None)
+    phone = StillSaving(phone_root, growing=99)
+    monkeypatch.setattr(U, "Adb", lambda serial=None: phone)
+    by = {s.participant_id: s for s in U.unload(example).sessions}
+    assert by["P001"].copied and by["P001"].neon == "copy failed" and phone.neon_pulls == U.NEON_ATTEMPTS
+    assert any("still saving" in w for w in by["P001"].warnings)
+    assert (phone_root / "neon_companion" / "wearer-1" / "rec-0001").is_dir()   # nothing removed on the phone
+
+
 def test_withdrawing_moves_the_neon_copy_with_the_participant(setup, monkeypatch):
     from socialeyes.session import withdraw as W
 

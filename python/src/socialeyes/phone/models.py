@@ -66,6 +66,12 @@ def exposure_from_camera(camera: dict) -> dict:
     return out
 
 
+def _set(exposure: Optional[dict]) -> dict:
+    """An exposure with its blank values left out, so the compiled study's {"exposure_us": None,
+    "gain": None, ...} compares equal to the table's shorter entry (the 22 Nov false warning)."""
+    return {k: v for k, v in (exposure or {}).items() if v is not None}
+
+
 def describe(entry: dict) -> str:
     e = entry.get("scene_exposure") or {}
     if e.get("mode") == "manual":
@@ -102,7 +108,7 @@ def checks(manufacturer: str, model: str, study: dict, eye_tracking: bool) -> tu
     differs = []
     if brightness is not None and abs(float(brightness) - float(entry["brightness"])) > 1e-6:
         differs.append(f"screen brightness {brightness:g}")
-    if exposure is not None and exposure != entry.get("scene_exposure"):
+    if exposure is not None and _set(exposure) != _set(entry.get("scene_exposure")):
         differs.append("its scene camera exposure")
     if differs:
         out.append(("warn", f"The study fixes {' and '.join(differs)}, which differs from this phone model's settings "

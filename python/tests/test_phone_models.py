@@ -57,6 +57,11 @@ def test_a_study_that_differs_from_the_phone_model_is_flagged_but_keeps_its_own(
     out, _ = models.checks(EDGE["manufacturer"], EDGE["model"],
                            recording(0.30, {"mode": "auto", "brightness": -32}), eye_tracking=True)
     assert [lvl for lvl, _ in out] == ["ok"]
+    # as the compiled study.json carries it: the unused fields are there as None (22 Nov false warning)
+    out, _ = models.checks(EDGE["manufacturer"], EDGE["model"],
+                           recording(0.30, {"mode": "auto", "exposure_us": None, "gain": None, "brightness": -32}),
+                           eye_tracking=True)
+    assert [lvl for lvl, _ in out] == ["ok"]
 
 
 def test_an_untested_phone_model():

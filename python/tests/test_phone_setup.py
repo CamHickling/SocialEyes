@@ -67,6 +67,21 @@ def test_a_ready_phone_has_nothing_left_but_the_optional_camera(monkeypatch):
     assert all(s["status"] == "done" for k, s in steps.items() if k != "camera")
 
 
+def test_an_older_app_on_the_phone_is_a_step_to_do_with_an_update_button(monkeypatch):
+    # 22 Nov test day: the Motorola had 0.3.8 while 0.3.13 was bundled, and the step showed a tick
+    phone = dict(serial="ABC", app_installed=True, app_version_name="0.3.8", app_version_code=38, camera_granted=True,
+                 battery=90, dnd="priority only", font_scale=1.0, profile={"ruler_check": {"measured_x_mm": 50, "measured_y_mm": 100}})
+    monkeypatch.setattr(loader, "read_phone", lambda adb: PhoneState(**phone))
+    monkeypatch.setattr(loader, "find_apk", lambda: loader.ApkInfo(None, 313, "0.3.13"))
+    g = S.guide(adb=FakeAdb([Device("ABC", "device")]))
+    app = by_id(g)["app"]
+    assert g["next"] == "app" and app["status"] == "todo" and app["action"] == "install"
+    assert app["action_label"] == "Update the app" and "0.3.13 is available" in app["detail"]
+    assert by_id(g)["open"]["status"] == "done"          # steps already done stay done
+    monkeypatch.setattr(loader, "read_phone", lambda adb: PhoneState(**{**phone, "app_version_code": 313}))
+    assert by_id(S.guide(adb=FakeAdb([Device("ABC", "device")])))["app"]["status"] == "done"
+
+
 def test_actions_run_on_the_phone_and_say_when_it_must_be_done_by_hand():
     adb = FakeAdb([Device("ABC", "device")], shell={"settings get global zen_mode": "1"})
     assert "Do Not Disturb" in S.do("dnd", adb=adb)
